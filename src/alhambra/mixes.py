@@ -1,8 +1,16 @@
+from __future__ import annotations
 import pint
 from dataclasses import dataclass
-from typing import Mapping, Tuple, Union, Sequence, Optional
+from typing import Iterable, Mapping, Tuple, Union, Sequence, Optional
 from abc import ABC, abstractmethod, abstractproperty
 from tabulate import tabulate
+
+from .tiles import TileList
+from .tilesets import TileSet
+
+import logging
+
+log = logging.getLogger("alhambra")
 
 UR = pint.UnitRegistry()
 
@@ -354,3 +362,37 @@ class Mix:
 
     def __str__(self):
         return self.mdtable()
+
+    def to_tileset(
+        self,
+        tilesets_or_lists: TileSet | TileList | Iterable[TileSet | TileList],
+        *,
+        seed=None,
+        base_conc=100 * UR("nM"),
+    ) -> TileSet:
+        newts = TileSet()
+
+        if isinstance(tilesets_or_lists, (TileList, TileSet)):
+            tilesets_or_lists = [tilesets_or_lists]
+
+        for comp, conc in self.all_comps().items():
+            new_tile = None
+            for tl_or_ts in tilesets_or_lists:
+                try:
+                    if isinstance(tl_or_ts, TileSet):
+                        tile = tl_or_ts.tiles[comp]
+                    else:
+                        tile = tl_or_ts[comp]
+                    new_tile = tile.copy()
+                    new_tile.stoic = float(conc / base_conc)
+                    newts.tiles.add(new_tile)
+                    break
+                except KeyError:
+                    pass
+            if new_tile is None:
+                log.warn(f"Component {comp} not found in tile lists.")
+
+        if len(newts.tiles) == 0:
+            raise ValueError("No mix components match tiles.")
+
+        return newts
