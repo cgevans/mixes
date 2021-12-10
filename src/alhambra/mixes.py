@@ -69,11 +69,13 @@ class FixedConc(MixComp):
     comp: BaseComponent
     set_dest_conc: pint.Quantity[float]
 
+    @UR.check("M")
     def dest_conc(
         self, mix_vol: Optional[pint.Quantity[float]]
     ) -> pint.Quantity[float]:
         return self.set_dest_conc
 
+    @UR.check("[volume]")
     def tx_vol(self, mix_vol: Optional[pint.Quantity[float]]) -> pint.Quantity[float]:
         return (mix_vol * (self.set_dest_conc / self.comp.conc)).to_compact()
 
@@ -91,7 +93,7 @@ class FixedConc(MixComp):
         if include_ea:
             [
                 self.comp.name,
-                self.comp.conc,
+                f"{self.comp.conc:.2f}",
                 f"{self.dest_conc(mix_vol):.2f}",
                 "",
                 "",
@@ -101,7 +103,7 @@ class FixedConc(MixComp):
         return [
             [
                 self.comp.name,
-                self.comp.conc,
+                f"{self.comp.conc:.2f}",
                 f"{self.dest_conc(mix_vol):.2f}",
                 f"{self.tx_vol(mix_vol):.2f}",
             ]
@@ -144,20 +146,20 @@ class FixedVol(MixComp):
             return [
                 [
                     self.comp.name,
-                    self.comp.conc,
-                    self.dest_conc(mix_vol),
+                    f"{self.comp.conc:.2f}",
+                    f"{self.dest_conc(mix_vol):.2f}",
                     "",
                     "",
-                    self.tx_vol(mix_vol),
+                    f"{self.tx_vol(mix_vol):.2f}",
                 ]
             ]
 
         return [
             [
                 self.comp.name,
-                self.comp.conc,
-                self.dest_conc(mix_vol),
-                self.tx_vol(mix_vol),
+                f"{self.comp.conc:.2f}",
+                f"{self.dest_conc(mix_vol):.2f}",
+                f"{self.tx_vol(mix_vol):.2f}",
             ]
         ]
 
@@ -202,20 +204,20 @@ class NFixedVol(MixComp):
             return [
                 [
                     self.comp.name,
-                    self.comp.conc,
-                    self.dest_conc(mix_vol),
+                    f"{self.comp.conc:.2f}",
+                    f"{self.dest_conc(mix_vol):.2f}",
                     self.number,
-                    self.ea_vol(mix_vol),
-                    self.tx_vol(mix_vol),
+                    f"{self.ea_vol(mix_vol):.2f}",
+                    f"{self.tx_vol(mix_vol):.2f}",
                 ]
             ]
 
         return [
             [
                 self.comp.name,
-                self.comp.conc,
-                self.dest_conc(mix_vol),
-                self.tx_vol(mix_vol),
+                f"{self.comp.conc:.2f}",
+                f"{self.dest_conc(mix_vol):.2f}",
+                f"{self.tx_vol(mix_vol):.2f}",
             ]
         ]
 
@@ -267,11 +269,11 @@ class MultiFixedVol(MixComp):
             return [
                 [
                     self.set_name,
-                    self.comp_conc,
-                    self.dest_conc(mix_vol),
+                    f"{self.comp_conc:.2f}",
+                    f"{self.dest_conc(mix_vol):.2f}",
                     self.number,
-                    self.ea_vol(mix_vol),
-                    self.tx_vol(mix_vol),
+                    f"{self.ea_vol(mix_vol):.2f}",
+                    f"{self.tx_vol(mix_vol):.2f}",
                 ]
             ]
         else:
@@ -327,7 +329,7 @@ class Mix:
 
     @property
     def conc(self) -> pint.Quantity[float]:
-        if isinstance(self.set_conc, pint.Quantity[float]):
+        if isinstance(self.set_conc, pint.Quantity):
             return self.set_conc
         elif isinstance(self.set_conc, str):
             for mc in self.mixcomps:
