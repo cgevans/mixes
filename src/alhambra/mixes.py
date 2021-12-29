@@ -1,19 +1,24 @@
 from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
 from lib2to3 import refactor
 from re import M
-import numpy as np
-import pint
-from dataclasses import dataclass
 from typing import (
     Iterable,
+    Literal,
     Mapping,
-    Union,
-    Sequence,
     Optional,
     Protocol,
+    Sequence,
+    Union,
     overload,
-    Literal,
 )
+
+import numpy as np
+import pandas as pd
+import pint
+import pint_pandas
 from pint.quantity import Quantity
 from tabulate import tabulate
 
@@ -21,11 +26,6 @@ from alhambra.seeds import Seed
 
 from .tiles import TileList
 from .tilesets import TileSet
-
-import logging
-
-import pandas as pd
-import pint_pandas
 
 log = logging.getLogger("alhambra")
 
