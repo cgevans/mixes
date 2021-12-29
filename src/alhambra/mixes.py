@@ -4,9 +4,20 @@ from re import M
 import numpy as np
 import pint
 from dataclasses import dataclass
-from typing import Iterable, Mapping, Union, Sequence, Optional, Protocol
+from typing import (
+    Iterable,
+    Mapping,
+    Union,
+    Sequence,
+    Optional,
+    Protocol,
+    overload,
+    Literal,
+)
 from pint.quantity import Quantity
 from tabulate import tabulate
+
+from alhambra.seeds import Seed
 
 from .tiles import TileList
 from .tilesets import TileSet
@@ -38,21 +49,52 @@ MIXHEAD_NO_EA = ("Comp", "Src []", "Dest []", "Tx Vol", "Loc", "Note")
 
 @dataclass(init=False, frozen=True, order=True)
 class WellPos:
-    row: str
+    row: int
     col: int
+    platesize: Literal[96, 384] = 96
 
+    @overload
+    def __init__(self, ref_or_row: int, col: int) -> None:
+        ...
+
+    @overload
     def __init__(self, ref_or_row: str, col: int | None = None) -> None:
-        if col is None:
-            col = int(ref_or_row[1:])
-            ref_or_row = ref_or_row[0]
+        ...
 
-        assert len(ref_or_row) == 1 and ref_or_row in "ABCDEFGH"
-        assert col in range(1, 13)
-        self.__setattr__("row", ref_or_row)
-        self.__setattr__("col", col)
+    def __init__(self, ref_or_row: str | int, col: int | None = None) -> None:
+        if col is None:
+            col = int(ref_or_row[1:]) - 1
+            ref_or_row = ref_or_row[0]
+            assert len(ref_or_row) == 1
+
+        assert col in range(0, 12)
+
+        match ref_or_row:
+            case str(x):
+                row: int = "ABCDEFGH".index(x)
+            case int(x):
+                row = ref_or_row
+
+        super().__setattr__("row", row)
+        super().__setattr__("col", col)
 
     def __str__(self) -> str:
-        return f"{self.row}{self.col}"
+        return f"{'ABCDEFGH'[self.row]}{self.col + 1}"
+
+    def __repr__(self) -> str:
+        return f"WellPos({self})"
+
+    def key_byrow(self) -> tuple[int, int]:
+        return (self.row, self.col)
+
+    def key_bycol(self) -> tuple[int, int]:
+        return (self.col, self.row)
+
+    def next_byrow(self) -> WellPos:
+        return WellPos(self.row + (self.col + 1) // 12, (self.col + 1) % 12)
+
+    def next_bycol(self) -> WellPos:
+        return WellPos((self.row + 1) % 8, self.col + (self.row + 1) // 8)
 
 
 @dataclass(eq=True)
@@ -317,6 +359,21 @@ class NFixedVol(MixStep):
         return self.comp.name
 
 
+def mixgaps(wl: Iterable[WellPos], by: Literal["row", "col"]) -> int:
+    score = 0
+
+    wli = iter(wl)
+
+    getnextpos = WellPos.next_bycol if by == "col" else WellPos.next_byrow
+    prevpos = next(wli)
+
+    for pos in wli:
+        if not (getnextpos(prevpos) == pos):
+            score += 1
+        prevpos = pos
+    return score
+
+
 @dataclass
 class MultiFixedVol(MixStep):
     comps: Sequence[BaseComponent]
@@ -385,11 +442,10 @@ class MultiFixedVol(MixStep):
 
     @property
     def name(self) -> str:
-        match self.set_name:
-            case None:
-                return ", ".join(c.name for c in self.comps)
-            case _ as x:
-                return x
+        if self.set_name is None:
+            return ", ".join(c.name for c in self.comps)
+        else:
+            return self.set_name
 
     def compactstrs(self, locations: pd.DataFrame | None) -> tuple[str, str | None]:
         if locations is None:
@@ -413,8 +469,33 @@ class MultiFixedVol(MixStep):
             ns, ls = [], []
 
             for p, ll in locdf.groupby("Plate"):
-                ns.append(", ".join(ll["Name"]))
-                ls.append(p + ": " + ", ".join(str(x) for x in ll["Well Position"]))
+                names: list[str] = list(ll["Name"])
+                wells: list[WellPos] = list(ll["Well Position"])
+
+                byrow = mixgaps(sorted(wells, key=WellPos.key_byrow), by="row")
+                bycol = mixgaps(sorted(wells, key=WellPos.key_bycol), by="col")
+
+                sortkey = WellPos.key_bycol if bycol <= byrow else WellPos.key_byrow
+                sortnext = WellPos.next_bycol if bycol <= byrow else WellPos.next_byrow
+
+                nw = sorted(
+                    [(name, well) for name, well in zip(names, wells, strict=True)],
+                    key=(lambda nwitem: sortkey(nwitem[1])),
+                )
+
+                wellsf = []
+                nwi = iter(nw)
+                prevpos = next(nwi)[1]
+                wellsf.append(f"**{prevpos}**")
+                for _, w in nwi:
+                    if sortnext(prevpos) != w:
+                        wellsf.append(f"**{w}**")
+                    else:
+                        wellsf.append(f"{w}")
+                    prevpos = w
+
+                ns.append(", ".join(n for n, _ in nw))
+                ls.append(p + ": " + ", ".join(wellsf))
 
             return "\n".join(ns), "\n".join(ls)
 
@@ -512,7 +593,7 @@ class Mix:
 
     def _repr_markdown_(self):
         return (
-            f"Mix: {self.name}, Conc: {self.conc:.2f}, Total Vol: {self.total_volume:.2f}\n\n"
+            f"Table: Mix: {self.name}, Conc: {self.conc:.2f}, Total Vol: {self.total_volume:.2f}\n\n"
             + self.mdtable()
         )
 
@@ -523,7 +604,7 @@ class Mix:
         self,
         tilesets_or_lists: TileSet | TileList | Iterable[TileSet | TileList],
         *,
-        seed=None,
+        seed: bool | Seed = False,
         base_conc=100 * UR("nM"),
     ) -> TileSet:
         newts = TileSet()
@@ -547,6 +628,16 @@ class Mix:
                     pass
             if new_tile is None:
                 log.warn(f"Component {comp} not found in tile lists.")
+
+        match seed:
+            case True:
+                firstts = next(iter(tilesets_or_lists))
+                assert isinstance(firstts, TileSet)
+                newts.seeds["default"] = firstts.seeds["default"]
+            case False:
+                pass
+            case Seed as x:
+                newts.seeds["default"] = x
 
         if len(newts.tiles) == 0:
             raise ValueError("No mix components match tiles.")
