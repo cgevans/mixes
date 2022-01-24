@@ -1,3 +1,7 @@
+"""
+A module for handling mixes.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -27,6 +31,8 @@ from alhambra.seeds import Seed
 from .tiles import TileList
 from .tilesets import TileSet
 
+import attrs
+
 log = logging.getLogger("alhambra")
 
 UR = pint.UnitRegistry()
@@ -46,12 +52,31 @@ MIXHEAD_EA = (
 )
 MIXHEAD_NO_EA = ("Comp", "Src []", "Dest []", "Tx Vol", "Loc", "Note")
 
+_PLATEROWS_96 = "ABCDEFGH"
+_PLATEROWS_384 = "ABCDEFGHIJKLMNOP"
 
-@dataclass(init=False, frozen=True, order=True)
+
+@attrs.define(init=False, frozen=True, order=True)
 class WellPos:
-    row: int
-    col: int
+    """A well position reference, allowing movemet in various directions and bounds checking."""
+
+    row: int = attrs.field()
+    col: int = attrs.field()
     platesize: Literal[96, 384] = 96
+
+    @row.validator
+    def _validate_row(self, v: int):
+        rmax = 8 if self.platesize == 96 else 16
+        if (v < 0) or (v >= rmax):
+            raise ValueError(f"Row {v} out of bounds for plate size {self.platesize}")
+
+    @col.validator
+    def _validate_col(self, v: int):
+        cmax = 12 if self.platesize == 96 else 24
+        if (v < 0) or (v >= cmax):
+            raise ValueError(
+                f"Column {v} out of bounds for plate size {self.platesize}"
+            )
 
     @overload
     def __init__(self, ref_or_row: int, col: int) -> None:
