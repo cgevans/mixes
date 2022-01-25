@@ -82,7 +82,7 @@ MIXHEAD_NO_EA = ("Comp", "Src []", "Dest []", "Tx Vol", "Loc", "Note")
 
 @attrs.define(init=False, frozen=True, order=True, hash=True)
 class WellPos:
-    """A well position reference, allowing movement in various directions and bounds checking.
+    """A Well reference, allowing movement in various directions and bounds checking.
 
     This uses 1-indexed row and col, in order to match usual practice.  It can take either
     a standard well reference as a string, or two integers for the row and column.
@@ -516,9 +516,9 @@ def findloc_tuples(
     loc = locs.iloc[0]
 
     try:
-        well = WellPos(loc["Well Position"])
+        well = WellPos(loc["Well"])
     except Exception:
-        well = loc["Well Position"]
+        well = loc["Well"]
 
     return (loc["Name"], loc["Plate"], well)
 
@@ -740,7 +740,7 @@ class MultiFixedVolume(AbstractAction):
         if locations is None:
             return ", ".join(c.name for c in self.components), None
         else:
-            locs = [c.location for c in self.components]
+            locs = [(c.name,) + c.location for c in self.components]
             names = [c.name for c in self.components]
 
             if all(x is None for x in locs):
@@ -751,15 +751,15 @@ class MultiFixedVolume(AbstractAction):
                     [name for name, loc in zip(names, locs) if loc is None]
                 )
 
-            locdf = pd.DataFrame(locs, columns=("Name", "Plate", "Well Position"))
+            locdf = pd.DataFrame(locs, columns=("Name", "Plate", "Well"))
 
-            locdf.sort_values(by=["Plate", "Well Position"])
+            locdf.sort_values(by=["Plate", "Well"])
 
             ns, ls = [], []
 
             for p, ll in locdf.groupby("Plate"):
                 names = list(ll["Name"])
-                wells: list[WellPos] = list(ll["Well Position"])
+                wells: list[WellPos] = list(ll["Well"])
 
                 byrow = mixgaps(sorted(wells, key=WellPos.key_byrow), by="row")
                 bycol = mixgaps(sorted(wells, key=WellPos.key_bycol), by="col")
@@ -893,15 +893,15 @@ class MultiFixedConcentration(AbstractAction):
                 [name for name, loc in zip(names, locs) if loc is None]
             )
 
-        locdf = pd.DataFrame(locs, columns=("Name", "Plate", "Well Position"))
+        locdf = pd.DataFrame(locs, columns=("Name", "Plate", "Well"))
 
-        locdf.sort_values(by=["Plate", "Well Position"])
+        locdf.sort_values(by=["Plate", "Well"])
 
         ns, ls = [], []
 
         for p, ll in locdf.groupby("Plate"):
             names = list(ll["Name"])
-            wells: list[WellPos] = list(ll["Well Position"])
+            wells: list[WellPos] = list(ll["Well"])
 
             byrow = mixgaps(sorted(wells, key=WellPos.key_byrow), by="row")
             bycol = mixgaps(sorted(wells, key=WellPos.key_bycol), by="col")
@@ -1156,7 +1156,7 @@ def load_reference(filename_or_file):
     df = pd.read_csv(filename_or_file)
 
     return df.reindex(
-        ["Name", "Plate", "Well Position", "Concentration (nM)", "Sequence"],
+        ["Name", "Plate", "Well", "Concentration (nM)", "Sequence"],
         axis="columns",
     )
 
