@@ -10,6 +10,7 @@ from typing import (
     Any,
     Iterable,
     Literal,
+    Mapping,
     Optional,
     Sequence,
     TypeAlias,
@@ -291,11 +292,15 @@ def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
         case str(x):
             q = ureg(x)
             if not q.check("nM"):
-                raise ValueError(f"{x} is not a valid quantity here (should be molarity).")
+                raise ValueError(
+                    f"{x} is not a valid quantity here (should be molarity)."
+                )
             return q
         case pint.Quantity() as x:
             if not x.check("nM"):
-                raise ValueError(f"{x} is not a valid quantity here (should be molarity).")
+                raise ValueError(
+                    f"{x} is not a valid quantity here (should be molarity)."
+                )
             return x.to_compact()
         case None:
             return Q_(np.nan, "nM")
@@ -307,11 +312,15 @@ def _parse_conc_required(v: str | pint.Quantity) -> pint.Quantity:
         case str(x):
             q = ureg(x)
             if not q.check("nM"):
-                raise ValueError(f"{x} is not a valid quantity here (should be molarity).")
+                raise ValueError(
+                    f"{x} is not a valid quantity here (should be molarity)."
+                )
             return q
         case pint.Quantity() as x:
             if not x.check("nM"):
-                raise ValueError(f"{x} is not a valid quantity here (should be molarity).")
+                raise ValueError(
+                    f"{x} is not a valid quantity here (should be molarity)."
+                )
             return x.to_compact()
     raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
 
@@ -321,11 +330,15 @@ def _parse_vol_optional(v: str | pint.Quantity | None) -> pint.Quantity:
         case str(x):
             q = ureg(x)
             if not q.check("uL"):
-                raise ValueError(f"{x} is not a valid quantity here (should be volume).")
+                raise ValueError(
+                    f"{x} is not a valid quantity here (should be volume)."
+                )
             return q
         case pint.Quantity() as x:
             if not x.check("uL"):
-                raise ValueError(f"{x} is not a valid quantity here (should be volume).")
+                raise ValueError(
+                    f"{x} is not a valid quantity here (should be volume)."
+                )
             return x.to_compact()
         case None:
             return Q_(np.nan, "uL")
@@ -337,11 +350,15 @@ def _parse_vol_required(v: str | pint.Quantity) -> pint.Quantity:
         case str(x):
             q = ureg(x)
             if not q.check("uL"):
-                raise ValueError(f"{x} is not a valid quantity here (should be volume).")
+                raise ValueError(
+                    f"{x} is not a valid quantity here (should be volume)."
+                )
             return q
         case pint.Quantity() as x:
             if not x.check("uL"):
-                raise ValueError(f"{x} is not a valid quantity here (should be volume).")
+                raise ValueError(
+                    f"{x} is not a valid quantity here (should be volume)."
+                )
             return x.to_compact()
     raise ValueError(f"{v} is not a valid quantity here (should be volume).")
 
@@ -354,8 +371,11 @@ def _parse_wellpos_optional(v: str | WellPos | None) -> WellPos | None:
             return x
         case None:
             return None
-    if np.isnan(v):
-        return None
+    try:
+        if np.isnan(v): # type: ignore
+            return None
+    except:
+        pass
     raise ValueError(f"Can't interpret {v} as well position or None.")
 
 
@@ -407,22 +427,34 @@ class Component(AbstractComponent):
             ref_by_name = reference.set_index("Name")
         ref_comp = ref_by_name.loc[self.name]
 
-        if len(ref_comp.shape) > 1: # Is this a series or a dataframe
-            log.warning("Component %s has more than one location: %s.  Choosing last.", self.name, ref_comp)
+        if len(ref_comp.shape) > 1:  # Is this a series or a dataframe
+            log.warning(
+                "Component %s has more than one location: %s.  Choosing last.",
+                self.name,
+                ref_comp,
+            )
             ref_comp = ref_comp.iloc[-1, :]
 
         ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], "nM")
 
-        if not np.isnan(self.concentration) and not np.allclose(ref_conc, self.concentration):
-            raise ValueError(f"Component {self.name}: concentration {self.concentration} does not match reference {ref_conc} of {ref_comp}.")
+        if not np.isnan(self.concentration) and not np.allclose(
+            ref_conc, self.concentration
+        ):
+            raise ValueError(
+                f"Component {self.name}: concentration {self.concentration} does not match reference {ref_conc} of {ref_comp}."
+            )
 
         ref_place = ref_comp["Plate"]
         if self.place and ref_place != self.place:
-            raise ValueError(f"Component {self.name}: plate {self.place} does not match reference {ref_place} of {ref_comp}.")
+            raise ValueError(
+                f"Component {self.name}: plate {self.place} does not match reference {ref_place} of {ref_comp}."
+            )
 
         ref_well = _parse_wellpos_optional(ref_comp["Well"])
         if self.well and self.well != ref_well:
-            raise ValueError(f"Component {self.name}: well {self.well} does not match reference {ref_well} of {ref_comp}.")
+            raise ValueError(
+                f"Component {self.name}: well {self.well} does not match reference {ref_well} of {ref_comp}."
+            )
 
         return Component(self.name, ref_conc, place=ref_place, well=ref_well)
 
@@ -440,14 +472,22 @@ class Strand(Component):
             ref_by_name = reference.set_index("Name")
         ref_comp = ref_by_name.loc[self.name]
 
-        if len(ref_comp.shape) > 1: # Is this a series or a dataframe
-            log.warning("Component %s has more than one location: %s.  Choosing last.", self.name, ref_comp)
+        if len(ref_comp.shape) > 1:  # Is this a series or a dataframe
+            log.warning(
+                "Component %s has more than one location: %s.  Choosing last.",
+                self.name,
+                ref_comp,
+            )
             ref_comp = ref_comp.iloc[-1, :]
 
         ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], "nM")
 
-        if not np.isnan(self.concentration) and not np.allclose(ref_conc, self.concentration):
-            raise ValueError(f"Strand {self.name}: concentration {self.concentration} does not match reference {ref_conc} of {ref_comp}.")
+        if not np.isnan(self.concentration) and not np.allclose(
+            ref_conc, self.concentration
+        ):
+            raise ValueError(
+                f"Strand {self.name}: concentration {self.concentration} does not match reference {ref_conc} of {ref_comp}."
+            )
 
         match (self.sequence, ref_comp["Sequence"]):
             case (None, None):
@@ -456,16 +496,22 @@ class Strand(Component):
                 seq = x
             case (str(x), str(y)):
                 if x != y:
-                    raise ValueError(f"Sequence {self.name}: sequence {x} does not match reference {y} of {ref_comp}.")
+                    raise ValueError(
+                        f"Sequence {self.name}: sequence {x} does not match reference {y} of {ref_comp}."
+                    )
                 seq = x
 
         ref_place = ref_comp["Plate"]
         if self.place and ref_place != self.place:
-            raise ValueError(f"Sequence {self.name}: plate {self.place} does not match reference {ref_place} of {ref_comp}.")
+            raise ValueError(
+                f"Sequence {self.name}: plate {self.place} does not match reference {ref_place} of {ref_comp}."
+            )
 
         ref_well = _parse_wellpos_optional(ref_comp["Well"])
         if self.well and self.well != ref_well:
-            raise ValueError(f"Sequence {self.name}: well {self.well} does not match reference {ref_well} of {ref_comp}.")
+            raise ValueError(
+                f"Sequence {self.name}: well {self.well} does not match reference {ref_well} of {ref_comp}."
+            )
 
         return Strand(self.name, ref_conc, sequence=x, well=ref_well, place=ref_place)
 
@@ -665,12 +711,17 @@ def _empty_components() -> pd.DataFrame:
 
 @attrs.define()
 class MultiFixedVolume(AbstractAction):
-    """A action adding multiple components, each with the same destination volume."""
+    """A action adding multiple components, with a set destination volume (potentially keeping equal concentration).
+    
+    MultiFixedVolume adds a selection of components, with a specified transfer volume.  Depending on the setting of
+
+    """
 
     components: Sequence[AbstractComponent]
     fixed_volume: Quantity[float] = attrs.field(converter=_parse_vol_required)
     set_name: str | None = None
     compact_display: bool = True
+    equal_conc: bool | Literal['max_vol', 'min_vol'] = True
 
     def with_reference(self, reference: pd.DataFrame) -> MultiFixedVolume:
         return MultiFixedVolume(
@@ -922,48 +973,48 @@ class MultiFixedConcentration(AbstractAction):
             for c in self.components
         ]
 
-        if all(x is None for x in locs):
-            return ", ".join(names), None
+        # if all(x is None for x in locs):
+        #     return ", ".join(names), None
 
-        if any(x is None for x in locs):
-            raise ValueError([name for name, loc in zip(names, locs) if loc is None])
+        # if any(x is None for x in locs):
+        #     raise ValueError([name for name, loc in zip(names, locs) if loc is None])
 
-        locdf = pd.DataFrame(locs, columns=("Name", "Plate", "Well"))
+        # locdf = pd.DataFrame(locs, columns=("Name", "Plate", "Well"))
 
-        locdf.sort_values(by=["Plate", "Well"])
+        # locdf.sort_values(by=["Plate", "Well"])
 
-        ns, ls = [], []
+        # ns, ls = [], []
 
-        for p, ll in locdf.groupby("Plate"):
-            names = list(ll["Name"])
-            wells: list[WellPos] = list(ll["Well"])
+        # for p, ll in locdf.groupby("Plate"):
+        #     names = list(ll["Name"])
+        #     wells: list[WellPos] = list(ll["Well"])
 
-            byrow = mixgaps(sorted(wells, key=WellPos.key_byrow), by="row")
-            bycol = mixgaps(sorted(wells, key=WellPos.key_bycol), by="col")
+        #     byrow = mixgaps(sorted(wells, key=WellPos.key_byrow), by="row")
+        #     bycol = mixgaps(sorted(wells, key=WellPos.key_bycol), by="col")
 
-            sortkey = WellPos.key_bycol if bycol <= byrow else WellPos.key_byrow
-            sortnext = WellPos.next_bycol if bycol <= byrow else WellPos.next_byrow
+        #     sortkey = WellPos.key_bycol if bycol <= byrow else WellPos.key_byrow
+        #     sortnext = WellPos.next_bycol if bycol <= byrow else WellPos.next_byrow
 
-            nw = sorted(
-                [(name, well) for name, well in zip(names, wells, strict=True)],
-                key=(lambda nwitem: sortkey(nwitem[1])),
-            )
+        #     nw = sorted(
+        #         [(name, well) for name, well in zip(names, wells, strict=True)],
+        #         key=(lambda nwitem: sortkey(nwitem[1])),
+        #     )
 
-            wellsf = []
-            nwi = iter(nw)
-            prevpos = next(nwi)[1]
-            wellsf.append(f"**{prevpos}**")
-            for _, w in nwi:
-                if sortnext(prevpos) != w:
-                    wellsf.append(f"**{w}**")
-                else:
-                    wellsf.append(f"{w}")
-                prevpos = w
+        #     wellsf = []
+        #     nwi = iter(nw)
+        #     prevpos = next(nwi)[1]
+        #     wellsf.append(f"**{prevpos}**")
+        #     for _, w in nwi:
+        #         if sortnext(prevpos) != w:
+        #             wellsf.append(f"**{w}**")
+        #         else:
+        #             wellsf.append(f"{w}")
+        #         prevpos = w
 
-            ns.append(", ".join(n for n, _ in nw))
-            ls.append(p + ": " + ", ".join(wellsf))
+        #     ns.append(", ".join(n for n, _ in nw))
+        #     ls.append(p + ": " + ", ".join(wellsf))
 
-        return "\n".join(ns), "\n".join(vs), "\n".join(ls)
+        # return "\n".join(ns), "\n".join(vs), "\n".join(ls)
 
 
 @attrs.define()
@@ -1134,7 +1185,9 @@ class Mix(AbstractComponent):
                     else:
                         tile = tl_or_ts[name]
                     new_tile = tile.copy()
-                    new_tile.stoic = float(Q_(row["concentration_nM"], "nM") / base_conc)
+                    new_tile.stoic = float(
+                        Q_(row["concentration_nM"], "nM") / base_conc
+                    )
                     newts.tiles.add(new_tile)
                     break
                 except KeyError:
@@ -1199,7 +1252,7 @@ def load_reference(filename_or_file):
     )
 
 
-RefFile: TypeAlias = "str | tuple[str, pint.Quantity | str]"
+RefFile: TypeAlias = "str | tuple[str, pint.Quantity | str | dict[str, pint.Quantity]]"
 
 REF_COLUMNS = ["Name", "Plate", "Well", "Concentration (nM)", "Sequence"]
 
@@ -1224,9 +1277,19 @@ def update_reference(
     for filename in files:
         filetype = None
         all_conc = None
+        conc_dict: dict[str, pint.Quantity] = {}
 
         if isinstance(filename, tuple):
-            filename, all_conc = filename[0], _parse_conc_required(filename[1])
+            conc_info = filename[1]
+            filename = filename[0]
+
+            if isinstance(conc_info, Mapping):
+                conc_dict = {k: _parse_conc_required(v) for k, v in conc_info.values()}
+                if "default" in conc_dict:
+                    all_conc = _parse_conc_required(conc_dict["default"])
+                    del conc_dict["default"]
+            else:
+                _parse_conc_required(filename[1])
 
         filepath = Path(filename)
 
@@ -1247,7 +1310,11 @@ def update_reference(
                     x.replace(" ", "") for x in sheet.loc[:, "Sequence"]
                 ]
                 sheet.rename(
-                    {"Plate Name": "Plate", "Well Position": "Well", "Sequence Name": "Name"},
+                    {
+                        "Plate Name": "Plate",
+                        "Well Position": "Well",
+                        "Sequence Name": "Name",
+                    },
                     axis="columns",
                     inplace=True,
                 )
@@ -1260,10 +1327,10 @@ def update_reference(
 
             else:
                 # FIXME: need better check here
-                #if not all(
+                # if not all(
                 #    next(iter(data.values())).columns
                 #    == ["Well Position", "Name", "Sequence"]
-                #):
+                # ):
                 #    raise ValueError
                 filetype = "plates-order"
                 for k, v in data.items():
@@ -1271,8 +1338,13 @@ def update_reference(
                         # There's already a plate column.  That's problematic.  Let's check,
                         # then delete it.
                         if not all(v["Plate"] == k):
-                            raise ValueError
-                        del(v["Plate"])
+                            raise ValueError(
+                                "Not all rows in sheet {k} have same plate value (normal IDT order files do not have a plate column)."
+                            )
+                        del v["Plate"]
+                    v["Concentration (nM)"] = conc_dict.get(
+                        k, all_conc if all_conc is not None else Q_(np.nan, "nM")
+                    ).m_as("nM")
                 all_seqs = (
                     pd.concat(
                         data.values(), keys=data.keys(), names=["Plate"], copy=False
@@ -1281,18 +1353,15 @@ def update_reference(
                     .drop(columns=["level_1"])
                 )
                 all_seqs.rename({"Well Position": "Well"}, axis="columns", inplace=True)
-                all_seqs["Concentration (nM)"] = (
-                    all_conc.m_as("nM") if all_conc is not None else np.nan
-                )
 
                 reference = pd.concat((reference, all_seqs), ignore_index=True)
                 continue
 
-        if filepath.suffix == '.csv':
+        if filepath.suffix == ".csv":
             tubedata = pd.read_csv(filepath)
             filetype = "idt-bulk"
 
-        if filepath.suffix == '.txt':
+        if filepath.suffix == ".txt":
             tubedata = pd.read_table(filepath)
             filetype = "idt-bulk"
 
@@ -1300,11 +1369,12 @@ def update_reference(
             tubedata["Plate"] = "tube"
             tubedata["Well"] = None
             tubedata["Concentration (nM)"] = (
-                    all_conc.m_as("nM") if all_conc is not None else np.nan
-                )
-            reference = pd.concat((reference, tubedata.loc[:, REF_COLUMNS]), ignore_index=True)
+                all_conc.m_as("nM") if all_conc is not None else np.nan
+            )
+            reference = pd.concat(
+                (reference, tubedata.loc[:, REF_COLUMNS]), ignore_index=True
+            )
             continue
-
 
         raise NotImplementedError
 
