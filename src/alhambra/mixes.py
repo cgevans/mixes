@@ -266,6 +266,11 @@ class AbstractComponent(ABC):
 
     @property
     @abstractmethod
+    def location(self) -> tuple[None | str, WellPos | None]:
+        ...
+
+    @property
+    @abstractmethod
     def concentration(self) -> Quantity[float]:  # pragma: no cover
         "(Source) concentration of the component as a pint Quantity.  NaN if undefined."
         ...
@@ -335,12 +340,24 @@ def _parse_vol_required(v: str | pint.Quantity) -> pint.Quantity:
             return x.to_compact()
     raise ValueError
 
+def _parse_wellpos_optional(v: str | WellPos | None) -> WellPos | None:
+    match v:
+        case str(x):
+            return WellPos(x)
+        case WellPos() as x:
+            return x
+        case None:
+            return None
+    raise ValueError
+
 @attrs.define()
 class Component(AbstractComponent):
     """A single named component, potentially with a concentration."""
 
     name: str
     concentration: Quantity[float] = attrs.field(converter=_parse_conc_optional, default=None)
+    place: str | None = attrs.field(default=None, kw_only=True)
+    well: WellPos | None = attrs.field(converter=_parse_wellpos_optional, default=None, kw_only=True)
 
     def __eq__(self, other: Any) -> bool:
         if not other.__class__ == Component:
@@ -355,6 +372,10 @@ class Component(AbstractComponent):
             case x, y:
                 return x == y
         return False
+
+    @property
+    def location(self) -> tuple[str | None, WellPos | None]:
+        return (self.place, self.well)
 
     def all_components(self) -> pd.DataFrame:
         df = pd.DataFrame(
@@ -378,7 +399,15 @@ class Component(AbstractComponent):
         if not np.isnan(self.concentration) and (ref_conc != self.concentration):
             raise ValueError
 
-        return Component(self.name, ref_conc)
+        ref_place = ref_comp["Plate"]
+        if self.place and ref_place != self.place:
+            raise ValueError
+
+        ref_well = _parse_wellpos_optional(ref_comp["Well"])
+        if self.well and self.well != ref_well:
+            raise ValueError
+
+        return Component(self.name, ref_conc, place=ref_place, well=ref_well)
 
 
 @attrs.define()
@@ -409,10 +438,20 @@ class Strand(Component):
                     raise ValueError
                 seq = x
 
+        ref_place = ref_comp["Plate"]
+        if self.place and ref_place != self.place:
+            raise ValueError
+
+        ref_well = _parse_wellpos_optional(ref_comp["Well"])
+        if self.well and self.well != ref_well:
+            raise ValueError
+        
         return Strand(
             self.name,
             ref_conc,
             sequence=x,
+            well=ref_well,
+            place=ref_place
         )
 
 
@@ -518,7 +557,7 @@ class FixedConcentration(AbstractAction):
                 source_conc=self.component.concentration,
                 dest_conc=self.dest_concentration(mix_vol),
                 total_tx_vol=self.tx_volume(mix_vol),
-                location=findloc(locations, self.component.name),
+                location=_format_location(self.component.location),
             )
         ]
 
@@ -564,7 +603,7 @@ class FixedVolume(AbstractAction):
                 source_conc=self.component.concentration,
                 dest_conc=self.dest_concentration(mix_vol),
                 total_tx_vol=self.tx_volume(mix_vol),
-                location=findloc(locations, self.component.name),
+                location=_format_location(self.component.location),
             )
         ]
 
@@ -666,7 +705,7 @@ class MultiFixedVolume(AbstractAction):
                     comp.concentration,
                     self.dest_concentration(mix_vol),
                     self.each_volume(mix_vol),
-                    location=findloc(locations, comp.name),
+                    location=_format_location(comp.location),
                 )
                 for comp in self.components
             ]
@@ -701,7 +740,7 @@ class MultiFixedVolume(AbstractAction):
         if locations is None:
             return ", ".join(c.name for c in self.components), None
         else:
-            locs = [findloc_tuples(locations, c.name) for c in self.components]
+            locs = [c.location for c in self.components]
             names = [c.name for c in self.components]
 
             if all(x is None for x in locs):
@@ -798,6 +837,7 @@ class MultiFixedConcentration(AbstractAction):
     def _mixlines(
         self, mix_vol: Quantity[float], locations: pd.DataFrame | None = None
     ) -> Sequence[_MixLine]:
+        raise NotImplementedError
         if not self.compact_display:
             return [
                 _MixLine(
@@ -838,7 +878,8 @@ class MultiFixedConcentration(AbstractAction):
         else:
             return self.set_name
 
-    def _compactstrs(self, mix_vol: pint.Quantity, reference: pd.DataFrame | None) -> tuple[str, pint.Quantity, str | None]:
+    def _compactstrs(self, mix_vol: pint.Quantity, reference: pd.DataFrame | None) -> tuple[str, pint.Quantity, pint.Quantity, str | None]:
+        raise NotImplementedError
         locs = [findloc_tuples(reference, c.name) for c in self.components]
         names = [c.name for c in self.components]
         scs = [c.concentration for c in self.components]
@@ -918,6 +959,7 @@ class FixedRatio(AbstractAction):
             str(self.source_value) + "x",
             str(self.dest_value) + "x",
             self.tx_volume(mix_vol),
+            location=_format_location(self.component.location)
         )]
 
     def with_reference(self, reference: pd.DataFrame) -> FixedRatio:
@@ -1069,7 +1111,7 @@ class Mix(AbstractComponent):
                 newts.seeds["default"] = firstts.seeds["default"]
             case False:
                 pass
-            case Seed as x:
+            case Seed() as x:
                 newts.seeds["default"] = x
 
         if len(newts.tiles) == 0:
@@ -1087,6 +1129,21 @@ class Mix(AbstractComponent):
         )
         new.reference = reference
         return new
+
+    @property
+    def location(self) -> tuple[None | str, WellPos | None]:
+        return (None, None)
+
+
+def _format_location(loc: tuple[str | None, WellPos | None]):
+    match loc:
+        case str(p), WellPos() as w:
+            return f"{p}: {w}"
+        case str(p), None:
+            return p
+        case None, None:
+            return ""
+    raise ValueError
 
 
 def load_reference(filename_or_file):
