@@ -1285,7 +1285,7 @@ def update_reference(
 
         if isinstance(filename, tuple):
             conc_info = filename[1]
-            filename = filename[0]
+            filepath = Path(filename[0])
 
             if isinstance(conc_info, Mapping):
                 conc_dict = {k: _parse_conc_required(v) for k, v in conc_info.values()}
@@ -1294,8 +1294,6 @@ def update_reference(
                     del conc_dict["default"]
             else:
                 _parse_conc_required(conc_info)
-
-        filepath = Path(filename)
 
         if filepath.suffix in (".xls", ".xlsx"):
             data: dict[str, pd.DataFrame] = pd.read_excel(filepath, sheet_name=None)
