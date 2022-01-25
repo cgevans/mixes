@@ -18,6 +18,7 @@ from typing import (
     cast,
     overload,
 )
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -47,7 +48,7 @@ __all__ = (
     "Mix",
     "load_reference",
     "compile_reference",
-    "update_reference"
+    "update_reference",
 )
 
 log = logging.getLogger("alhambra")
@@ -284,6 +285,7 @@ class AbstractComponent(ABC):
     def with_reference(self: T, reference: pd.DataFrame) -> T:  # pragma: no cover
         ...
 
+
 def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
     match v:
         case str(x):
@@ -299,6 +301,7 @@ def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
             return Q_(np.nan, "nM")
     raise ValueError
 
+
 def _parse_conc_required(v: str | pint.Quantity) -> pint.Quantity:
     match v:
         case str(x):
@@ -311,6 +314,7 @@ def _parse_conc_required(v: str | pint.Quantity) -> pint.Quantity:
                 raise ValueError
             return x.to_compact()
     raise ValueError
+
 
 def _parse_vol_optional(v: str | pint.Quantity | None) -> pint.Quantity:
     match v:
@@ -327,6 +331,7 @@ def _parse_vol_optional(v: str | pint.Quantity | None) -> pint.Quantity:
             return Q_(np.nan, "uL")
     raise ValueError
 
+
 def _parse_vol_required(v: str | pint.Quantity) -> pint.Quantity:
     match v:
         case str(x):
@@ -340,6 +345,7 @@ def _parse_vol_required(v: str | pint.Quantity) -> pint.Quantity:
             return x.to_compact()
     raise ValueError
 
+
 def _parse_wellpos_optional(v: str | WellPos | None) -> WellPos | None:
     match v:
         case str(x):
@@ -350,14 +356,19 @@ def _parse_wellpos_optional(v: str | WellPos | None) -> WellPos | None:
             return None
     raise ValueError
 
+
 @attrs.define()
 class Component(AbstractComponent):
-    """A single named component, potentially with a concentration."""
+    """A single named component, potentially with a concentration and location."""
 
     name: str
-    concentration: Quantity[float] = attrs.field(converter=_parse_conc_optional, default=None)
+    concentration: Quantity[float] = attrs.field(
+        converter=_parse_conc_optional, default=None
+    )
     place: str | None = attrs.field(default=None, kw_only=True)
-    well: WellPos | None = attrs.field(converter=_parse_wellpos_optional, default=None, kw_only=True)
+    well: WellPos | None = attrs.field(
+        converter=_parse_wellpos_optional, default=None, kw_only=True
+    )
 
     def __eq__(self, other: Any) -> bool:
         if not other.__class__ == Component:
@@ -412,7 +423,7 @@ class Component(AbstractComponent):
 
 @attrs.define()
 class Strand(Component):
-    """A single named strand, potentially with a concentration and sequence."""
+    """A single named strand, potentially with a concentration, location and sequence."""
 
     sequence: str | None = None
 
@@ -445,14 +456,8 @@ class Strand(Component):
         ref_well = _parse_wellpos_optional(ref_comp["Well"])
         if self.well and self.well != ref_well:
             raise ValueError
-        
-        return Strand(
-            self.name,
-            ref_conc,
-            sequence=x,
-            well=ref_well,
-            place=ref_place
-        )
+
+        return Strand(self.name, ref_conc, sequence=x, well=ref_well, place=ref_place)
 
 
 class AbstractAction(ABC):
@@ -488,6 +493,7 @@ class AbstractAction(ABC):
 
     def dest_concentration(self, mix_vol: pint.Quantity) -> pint.Quantity:
         raise ValueError
+
 
 def findloc(locations: pd.DataFrame | None, name: str) -> str | None:
     match findloc_tuples(locations, name):
@@ -530,7 +536,9 @@ class FixedConcentration(AbstractAction):
     component: AbstractComponent
     fixed_concentration: Quantity[float] = attrs.field(converter=_parse_conc_required)
 
-    def dest_concentration(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
+    def dest_concentration(
+        self, mix_vol: Quantity[float] = Q_(np.nan, "nM")
+    ) -> Quantity[float]:
         return self.fixed_concentration
 
     def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
@@ -540,7 +548,9 @@ class FixedConcentration(AbstractAction):
         retval.check("M")
         return retval
 
-    def all_components(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> pd.DataFrame:
+    def all_components(
+        self, mix_vol: Quantity[float] = Q_(np.nan, "nM")
+    ) -> pd.DataFrame:
         comps = self.component.all_components()
         comps.concentration_nM *= (
             (self.fixed_concentration / self.component.concentration).to("").magnitude
@@ -548,7 +558,9 @@ class FixedConcentration(AbstractAction):
         return comps
 
     def _mixlines(
-        self, mix_vol: Quantity[float] = Q_(np.nan, "nM"), locations: pd.DataFrame | None = None
+        self,
+        mix_vol: Quantity[float] = Q_(np.nan, "nM"),
+        locations: pd.DataFrame | None = None,
     ) -> Sequence[_MixLine]:
 
         return [
@@ -578,7 +590,9 @@ class FixedVolume(AbstractAction):
     component: AbstractComponent
     fixed_volume: Quantity[float] = attrs.field(converter=_parse_vol_required)
 
-    def dest_concentration(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
+    def dest_concentration(
+        self, mix_vol: Quantity[float] = Q_(np.nan, "nM")
+    ) -> Quantity[float]:
         return (self.component.concentration * self.fixed_volume / mix_vol).to_compact()
 
     def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
@@ -686,10 +700,14 @@ class MultiFixedVolume(AbstractAction):
 
         return newdf
 
-    def dest_concentration(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
+    def dest_concentration(
+        self, mix_vol: Quantity[float] = Q_(np.nan, "nM")
+    ) -> Quantity[float]:
         return (self.source_concentration * self.fixed_volume / mix_vol).to_compact()
 
-    def each_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
+    def each_volume(
+        self, mix_vol: Quantity[float] = Q_(np.nan, "nM")
+    ) -> Quantity[float]:
         return self.fixed_volume
 
     def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
@@ -791,7 +809,7 @@ class MultiFixedVolume(AbstractAction):
 
 @attrs.define()
 class MultiFixedConcentration(AbstractAction):
-    """A action adding multiple components, each with the same destination concentration."""
+    """A action adding multiple components, each with the same destination concentration (NOT IMPLEMENTED)."""
 
     components: Sequence[AbstractComponent]
     fixed_concentration: Quantity[float] = attrs.field(converter=_parse_conc_required)
@@ -825,7 +843,9 @@ class MultiFixedConcentration(AbstractAction):
 
         return newdf
 
-    def dest_concentration(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
+    def dest_concentration(
+        self, mix_vol: Quantity[float] = Q_(np.nan, "nM")
+    ) -> Quantity[float]:
         return self.fixed_concentration
 
     def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
@@ -853,7 +873,9 @@ class MultiFixedConcentration(AbstractAction):
             ]
         else:
 
-            name, scs, vol, locs = self._compactstrs(mix_vol=mix_vol, reference=locations)
+            name, scs, vol, locs = self._compactstrs(
+                mix_vol=mix_vol, reference=locations
+            )
 
             return [
                 _MixLine(
@@ -878,20 +900,23 @@ class MultiFixedConcentration(AbstractAction):
         else:
             return self.set_name
 
-    def _compactstrs(self, mix_vol: pint.Quantity, reference: pd.DataFrame | None) -> tuple[str, pint.Quantity, pint.Quantity, str | None]:
+    def _compactstrs(
+        self, mix_vol: pint.Quantity, reference: pd.DataFrame | None
+    ) -> tuple[str, pint.Quantity, pint.Quantity, str | None]:
         raise NotImplementedError
         locs = [findloc_tuples(reference, c.name) for c in self.components]
         names = [c.name for c in self.components]
         scs = [c.concentration for c in self.components]
-        vols = [(mix_vol * self.dest_concentration / c.concentration).to_compact() for c in self.components]
+        vols = [
+            (mix_vol * self.dest_concentration / c.concentration).to_compact()
+            for c in self.components
+        ]
 
         if all(x is None for x in locs):
             return ", ".join(names), None
 
         if any(x is None for x in locs):
-            raise ValueError(
-                [name for name, loc in zip(names, locs) if loc is None]
-            )
+            raise ValueError([name for name, loc in zip(names, locs) if loc is None])
 
         locdf = pd.DataFrame(locs, columns=("Name", "Plate", "Well"))
 
@@ -933,7 +958,8 @@ class MultiFixedConcentration(AbstractAction):
 
 @attrs.define()
 class FixedRatio(AbstractAction):
-    """A mix action taking a component from some"""
+    """A mix action adding a component at some fixed concentration ratio, regardless of concentration.
+    Useful, for, eg, concentrated buffers."""
 
     component: AbstractComponent
     source_value: float
@@ -954,13 +980,15 @@ class FixedRatio(AbstractAction):
     def _mixlines(
         self, mix_vol: Quantity[float], locations: pd.DataFrame | None = None
     ) -> Sequence[_MixLine]:
-        return [_MixLine(
-            self.name,
-            str(self.source_value) + "x",
-            str(self.dest_value) + "x",
-            self.tx_volume(mix_vol),
-            location=_format_location(self.component.location)
-        )]
+        return [
+            _MixLine(
+                self.name,
+                str(self.source_value) + "x",
+                str(self.dest_value) + "x",
+                self.tx_volume(mix_vol),
+                location=_format_location(self.component.location),
+            )
+        ]
 
     def with_reference(self, reference: pd.DataFrame) -> FixedRatio:
         return FixedRatio(
@@ -1160,15 +1188,102 @@ def load_reference(filename_or_file):
         axis="columns",
     )
 
-RefFile: TypeAlias = "str | tuple[str, pint.Quantity]"
 
-def update_reference(reference: pd.DataFrame, files: Sequence[RefFile]) -> pd.DataFrame:
+RefFile: TypeAlias = "str | tuple[str, pint.Quantity | str]"
+
+REF_COLUMNS = ["Name", "Plate", "Well", "Concentration (nM)", "Sequence"]
+
+
+def update_reference(
+    reference: pd.DataFrame | None, files: Sequence[RefFile] | RefFile, round: int = -1
+) -> pd.DataFrame:
     """
     Update reference information.
 
     This updates an existing reference dataframe with new files, with the same methods as :func:`compile_reference`.
     """
-    raise NotImplementedError
+    if reference is None:
+        reference = pd.DataFrame(columns=REF_COLUMNS)
+
+    if isinstance(files, str) or (
+        len(files) == 2 and isinstance(files[1], str) and not Path(files[1]).exists()
+    ):
+        files = [cast(RefFile, files)]
+
+    # FIXME: how to deal with repeats?
+    for filename in files:
+        filetype = None
+        all_conc = None
+
+        if isinstance(filename, tuple):
+            filename, all_conc = filename[0], _parse_conc_required(filename[1])
+
+        if filename.endswith(("xls", "xlsx")):
+            data: dict[str, pd.DataFrame] = pd.read_excel(filename, sheet_name=None)
+            if "Plate Specs" in data:
+                if len(data) > 1:
+                    raise ValueError(
+                        f"Plate specs file {filename} should only have one sheet, but has {len(data)}."
+                    )
+                sheet: pd.DataFrame = data["Plate Specs"]
+                filetype = "plate-specs"
+
+                sheet.loc[:, "Concentration (nM)"] = 1000 * sheet.loc[
+                    :, "Measured Concentration µM "
+                ].round(round)
+                sheet.loc[:, "Sequence"] = [
+                    x.replace(" ", "") for x in sheet.loc[:, "Sequence"]
+                ]
+                sheet.rename(
+                    {"Plate Name": "Plate", "Well Position": "Well", "Sequence Name": "Name"},
+                    axis="columns",
+                    inplace=True,
+                )
+
+                reference = pd.concat(
+                    (reference, sheet.loc[:, REF_COLUMNS]), ignore_index=True
+                )
+
+                continue
+
+            else:
+                if not all(
+                    next(iter(data.values())).columns
+                    == ["Well Position", "Name", "Sequence"]
+                ):
+                    raise ValueError
+                filetype = "plates-order"
+                all_seqs = (
+                    pd.concat(
+                        data.values(), keys=data.keys(), names=["Plate"], copy=False
+                    )
+                    .reset_index()
+                    .drop(columns=["level_1"])
+                )
+                all_seqs.rename({"Well Position": "Well"}, axis="columns", inplace=True)
+                all_seqs["Concentration (nM)"] = (
+                    all_conc.m_as("nM") if all_conc is not None else np.nan
+                )
+
+                reference = pd.concat((reference, all_seqs), ignore_index=True)
+                continue
+
+        if filename.endswith(("csv")):
+            data = pd.read_csv(filename)
+            filetype = "idt-bulk"
+            raise NotImplementedError
+
+        if filename.endswith(("txt")):
+            data = pd.read_table(filename)
+            filetype = "idt-bulk"
+            raise NotImplementedError
+
+        raise NotImplementedError
+
+    # FIXME: validation
+
+    return reference
+
 
 def compile_reference(files: Sequence[RefFile] | RefFile) -> pd.DataFrame:
     """
@@ -1181,4 +1296,4 @@ def compile_reference(files: Sequence[RefFile] | RefFile) -> pd.DataFrame:
     - An IDT bulk order entry text file.
     - An IDT plate spec sheet.
     """
-    raise NotImplementedError
+    return update_reference(None, files)
