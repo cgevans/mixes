@@ -714,6 +714,10 @@ class MultiFixedVolume(AbstractAction):
     """A action adding multiple components, with a set destination volume (potentially keeping equal concentration).
     
     MultiFixedVolume adds a selection of components, with a specified transfer volume.  Depending on the setting of
+    `equal_conc`, it may require that the destination concentrations all be equal, may not care, and just transfer
+    a fixed volume of each strand, or may treat the fixed transfer volume as the volume as the minimum or maximum
+    volume to transfer, adjusting volumes of each strand to make this work and have them at equal destination
+    concentrations.
 
     """
 
@@ -1289,7 +1293,7 @@ def update_reference(
                     all_conc = _parse_conc_required(conc_dict["default"])
                     del conc_dict["default"]
             else:
-                _parse_conc_required(filename[1])
+                _parse_conc_required(conc_info)
 
         filepath = Path(filename)
 
