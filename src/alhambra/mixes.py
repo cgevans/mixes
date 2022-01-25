@@ -43,7 +43,9 @@ __all__ = (
     "MultiFixedVolume",
     "MultiFixedConcentration",
     "Mix",
-    "load_reference"
+    "load_reference",
+    "compile_reference",
+    "update_reference"
 )
 
 log = logging.getLogger("alhambra")
@@ -1028,9 +1030,38 @@ class Mix(AbstractComponent):
 
 
 def load_reference(filename_or_file):
+    """
+    Load reference information from a CSV file.
+
+    The reference information loaded by this function should be compiled manually, fitting the :ref:`mix reference` format, or
+    be loaded with :func:`compile_reference` or :func:`update_reference`.
+    """
     df = pd.read_csv(filename_or_file)
 
     return df.reindex(
         ["Name", "Plate", "Well Position", "Concentration (nM)", "Sequence"],
         axis="columns",
     )
+
+RefFiles: TypeVar = ""
+
+def update_reference(reference: pd.DataFrame, files: Sequence[RefFile]) -> pd.DataFrame:
+    """
+    Update reference information.
+
+    This updates an existing reference dataframe with new files, with the same methods as :func:`compile_reference`.
+    """
+    raise NotImplementedError
+
+def compile_reference(files: Sequence[RefFile] | RefFile) -> pd.DataFrame:
+    """
+    Compile reference information.
+
+    This loads information from the following sources:
+
+    - An IDT plate order spreadsheet.  This does not include concentration.  To add concentration information, list it as a tuple of
+      :code:`(file, concentration)`.
+    - An IDT bulk order entry text file.
+    - An IDT plate spec sheet.
+    """
+    raise NotImplementedError
