@@ -294,6 +294,46 @@ def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
             return Q_(np.nan, "nM")
     raise ValueError
 
+def _parse_conc_required(v: str | pint.Quantity) -> pint.Quantity:
+    match v:
+        case str(x):
+            q = ureg(x)
+            if not q.check("nM"):
+                raise ValueError
+            return q
+        case pint.Quantity() as x:
+            if not x.check("nM"):
+                raise ValueError
+            return x.to_compact()
+    raise ValueError
+
+def _parse_vol_optional(v: str | pint.Quantity | None) -> pint.Quantity:
+    match v:
+        case str(x):
+            q = ureg(x)
+            if not q.check("uL"):
+                raise ValueError
+            return q
+        case pint.Quantity() as x:
+            if not x.check("uL"):
+                raise ValueError
+            return x.to_compact()
+        case None:
+            return Q_(np.nan, "uL")
+    raise ValueError
+
+def _parse_vol_required(v: str | pint.Quantity) -> pint.Quantity:
+    match v:
+        case str(x):
+            q = ureg(x)
+            if not q.check("uL"):
+                raise ValueError
+            return q
+        case pint.Quantity() as x:
+            if not x.check("uL"):
+                raise ValueError
+            return x.to_compact()
+    raise ValueError
 
 @attrs.define()
 class Component(AbstractComponent):
@@ -449,7 +489,7 @@ class FixedConcentration(AbstractAction):
     """A mix action adding one component at a fixed destination concentration."""
 
     component: AbstractComponent
-    fixed_concentration: Quantity[float]
+    fixed_concentration: Quantity[float] = attrs.field(converter=_parse_conc_required)
 
     def dest_concentration(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
         return self.fixed_concentration
@@ -497,7 +537,7 @@ class FixedVolume(AbstractAction):
     """A mix action adding one component, at a fixed destination volume."""
 
     component: AbstractComponent
-    fixed_volume: Quantity[float]
+    fixed_volume: Quantity[float] = attrs.field(converter=_parse_vol_required)
 
     def dest_concentration(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
         return (self.component.concentration * self.fixed_volume / mix_vol).to_compact()
@@ -565,7 +605,7 @@ class MultiFixedVolume(AbstractAction):
     """A action adding multiple components, each with the same destination volume."""
 
     components: Sequence[AbstractComponent]
-    fixed_volume: Quantity[float]
+    fixed_volume: Quantity[float] = attrs.field(converter=_parse_vol_required)
     set_name: str | None = None
     compact_display: bool = True
 
@@ -715,7 +755,7 @@ class MultiFixedConcentration(AbstractAction):
     """A action adding multiple components, each with the same destination concentration."""
 
     components: Sequence[AbstractComponent]
-    fixed_concentration: Quantity[float]
+    fixed_concentration: Quantity[float] = attrs.field(converter=_parse_conc_required)
     set_name: str | None = None
     compact_display: bool = True
 
@@ -892,8 +932,8 @@ class Mix(AbstractComponent):
     some volume or concentration.
     """
 
-    name: str
     actions: Sequence[AbstractAction]
+    name: str
     fixed_total_volume: Optional[Quantity[float]] = None
     fixed_concentration: Union[str, Quantity[float], None] = None
     buffer_name: Optional[str] = None
