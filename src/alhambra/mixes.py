@@ -12,8 +12,10 @@ from typing import (
     Literal,
     Optional,
     Sequence,
+    TypeAlias,
     TypeVar,
     Union,
+    cast,
     overload,
 )
 
@@ -50,18 +52,18 @@ __all__ = (
 
 log = logging.getLogger("alhambra")
 
-UR = pint.UnitRegistry()
-pint_pandas.PintType.ureg = UR
-UR.default_format = "~"
+ureg = pint.UnitRegistry()
+pint_pandas.PintType.ureg = ureg
+ureg.default_format = "~"
 
-MOLARITY_TOLERANCE = UR.Quantity(1.0, "fM")
-VOLUME_TOLERANCE = UR.Quantity(1.0, "pl")
+MOLARITY_TOLERANCE = ureg.Quantity(1.0, "fM")
+VOLUME_TOLERANCE = ureg.Quantity(1.0, "pl")
 
 
-uL = UR("uL")
-uM = UR("uM")
-nM = UR("nM")
-Q_ = UR.Quantity
+uL = ureg("uL")
+uM = ureg("uM")
+nM = ureg("nM")
+Q_ = ureg.Quantity
 
 ROW_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWX"
 
@@ -144,7 +146,7 @@ class WellPos:
             raise ValueError(f"Plate size {platesize} not supported.")
         object.__setattr__(self, "platesize", platesize)
 
-        self._validate_col(col)
+        self._validate_col(cast(int, col))
         self._validate_row(row)
 
         object.__setattr__(self, "row", row)
@@ -156,14 +158,15 @@ class WellPos:
     def __repr__(self) -> str:
         return f'WellPos("{self}")'
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         match other:
-            case WellPos(row, col, platesize):
+            case WellPos(row, col, platesize):  # type: ignore
                 return (row == self.row) and (col == self.col)
             case str(ws):
                 return self == WellPos(other, platesize=self.platesize)
             case _:
                 return False
+        return False
 
     def key_byrow(self) -> tuple[int, int]:
         "Get a tuple (row, col) key that can be used for ordering by row."
@@ -197,8 +200,8 @@ class _MixLine:
     """Class for handling a line of a (processed) mix recipe."""
 
     name: str | None
-    source_conc: Quantity[float] | None
-    dest_conc: Quantity[float] | None
+    source_conc: Quantity[float] | str | None
+    dest_conc: Quantity[float] | str | None
     total_tx_vol: Quantity[float] | None
     number: int = 1
     each_tx_vol: Quantity[float] | None = None
@@ -246,6 +249,7 @@ def _formatter(x: int | float | str | None, t: str = "") -> str:
             return f"{y:.2f}"
         case _:
             raise TypeError
+    raise TypeError
 
 
 T = TypeVar("T")
@@ -263,16 +267,32 @@ class AbstractComponent(ABC):
     @property
     @abstractmethod
     def concentration(self) -> Quantity[float]:  # pragma: no cover
-        "(Source) concentration of the component as a pint Quantity."
+        "(Source) concentration of the component as a pint Quantity.  NaN if undefined."
         ...
 
     @abstractmethod
     def all_components(self) -> pd.DataFrame:  # pragma: no cover
+        "A dataframe of all components."
         ...
 
     @abstractmethod
     def with_reference(self: T, reference: pd.DataFrame) -> T:  # pragma: no cover
         ...
+
+def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
+    match v:
+        case str(x):
+            q = ureg(x)
+            if not q.check("nM"):
+                raise ValueError
+            return q
+        case pint.Quantity() as x:
+            if not x.check("nM"):
+                raise ValueError
+            return x.to_compact()
+        case None:
+            return Q_(np.nan, "nM")
+    raise ValueError
 
 
 @attrs.define()
@@ -280,7 +300,7 @@ class Component(AbstractComponent):
     """A single named component, potentially with a concentration."""
 
     name: str
-    concentration: Quantity[float] | None = None
+    concentration: Quantity[float] = attrs.field(converter=_parse_conc_optional, default=None)
 
     def __eq__(self, other: Any) -> bool:
         if not other.__class__ == Component:
@@ -289,9 +309,12 @@ class Component(AbstractComponent):
             return False
         match (self.concentration, other.concentration):
             case (Quantity() as x, Quantity() as y):
+                if np.isnan(x) and np.isnan(y):
+                    return True
                 return abs(x - y) <= MOLARITY_TOLERANCE
             case x, y:
                 return x == y
+        return False
 
     def all_components(self) -> pd.DataFrame:
         df = pd.DataFrame(
@@ -310,9 +333,9 @@ class Component(AbstractComponent):
             ref_by_name = reference.set_index("Name")
         ref_comp = ref_by_name.loc[self.name]
 
-        ref_conc = UR.Quantity(ref_comp["Concentration (nM)"], "nM")
+        ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], "nM")
 
-        if self.concentration is not None and (ref_conc != self.concentration):
+        if not np.isnan(self.concentration) and (ref_conc != self.concentration):
             raise ValueError
 
         return Component(self.name, ref_conc)
@@ -331,9 +354,9 @@ class Strand(Component):
             ref_by_name = reference.set_index("Name")
         ref_comp = ref_by_name.loc[self.name]
 
-        ref_conc = UR.Quantity(ref_comp["Concentration (nM)"], "nM")
+        ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], "nM")
 
-        if self.concentration is not None and (ref_conc != self.concentration):
+        if not np.isnan(self.concentration) and (ref_conc != self.concentration):
             raise ValueError
 
         match (self.sequence, ref_comp["Sequence"]):
@@ -364,7 +387,7 @@ class AbstractAction(ABC):
 
     @abstractmethod
     def tx_volume(
-        self, mix_vol: Optional[Quantity[float]]
+        self, mix_vol: Quantity[float] = Q_(np.nan, "nM")
     ) -> Quantity[float]:  # pragma: no cover
         ...
 
@@ -384,21 +407,24 @@ class AbstractAction(ABC):
     def with_reference(self: T, reference: pd.DataFrame) -> T:  # pragma: no cover
         ...
 
+    def dest_concentration(self, mix_vol: pint.Quantity) -> pint.Quantity:
+        raise ValueError
 
 def findloc(locations: pd.DataFrame | None, name: str) -> str | None:
     match findloc_tuples(locations, name):
-        case (name, plate, well):
+        case (_, plate, well):
             if well:
                 return f"{plate}: {well}"
             else:
                 return f"{plate}"
         case None:
             return None
+    return None
 
 
 def findloc_tuples(
     locations: pd.DataFrame | None, name: str
-) -> tuple[str, str, str] | None:
+) -> tuple[str, str, WellPos | str] | None:
     if locations is None:
         return None
     locs = locations.loc[locations["Name"] == name]
@@ -425,19 +451,17 @@ class FixedConcentration(AbstractAction):
     component: AbstractComponent
     fixed_concentration: Quantity[float]
 
-    def dest_concentration(self, mix_vol: Optional[Quantity[float]]) -> Quantity[float]:
+    def dest_concentration(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
         return self.fixed_concentration
 
-    def tx_volume(self, mix_vol: Optional[Quantity[float]]) -> Quantity[float]:
-        if mix_vol is None:
-            raise ValueError
+    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
         retval: Quantity[float] = (
             mix_vol * self.fixed_concentration / self.component.concentration
         ).to_compact()
         retval.check("M")
         return retval
 
-    def all_components(self, mix_vol: Quantity[float]) -> pd.DataFrame:
+    def all_components(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> pd.DataFrame:
         comps = self.component.all_components()
         comps.concentration_nM *= (
             (self.fixed_concentration / self.component.concentration).to("").magnitude
@@ -445,7 +469,7 @@ class FixedConcentration(AbstractAction):
         return comps
 
     def _mixlines(
-        self, mix_vol: Quantity[float], locations: pd.DataFrame | None = None
+        self, mix_vol: Quantity[float] = Q_(np.nan, "nM"), locations: pd.DataFrame | None = None
     ) -> Sequence[_MixLine]:
 
         return [
@@ -475,10 +499,10 @@ class FixedVolume(AbstractAction):
     component: AbstractComponent
     fixed_volume: Quantity[float]
 
-    def dest_concentration(self, mix_vol: Optional[Quantity[float]]) -> Quantity[float]:
+    def dest_concentration(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
         return (self.component.concentration * self.fixed_volume / mix_vol).to_compact()
 
-    def tx_volume(self, mix_vol: Optional[Quantity[float]]) -> Quantity[float]:
+    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
         return self.fixed_volume
 
     def all_components(self, mix_vol: Quantity[float]) -> pd.DataFrame:
@@ -583,13 +607,13 @@ class MultiFixedVolume(AbstractAction):
 
         return newdf
 
-    def dest_concentration(self, mix_vol: Optional[Quantity[float]]) -> Quantity[float]:
+    def dest_concentration(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
         return (self.source_concentration * self.fixed_volume / mix_vol).to_compact()
 
-    def each_volume(self, mix_vol: Optional[Quantity[float]]) -> Quantity[float]:
+    def each_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
         return self.fixed_volume
 
-    def tx_volume(self, mix_vol: Optional[Quantity[float]]) -> Quantity[float]:
+    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
         return self.fixed_volume * self.number
 
     def _mixlines(
@@ -655,7 +679,7 @@ class MultiFixedVolume(AbstractAction):
             ns, ls = [], []
 
             for p, ll in locdf.groupby("Plate"):
-                names: list[str] = list(ll["Name"])
+                names = list(ll["Name"])
                 wells: list[WellPos] = list(ll["Well Position"])
 
                 byrow = mixgaps(sorted(wells, key=WellPos.key_byrow), by="row")
@@ -695,8 +719,8 @@ class MultiFixedConcentration(AbstractAction):
     set_name: str | None = None
     compact_display: bool = True
 
-    def with_reference(self, reference: pd.DataFrame) -> MultiFixedVolume:
-        return MultiFixedVolume(
+    def with_reference(self, reference: pd.DataFrame) -> MultiFixedConcentration:
+        return MultiFixedConcentration(
             [c.with_reference(reference) for c in self.components],
             self.fixed_concentration,
             self.set_name,
@@ -722,17 +746,14 @@ class MultiFixedConcentration(AbstractAction):
 
         return newdf
 
-    def dest_concentration(self, mix_vol: Optional[Quantity[float]]) -> Quantity[float]:
+    def dest_concentration(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
         return self.fixed_concentration
 
-    def tx_volume(self, mix_vol: Optional[Quantity[float]]) -> Quantity[float]:
-        sum(
-            (
-                (mix_vol * self.fixed_concentration / comp.concentration).to(uL)
-                for comp in self.components
-            ),
-            Q_(0.0, uL),
-        )
+    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
+        v = Q_(0.0, "uL")
+        for comp in self.components:
+            v += (mix_vol * self.fixed_concentration / comp.concentration).to(uL)
+        return v
 
     def _mixlines(
         self, mix_vol: Quantity[float], locations: pd.DataFrame | None = None
@@ -752,12 +773,12 @@ class MultiFixedConcentration(AbstractAction):
             ]
         else:
 
-            name, vol, locs = self._compactstrs(locations=locations)
+            name, scs, vol, locs = self._compactstrs(mix_vol=mix_vol, reference=locations)
 
             return [
                 _MixLine(
                     name,
-                    self.source_concentration,
+                    scs,
                     self.dest_concentration(mix_vol),
                     self.tx_volume(mix_vol),
                     self.number,
@@ -777,57 +798,56 @@ class MultiFixedConcentration(AbstractAction):
         else:
             return self.set_name
 
-    def _compactstrs(self, locations: pd.DataFrame | None) -> tuple[str, str | None]:
-        if locations is None:
-            return ", ".join(c.name for c in self.components), None
-        else:
-            locs = [findloc_tuples(locations, c.name) for c in self.components]
-            names = [c.name for c in self.components]
+    def _compactstrs(self, mix_vol: pint.Quantity, reference: pd.DataFrame | None) -> tuple[str, pint.Quantity, str | None]:
+        locs = [findloc_tuples(reference, c.name) for c in self.components]
+        names = [c.name for c in self.components]
+        scs = [c.concentration for c in self.components]
+        vols = [(mix_vol * self.dest_concentration / c.concentration).to_compact() for c in self.components]
 
-            if all(x is None for x in locs):
-                return ", ".join(names), None
+        if all(x is None for x in locs):
+            return ", ".join(names), None
 
-            if any(x is None for x in locs):
-                raise ValueError(
-                    [name for name, loc in zip(names, locs) if loc is None]
-                )
+        if any(x is None for x in locs):
+            raise ValueError(
+                [name for name, loc in zip(names, locs) if loc is None]
+            )
 
-            locdf = pd.DataFrame(locs, columns=("Name", "Plate", "Well Position"))
+        locdf = pd.DataFrame(locs, columns=("Name", "Plate", "Well Position"))
 
-            locdf.sort_values(by=["Plate", "Well Position"])
+        locdf.sort_values(by=["Plate", "Well Position"])
 
-            ns, ls = [], []
+        ns, ls = [], []
 
-            for p, ll in locdf.groupby("Plate"):
-                names: list[str] = list(ll["Name"])
-                wells: list[WellPos] = list(ll["Well Position"])
+        for p, ll in locdf.groupby("Plate"):
+            names = list(ll["Name"])
+            wells: list[WellPos] = list(ll["Well Position"])
 
-                byrow = mixgaps(sorted(wells, key=WellPos.key_byrow), by="row")
-                bycol = mixgaps(sorted(wells, key=WellPos.key_bycol), by="col")
+            byrow = mixgaps(sorted(wells, key=WellPos.key_byrow), by="row")
+            bycol = mixgaps(sorted(wells, key=WellPos.key_bycol), by="col")
 
-                sortkey = WellPos.key_bycol if bycol <= byrow else WellPos.key_byrow
-                sortnext = WellPos.next_bycol if bycol <= byrow else WellPos.next_byrow
+            sortkey = WellPos.key_bycol if bycol <= byrow else WellPos.key_byrow
+            sortnext = WellPos.next_bycol if bycol <= byrow else WellPos.next_byrow
 
-                nw = sorted(
-                    [(name, well) for name, well in zip(names, wells, strict=True)],
-                    key=(lambda nwitem: sortkey(nwitem[1])),
-                )
+            nw = sorted(
+                [(name, well) for name, well in zip(names, wells, strict=True)],
+                key=(lambda nwitem: sortkey(nwitem[1])),
+            )
 
-                wellsf = []
-                nwi = iter(nw)
-                prevpos = next(nwi)[1]
-                wellsf.append(f"**{prevpos}**")
-                for _, w in nwi:
-                    if sortnext(prevpos) != w:
-                        wellsf.append(f"**{w}**")
-                    else:
-                        wellsf.append(f"{w}")
-                    prevpos = w
+            wellsf = []
+            nwi = iter(nw)
+            prevpos = next(nwi)[1]
+            wellsf.append(f"**{prevpos}**")
+            for _, w in nwi:
+                if sortnext(prevpos) != w:
+                    wellsf.append(f"**{w}**")
+                else:
+                    wellsf.append(f"{w}")
+                prevpos = w
 
-                ns.append(", ".join(n for n, _ in nw))
-                ls.append(p + ": " + ", ".join(wellsf))
+            ns.append(", ".join(n for n, _ in nw))
+            ls.append(p + ": " + ", ".join(wellsf))
 
-            return "\n".join(ns), "\n".join(ls)
+        return "\n".join(ns), "\n".join(vs), "\n".join(ls)
 
 
 @attrs.define()
@@ -842,7 +862,7 @@ class FixedRatio(AbstractAction):
     def name(self) -> str:
         return self.component.name
 
-    def tx_volume(self, mix_vol: Optional[Quantity[float]]) -> Quantity[float]:
+    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "nM")) -> Quantity[float]:
         return mix_vol * self.dest_value / self.source_value
 
     def all_components(self, mix_vol: Quantity[float]) -> pd.DataFrame:
@@ -853,14 +873,14 @@ class FixedRatio(AbstractAction):
     def _mixlines(
         self, mix_vol: Quantity[float], locations: pd.DataFrame | None = None
     ) -> Sequence[_MixLine]:
-        return _MixLine(
+        return [_MixLine(
             self.name,
             str(self.source_value) + "x",
             str(self.dest_value) + "x",
             self.tx_volume(mix_vol),
-        )
+        )]
 
-    def with_reference(self: T, reference: pd.DataFrame) -> T:
+    def with_reference(self, reference: pd.DataFrame) -> FixedRatio:
         return FixedRatio(
             self.component.with_reference(reference), self.source_value, self.dest_value
         )
@@ -900,7 +920,7 @@ class Mix(AbstractComponent):
             return self.fixed_concentration
         elif isinstance(self.fixed_concentration, str):
             ac = self.all_components()
-            return UR.Quantity(
+            return ureg.Quantity(
                 ac.loc[self.fixed_concentration, "concentration_nM"], "nM"
             )
         elif self.fixed_concentration is None:
@@ -917,7 +937,7 @@ class Mix(AbstractComponent):
         if self.fixed_total_volume is not None:
             return self.fixed_total_volume
         else:
-            return sum([c.tx_volume(None) for c in self.actions], 0 * UR("µL"))
+            return sum([c.tx_volume() for c in self.actions], 0 * ureg("µL"))
 
     @property
     def buffer_volume(self) -> Quantity[float]:
@@ -974,7 +994,7 @@ class Mix(AbstractComponent):
         tilesets_or_lists: TileSet | TileList | Iterable[TileSet | TileList],
         *,
         seed: bool | Seed = False,
-        base_conc=100 * UR("nM"),
+        base_conc=100 * ureg("nM"),
     ) -> TileSet:
         """
         Given some :any:`TileSet`\ s, or lists of :any:`Tile`\ s from which to
@@ -1043,7 +1063,7 @@ def load_reference(filename_or_file):
         axis="columns",
     )
 
-RefFiles: TypeVar = ""
+RefFile: TypeAlias = "str | tuple[str, pint.Quantity]"
 
 def update_reference(reference: pd.DataFrame, files: Sequence[RefFile]) -> pd.DataFrame:
     """
