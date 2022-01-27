@@ -77,9 +77,9 @@ ureg = pint.UnitRegistry()
 pint_pandas.PintType.ureg = ureg
 ureg.default_format = "~#P"
 
-uL = ureg("uL")
-uM = ureg("uM")
-nM = ureg("nM")
+uL = ureg.uL
+uM = ureg.uM
+nM = ureg.nM
 
 Q_ = ureg.Quantity
 "Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`"
@@ -317,19 +317,19 @@ def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
     match v:
         case str(x):
             q = ureg(x)
-            if not q.check("nM"):
+            if not q.check(nM):
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be molarity)."
                 )
             return q
         case pint.Quantity() as x:
-            if not x.check("nM"):
+            if not x.check(nM):
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be molarity)."
                 )
             return x.to_compact()
         case None:
-            return Q_(np.nan, "nM")
+            return Q_(np.nan, nM)
     raise ValueError
 
 
@@ -337,13 +337,13 @@ def _parse_conc_required(v: str | pint.Quantity) -> pint.Quantity:
     match v:
         case str(x):
             q = ureg(x)
-            if not q.check("nM"):
+            if not q.check(nM):
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be molarity)."
                 )
             return q
         case pint.Quantity() as x:
-            if not x.check("nM"):
+            if not x.check(nM):
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be molarity)."
                 )
@@ -355,19 +355,19 @@ def _parse_vol_optional(v: str | pint.Quantity | None) -> pint.Quantity:
     match v:
         case str(x):
             q = ureg(x)
-            if not q.check("uL"):
+            if not q.check(uL):
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be volume)."
                 )
             return q
         case pint.Quantity() as x:
-            if not x.check("uL"):
+            if not x.check(uL):
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be volume)."
                 )
             return x.to_compact()
         case None:
-            return Q_(np.nan, "uL")
+            return Q_(np.nan, uL)
     raise ValueError
 
 
@@ -375,13 +375,13 @@ def _parse_vol_required(v: str | pint.Quantity) -> pint.Quantity:
     match v:
         case str(x):
             q = ureg(x)
-            if not q.check("uL"):
+            if not q.check(uL):
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be volume)."
                 )
             return q
         case pint.Quantity() as x:
-            if not x.check("uL"):
+            if not x.check(uL):
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be volume)."
                 )
@@ -439,7 +439,7 @@ class Component(AbstractComponent):
     def all_components(self) -> pd.DataFrame:
         df = pd.DataFrame(
             {
-                "concentration_nM": [self.concentration.to("nM").magnitude],
+                "concentration_nM": [self.concentration.to(nM).magnitude],
                 "component": [self],
             },
             index=pd.Index([self.name], name="name"),
@@ -455,13 +455,13 @@ class Component(AbstractComponent):
 
         if len(ref_comp.shape) > 1:  # Is this a series or a dataframe
             log.warning(
-                "Component %s has more than one location: %s.  Choosing last.",
+                "Component %s has more than one location: %s.  Choosing first.",
                 self.name,
-                ref_comp,
+                [(x["Plate"], x["Well"]) for _, x in ref_comp.iterrows()],
             )
-            ref_comp = ref_comp.iloc[-1, :]
+            ref_comp = ref_comp.iloc[0, :]
 
-        ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], "nM")
+        ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], nM)
 
         if not np.isnan(self.concentration) and not np.allclose(
             ref_conc, self.concentration
@@ -500,13 +500,13 @@ class Strand(Component):
 
         if len(ref_comp.shape) > 1:  # Is this a series or a dataframe
             log.warning(
-                "Component %s has more than one location: %s.  Choosing last.",
+                "Component %s has more than one location: %s.  Choosing first.",
                 self.name,
-                ref_comp,
+                [(x["Plate"], x["Well"]) for _, x in ref_comp.iterrows()],
             )
-            ref_comp = ref_comp.iloc[-1, :]
+            ref_comp = ref_comp.iloc[0, :]
 
-        ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], "nM")
+        ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], nM)
 
         if not np.isnan(self.concentration) and not np.allclose(
             ref_conc, self.concentration
@@ -553,7 +553,7 @@ class AbstractAction(ABC):
 
     @abstractmethod
     def tx_volume(
-        self, mix_vol: Quantity[float] = Q_(np.nan, "uL")
+        self, mix_vol: Quantity[float] = Q_(np.nan, uL)
     ) -> Quantity[float]:  # pragma: no cover
         """The total volume transferred by the action to the sample.  May depend on the total mix volume.
 
@@ -661,16 +661,16 @@ class FixedConcentration(AbstractAction):
     fixed_concentration: Quantity[float] = attrs.field(converter=_parse_conc_required)
 
     def dest_concentration(
-        self, mix_vol: Quantity[float] = Q_(np.nan, "uL")
+        self, mix_vol: Quantity[float] = Q_(np.nan, uL)
     ) -> Quantity[float]:
         return self.fixed_concentration
 
     def dest_concentrations(
-        self, mix_vol: Quantity[float] = Q_(np.nan, "uL")
+        self, mix_vol: Quantity[float] = Q_(np.nan, uL)
     ) -> Quantity[float]:
         return pd.Series([self.dest_concentration(mix_vol)], dtype="pint[nM]")
 
-    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "uL")) -> Quantity[float]:
+    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> Quantity[float]:
         retval: Quantity[float] = (
             mix_vol * self.fixed_concentration / self.component.concentration
         ).to_compact()
@@ -678,7 +678,7 @@ class FixedConcentration(AbstractAction):
         return retval
 
     def all_components(
-        self, mix_vol: Quantity[float] = Q_(np.nan, "uL")
+        self, mix_vol: Quantity[float] = Q_(np.nan, uL)
     ) -> pd.DataFrame:
         comps = self.component.all_components()
         comps.concentration_nM *= (
@@ -688,7 +688,7 @@ class FixedConcentration(AbstractAction):
 
     def _mixlines(
         self,
-        mix_vol: Quantity[float] = Q_(np.nan, "uL"),
+        mix_vol: Quantity[float] = Q_(np.nan, uL),
         locations: pd.DataFrame | None = None,
     ) -> Sequence[MixLine]:
 
@@ -730,16 +730,16 @@ class FixedVolume(AbstractAction):
     fixed_volume: Quantity[float] = attrs.field(converter=_parse_vol_required)
 
     def dest_concentration(
-        self, mix_vol: Quantity[float] = Q_(np.nan, "uL")
+        self, mix_vol: Quantity[float] = Q_(np.nan, uL)
     ) -> Quantity[float]:
         return (self.component.concentration * self.fixed_volume / mix_vol).to_compact()
 
     def dest_concentrations(
-        self, mix_vol: Quantity[float] = Q_(np.nan, "uL")
+        self, mix_vol: Quantity[float] = Q_(np.nan, uL)
     ) -> pd.Series:
         return pd.Series([self.dest_concentration(mix_vol)], dtype="pint[nM]")
 
-    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "uL")) -> Quantity[float]:
+    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> Quantity[float]:
         return self.fixed_volume
 
     def all_components(self, mix_vol: Quantity[float]) -> pd.DataFrame:
@@ -898,7 +898,7 @@ class MultiFixedVolume(AbstractAction):
     @property
     def source_concentrations(self):
         concs = pd.Series(
-            [c.concentration.m_as("nM") for c in self.components], dtype="pint[nM]"
+            [c.concentration.m_as(nM) for c in self.components], dtype="pint[nM]"
         )
         if not (concs == concs[0]).all() and not self.equal_conc:
             raise ValueError("Not all components have equal concentration.")
@@ -926,11 +926,11 @@ class MultiFixedVolume(AbstractAction):
         return newdf
 
     def dest_concentrations(
-        self, mix_vol: Quantity[float] = Q_(np.nan, "uL")
+        self, mix_vol: Quantity[float] = Q_(np.nan, uL)
     ) -> pd.Series:
         return self.source_concentrations * self.each_volumes(mix_vol) / mix_vol
 
-    def each_volumes(self, mix_vol: Quantity[float] = Q_(np.nan, "uL")) -> pd.Series:
+    def each_volumes(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> pd.Series:
         match self.equal_conc:
             case str("min_volume"):
                 return (
@@ -949,17 +949,17 @@ class MultiFixedVolume(AbstractAction):
                 if not (sc == sc[0]).all():
                     raise ValueError("Concentrations")
                 return pd.Series(
-                    [self.fixed_volume.m_as("uL")] * len(self.components),
+                    [self.fixed_volume.m_as(uL)] * len(self.components),
                     dtype="pint[uL]",
                 )
             case bool(False):
                 return pd.Series(
-                    [self.fixed_volume.m_as("uL")] * len(self.components),
+                    [self.fixed_volume.m_as(uL)] * len(self.components),
                     dtype="pint[uL]",
                 )
         raise ValueError(f"equal_conc={repr(self.equal_conc)} not understood")
 
-    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "uL")) -> Quantity[float]:
+    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> Quantity[float]:
         match self.equal_conc:
             case ("max_fill", str(buffername)):
                 return self.fixed_volume * len(self.components)
@@ -991,7 +991,7 @@ class MultiFixedVolume(AbstractAction):
                 fv = (
                     self.fixed_volume * len(self.components) - self.each_volumes().sum()
                 )
-                if not np.allclose(fv, Q_(0.0, "uL")):
+                if not np.allclose(fv, Q_(0.0, uL)):
                     ml.append(MixLine(buffername, None, None, fv))
 
         return ml
@@ -1155,12 +1155,12 @@ class MultiFixedConcentration(AbstractAction):
         return newdf
 
     def dest_concentration(
-        self, mix_vol: Quantity[float] = Q_(np.nan, "uL")
+        self, mix_vol: Quantity[float] = Q_(np.nan, uL)
     ) -> Quantity[float]:
         return self.fixed_concentration
 
-    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "uL")) -> Quantity[float]:
-        v = Q_(0.0, "uL")
+    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> Quantity[float]:
+        v = Q_(0.0, uL)
         for comp in self.components:
             v += (mix_vol * self.fixed_concentration / comp.concentration).to(uL)
         return v
@@ -1280,7 +1280,7 @@ class FixedRatio(AbstractAction):
     def name(self) -> str:
         return self.component.name
 
-    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, "uL")) -> Quantity[float]:
+    def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> Quantity[float]:
         return mix_vol * self.dest_value / self.source_value
 
     def all_components(self, mix_vol: Quantity[float]) -> pd.DataFrame:
@@ -1315,7 +1315,7 @@ class Mix(AbstractComponent):
 
     actions: Sequence[AbstractAction]
     name: str
-    fixed_total_volume: Optional[Quantity[float]] = None
+    fixed_total_volume: Optional[Quantity[float]] = attrs.field(converter=_parse_vol_optional, default=None)
     fixed_concentration: Union[str, Quantity[float], None] = None
     buffer_name: Optional[str] = None
     reference: pd.DataFrame | None = None
@@ -1342,7 +1342,7 @@ class Mix(AbstractComponent):
         elif isinstance(self.fixed_concentration, str):
             ac = self.all_components()
             return ureg.Quantity(
-                ac.loc[self.fixed_concentration, "concentration_nM"], "nM"
+                ac.loc[self.fixed_concentration, "concentration_nM"], ureg.nM
             )
         elif self.fixed_concentration is None:
             return self.actions[0].dest_concentrations(self.total_volume)[0]
@@ -1355,10 +1355,10 @@ class Mix(AbstractComponent):
         Total volume of the the mix.  If the mix has a fixed total volume, then that,
         otherwise, the sum of the transfer volumes of each component.
         """
-        if self.fixed_total_volume is not None:
+        if not np.isnan(self.fixed_total_volume.magnitude):
             return self.fixed_total_volume
         else:
-            return sum([c.tx_volume() for c in self.actions], 0 * ureg("µL"))
+            return sum([c.tx_volume(self.fixed_total_volume) for c in self.actions], Q_(0., ureg.uL))
 
     @property
     def buffer_volume(self) -> Quantity[float]:
@@ -1419,7 +1419,7 @@ class Mix(AbstractComponent):
         tx_vols = [m.total_tx_vol for m in mixlines if m.total_tx_vol is not None]
         if any(np.isnan(x.magnitude) for x in tx_vols):
             raise ValueError("Some volumes are undefined.")
-        if any(x < Q_(0.0, "uL") for x in tx_vols):
+        if any(x < Q_(0.0, uL) for x in tx_vols):
             raise ValueError("Some volumes are negative.")
 
     def all_components(self) -> pd.DataFrame:
@@ -1450,12 +1450,13 @@ class Mix(AbstractComponent):
         tilesets_or_lists: TileSet | TileList | Iterable[TileSet | TileList],
         *,
         seed: bool | Seed = False,
-        base_conc=100 * ureg("nM"),
+        base_conc=Q_(100., nM),
     ) -> TileSet:
         """
         Given some :any:`TileSet`\ s, or lists of :any:`Tile`\ s from which to
         take tiles, generate an TileSet from the mix.
         """
+        from .flatish import BaseSSTile
         newts = TileSet()
 
         if isinstance(tilesets_or_lists, (TileList, TileSet)):
@@ -1470,8 +1471,10 @@ class Mix(AbstractComponent):
                     else:
                         tile = tl_or_ts[name]
                     new_tile = tile.copy()
+                    if isinstance(new_tile, BaseSSTile) and ((seq := getattr(row["component"], "sequence", None)) is not None):
+                        new_tile.sequence |= seq
                     new_tile.stoic = float(
-                        Q_(row["concentration_nM"], "nM") / base_conc
+                        Q_(row["concentration_nM"], nM) / base_conc
                     )
                     newts.tiles.add(new_tile)
                     break
@@ -1626,8 +1629,8 @@ def update_reference(
                             )
                         del v["Plate"]
                     v["Concentration (nM)"] = conc_dict.get(
-                        k, all_conc if all_conc is not None else Q_(np.nan, "nM")
-                    ).m_as("nM")
+                        k, all_conc if all_conc is not None else Q_(np.nan, nM)
+                    ).m_as(nM)
                 all_seqs = (
                     pd.concat(
                         data.values(), keys=data.keys(), names=["Plate"], copy=False
@@ -1652,7 +1655,7 @@ def update_reference(
             tubedata["Plate"] = "tube"
             tubedata["Well"] = None
             tubedata["Concentration (nM)"] = (
-                all_conc.m_as("nM") if all_conc is not None else np.nan
+                all_conc.m_as(nM) if all_conc is not None else np.nan
             )
             reference = pd.concat(
                 (reference, tubedata.loc[:, REF_COLUMNS]), ignore_index=True
