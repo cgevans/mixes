@@ -479,7 +479,7 @@ class Component(AbstractComponent):
             log.warning(
                 "Component %s has more than one location: %s.  Choosing first.",
                 self.name,
-                [(x["Plate"], x["Well"]) for _, x in matches],
+                [(x["Plate"], x["Well"]) for x in matches],
             )
         elif (len(matches) == 0) and len(mismatches) > 0:
             raise ValueError(
@@ -507,50 +507,66 @@ class Strand(Component):
             ref_by_name = reference
         else:
             ref_by_name = reference.set_index("Name")
-        ref_comp = ref_by_name.loc[self.name]
+        ref_comps = ref_by_name.loc[[self.name], :] # using this format to force a dataframe result
 
-        if len(ref_comp.shape) > 1:  # Is this a series or a dataframe
+        mismatches = []
+        matches = []
+        for _, ref_comp in ref_comps.iterrows():
+            ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], nM)
+            if not np.isnan(self.concentration) and not np.allclose(
+                ref_conc, self.concentration
+            ):
+                mismatches.append(("Concentration (nM)", ref_comp))
+                continue
+
+            ref_place = ref_comp["Plate"]
+            if self.place and ref_place != self.place:
+                mismatches.append(("Plate", ref_comp))
+                continue
+
+            ref_well = _parse_wellpos_optional(ref_comp["Well"])
+            if self.well and self.well != ref_well:
+                mismatches.append(("Well", ref_well))
+                continue
+
+            match (self.sequence, ref_comp["Sequence"]):
+                case (str(x), str(y)):
+                    x = x.replace(" ", "").replace("-","")
+                    y = y.replace(" ", "").replace("-","")
+                    if x != y:
+                        mismatches.append(("Sequence", ref_comp["Sequence"]))
+                        continue
+
+            matches.append(ref_comp)
+
+        del(ref_comp)  # Ensure we never use this again
+
+        if len(matches) > 1:
             log.warning(
-                "Component %s has more than one location: %s.  Choosing first.",
+                "Strand %s has more than one location: %s.  Choosing first.",
                 self.name,
-                [(x["Plate"], x["Well"]) for _, x in ref_comp.iterrows()],
+                [(x["Plate"], x["Well"]) for x in matches],
             )
-            ref_comp = ref_comp.iloc[0, :]
-
-        ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], nM)
-
-        if not np.isnan(self.concentration) and not np.allclose(
-            ref_conc, self.concentration
-        ):
+        elif (len(matches) == 0) and len(mismatches) > 0:
             raise ValueError(
-                f"Strand {self.name}: concentration {self.concentration} does not match reference {ref_conc} of {ref_comp}."
+                "Strand has only mismatched references: %s",
+                self,
+                mismatches
             )
 
-        match (self.sequence, ref_comp["Sequence"]):
+        m = matches[0]
+        ref_conc = ureg.Quantity(m["Concentration (nM)"], nM)
+        ref_place = m["Plate"]
+        ref_well = _parse_wellpos_optional(m["Well"])
+        match (self.sequence, m["Sequence"]):
             case (None, None):
                 seq = None
-            case (str(x), None) | (str(x), "") | (None, str(x)):
+            case (str(x), None) | (str(x), "") | (None, str(x)) | (str(_), str(x)):
                 seq = x
-            case (str(x), str(y)):
-                if x != y:
-                    raise ValueError(
-                        f"Sequence {self.name}: sequence {x} does not match reference {y} of {ref_comp}."
-                    )
-                seq = x
+            case _:
+                raise RuntimeError("should be unreachable")
 
-        ref_place = ref_comp["Plate"]
-        if self.place and ref_place != self.place:
-            raise ValueError(
-                f"Sequence {self.name}: plate {self.place} does not match reference {ref_place} of {ref_comp}."
-            )
-
-        ref_well = _parse_wellpos_optional(ref_comp["Well"])
-        if self.well and self.well != ref_well:
-            raise ValueError(
-                f"Sequence {self.name}: well {self.well} does not match reference {ref_well} of {ref_comp}."
-            )
-
-        return Strand(self.name, ref_conc, sequence=x, well=ref_well, place=ref_place)
+        return attrs.evolve(self, name=self.name, concentration=ref_conc, place=ref_place, well=ref_well, sequence=seq)
 
 
 class AbstractAction(ABC):
