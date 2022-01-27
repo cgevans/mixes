@@ -1119,7 +1119,7 @@ class MultiFixedVolume(AbstractAction):
                 source_concs.append((plate_vol_comps["source_concs"].iloc[0]))
                 dest_concs.append((plate_vol_comps["dest_concs"].iloc[0]))
                 locations.append(
-                    plate + ": " + ", ".join(str(w) for w in plate_vol_comps["well"])
+                    plate + ": " + ", ".join(str(w) for w in wells_formatted)
                 )
 
         return [
