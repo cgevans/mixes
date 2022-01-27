@@ -1249,10 +1249,11 @@ class MultiFixedConcentration(AbstractAction):
     def dest_concentrations(
         self, mix_vol: Quantity[float] = Q_(np.nan, uL)
     ) -> pd.Series:
-        return self.source_concentrations * self.each_volumes(mix_vol) / mix_vol
+        return self.source_concentrations * self.each_volumes(mix_vol)/mix_vol
+        # FIXME: THIS IS SILLY
 
     def each_volumes(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> pd.Series:
-        return mix_vol * self.fixed_concentration / self.dest_concentrations
+        return mix_vol * self.fixed_concentration / self.source_concentrations
                     
     def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> Quantity[float]:
         return self.each_volumes(mix_vol).sum()
