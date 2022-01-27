@@ -290,7 +290,7 @@ class AbstractComponent(ABC):
         return (None, None)
 
     @property
-    def place(self) -> None | str:
+    def plate(self) -> None | str:
         return None
 
     @property
@@ -413,7 +413,7 @@ class Component(AbstractComponent):
     concentration: Quantity[float] = attrs.field(
         converter=_parse_conc_optional, default=None
     )
-    place: str | None = attrs.field(default=None, kw_only=True)
+    plate: str | None = attrs.field(default=None, kw_only=True)
     well: WellPos | None = attrs.field(
         converter=_parse_wellpos_optional, default=None, kw_only=True
     )
@@ -434,7 +434,7 @@ class Component(AbstractComponent):
 
     @property
     def location(self) -> tuple[str | None, WellPos | None]:
-        return (self.place, self.well)
+        return (self.plate, self.well)
 
     def all_components(self) -> pd.DataFrame:
         df = pd.DataFrame(
@@ -463,8 +463,8 @@ class Component(AbstractComponent):
                 mismatches.append(("Concentration (nM)", ref_comp))
                 continue
 
-            ref_place = ref_comp["Plate"]
-            if self.place and ref_place != self.place:
+            ref_plate = ref_comp["Plate"]
+            if self.plate and ref_plate != self.plate:
                 mismatches.append(("Plate", ref_comp))
                 continue
 
@@ -490,10 +490,10 @@ class Component(AbstractComponent):
 
         match = matches[0]
         ref_conc = ureg.Quantity(match["Concentration (nM)"], nM)
-        ref_place = match["Plate"]
+        ref_plate = match["Plate"]
         ref_well = _parse_wellpos_optional(match["Well"])
 
-        return attrs.evolve(self, name=self.name, concentration=ref_conc, place=ref_place, well=ref_well)
+        return attrs.evolve(self, name=self.name, concentration=ref_conc, plate=ref_plate, well=ref_well)
 
 
 @attrs.define()
@@ -519,8 +519,8 @@ class Strand(Component):
                 mismatches.append(("Concentration (nM)", ref_comp))
                 continue
 
-            ref_place = ref_comp["Plate"]
-            if self.place and ref_place != self.place:
+            ref_plate = ref_comp["Plate"]
+            if self.plate and ref_plate != self.plate:
                 mismatches.append(("Plate", ref_comp))
                 continue
 
@@ -556,7 +556,7 @@ class Strand(Component):
 
         m = matches[0]
         ref_conc = ureg.Quantity(m["Concentration (nM)"], nM)
-        ref_place = m["Plate"]
+        ref_plate = m["Plate"]
         ref_well = _parse_wellpos_optional(m["Well"])
         match (self.sequence, m["Sequence"]):
             case (None, None):
@@ -566,7 +566,7 @@ class Strand(Component):
             case _:
                 raise RuntimeError("should be unreachable")
 
-        return attrs.evolve(self, name=self.name, concentration=ref_conc, place=ref_place, well=ref_well, sequence=seq)
+        return attrs.evolve(self, name=self.name, concentration=ref_conc, plate=ref_plate, well=ref_well, sequence=seq)
 
 
 class AbstractAction(ABC):
@@ -1049,7 +1049,7 @@ class MultiFixedVolume(AbstractAction):
                 "source_concs": self.source_concentrations,
                 "dest_concs": self.dest_concentrations(mix_vol),
                 "ea_vols": self.each_volumes(mix_vol),
-                "plate": [c.place for c in self.components],
+                "plate": [c.plate for c in self.components],
                 "well": [c.well for c in self.components],
             }
         )
@@ -1307,7 +1307,7 @@ class MultiFixedConcentration(AbstractAction):
                 "source_concs": self.source_concentrations,
                 "dest_concs": self.dest_concentrations(mix_vol),
                 "ea_vols": self.each_volumes(mix_vol),
-                "plate": [c.place for c in self.components],
+                "plate": [c.plate for c in self.components],
                 "well": [c.well for c in self.components],
             }
         )
