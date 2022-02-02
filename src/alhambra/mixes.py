@@ -451,7 +451,9 @@ class Component(AbstractComponent):
             ref_by_name = reference
         else:
             ref_by_name = reference.set_index("Name")
-        ref_comps = ref_by_name.loc[[self.name], :] # using this format to force a dataframe result
+        ref_comps = ref_by_name.loc[
+            [self.name], :
+        ]  # using this format to force a dataframe result
 
         mismatches = []
         matches = []
@@ -483,9 +485,7 @@ class Component(AbstractComponent):
             )
         elif (len(matches) == 0) and len(mismatches) > 0:
             raise ValueError(
-                "Component has only mismatched references: %s",
-                self,
-                mismatches
+                "Component has only mismatched references: %s", self, mismatches
             )
 
         match = matches[0]
@@ -493,7 +493,9 @@ class Component(AbstractComponent):
         ref_plate = match["Plate"]
         ref_well = _parse_wellpos_optional(match["Well"])
 
-        return attrs.evolve(self, name=self.name, concentration=ref_conc, plate=ref_plate, well=ref_well)
+        return attrs.evolve(
+            self, name=self.name, concentration=ref_conc, plate=ref_plate, well=ref_well
+        )
 
 
 @attrs.define()
@@ -507,7 +509,9 @@ class Strand(Component):
             ref_by_name = reference
         else:
             ref_by_name = reference.set_index("Name")
-        ref_comps = ref_by_name.loc[[self.name], :] # using this format to force a dataframe result
+        ref_comps = ref_by_name.loc[
+            [self.name], :
+        ]  # using this format to force a dataframe result
 
         mismatches = []
         matches = []
@@ -531,15 +535,15 @@ class Strand(Component):
 
             match (self.sequence, ref_comp["Sequence"]):
                 case (str(x), str(y)):
-                    x = x.replace(" ", "").replace("-","")
-                    y = y.replace(" ", "").replace("-","")
+                    x = x.replace(" ", "").replace("-", "")
+                    y = y.replace(" ", "").replace("-", "")
                     if x != y:
                         mismatches.append(("Sequence", ref_comp["Sequence"]))
                         continue
 
             matches.append(ref_comp)
 
-        del(ref_comp)  # Ensure we never use this again
+        del ref_comp  # Ensure we never use this again
 
         if len(matches) > 1:
             log.warning(
@@ -549,9 +553,7 @@ class Strand(Component):
             )
         elif (len(matches) == 0) and len(mismatches) > 0:
             raise ValueError(
-                "Strand has only mismatched references: %s",
-                self,
-                mismatches
+                "Strand has only mismatched references: %s", self, mismatches
             )
 
         m = matches[0]
@@ -566,7 +568,14 @@ class Strand(Component):
             case _:
                 raise RuntimeError("should be unreachable")
 
-        return attrs.evolve(self, name=self.name, concentration=ref_conc, plate=ref_plate, well=ref_well, sequence=seq)
+        return attrs.evolve(
+            self,
+            name=self.name,
+            concentration=ref_conc,
+            plate=ref_plate,
+            well=ref_well,
+            sequence=seq,
+        )
 
 
 class AbstractAction(ABC):
@@ -704,9 +713,7 @@ class FixedConcentration(AbstractAction):
         retval.check("L")
         return retval
 
-    def all_components(
-        self, mix_vol: Quantity[float] = Q_(np.nan, uL)
-    ) -> pd.DataFrame:
+    def all_components(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> pd.DataFrame:
         comps = self.component.all_components()
         comps.concentration_nM *= (
             (self.fixed_concentration / self.component.concentration).to("").magnitude
@@ -1157,9 +1164,8 @@ class MultiFixedConcentration(AbstractAction):
     components
         A list of :ref:`Components`.
 
-    fixed_volume
-        A fixed volume for the action.  Input can be a string (eg, "5 µL") or a pint Quantity.  The interpretation
-        of this depends on equal_conc.
+    fixed_concentration
+        A fixed concentration for the action.  Input can be a string (eg, "50 nM") or a pint Quantity.
 
     set_name
         The name of the mix.  If not set, name is based on components.
@@ -1178,7 +1184,7 @@ class MultiFixedConcentration(AbstractAction):
     ...     Component("c3", "200 nM"),
     ... ]
 
-    >>> print(Mix([MultiFixedConcentration(components, "5 uL")], name="example"))
+    >>> print(Mix([MultiFixedConcentration(components, "66.67 uL")], name="example", ))
     Table: Mix: example, Conc: 66.67 nM, Total Vol: 15.00 µl
     <BLANKLINE>
     | Comp       | Src []    | Dest []   |   # | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
@@ -1192,7 +1198,7 @@ class MultiFixedConcentration(AbstractAction):
     ...     Component("c4", "100 nM")
     ... ]
 
-    >>> print(Mix([MultiFixedConcentration(components, "5 uL", equal_conc="min_volume")], name="example"))
+    >>> print(Mix([MultiFixedConcentration(components, "40 nM")], name="example", fixed_total_volume="25 uL"))
     Table: Mix: example, Conc: 40.00 nM, Total Vol: 25.00 µl
     <BLANKLINE>
     | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
@@ -1216,8 +1222,10 @@ class MultiFixedConcentration(AbstractAction):
     compact_display: bool = True
 
     def with_reference(self, reference: pd.DataFrame) -> MultiFixedConcentration:
-        return attrs.evolve(self, components=[c.with_reference(reference) for c in self.components])
-        
+        return attrs.evolve(
+            self, components=[c.with_reference(reference) for c in self.components]
+        )
+
     @property
     def source_concentrations(self):
         concs = pd.Series(
@@ -1249,12 +1257,12 @@ class MultiFixedConcentration(AbstractAction):
     def dest_concentrations(
         self, mix_vol: Quantity[float] = Q_(np.nan, uL)
     ) -> pd.Series:
-        return self.source_concentrations * self.each_volumes(mix_vol)/mix_vol
+        return self.source_concentrations * self.each_volumes(mix_vol) / mix_vol
         # FIXME: THIS IS SILLY
 
     def each_volumes(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> pd.Series:
         return mix_vol * self.fixed_concentration / self.source_concentrations
-                    
+
     def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> Quantity[float]:
         return self.each_volumes(mix_vol).sum()
 
@@ -1451,7 +1459,9 @@ class Mix(AbstractComponent):
 
     actions: Sequence[AbstractAction]
     name: str
-    fixed_total_volume: Optional[Quantity[float]] = attrs.field(converter=_parse_vol_optional, default=None)
+    fixed_total_volume: Optional[Quantity[float]] = attrs.field(
+        converter=_parse_vol_optional, default=None
+    )
     fixed_concentration: Union[str, Quantity[float], None] = None
     buffer_name: Optional[str] = None
     reference: pd.DataFrame | None = None
@@ -1491,10 +1501,18 @@ class Mix(AbstractComponent):
         Total volume of the the mix.  If the mix has a fixed total volume, then that,
         otherwise, the sum of the transfer volumes of each component.
         """
-        if self.fixed_total_volume is not None and not np.isnan(self.fixed_total_volume.magnitude):
+        if self.fixed_total_volume is not None and not np.isnan(
+            self.fixed_total_volume.magnitude
+        ):
             return self.fixed_total_volume
         else:
-            return sum([c.tx_volume(self.fixed_total_volume or Q_(np.nan, ureg.uL)) for c in self.actions], Q_(0., ureg.uL))
+            return sum(
+                [
+                    c.tx_volume(self.fixed_total_volume or Q_(np.nan, ureg.uL))
+                    for c in self.actions
+                ],
+                Q_(0.0, ureg.uL),
+            )
 
     @property
     def buffer_volume(self) -> Quantity[float]:
@@ -1586,13 +1604,14 @@ class Mix(AbstractComponent):
         tilesets_or_lists: TileSet | TileList | Iterable[TileSet | TileList],
         *,
         seed: bool | Seed = False,
-        base_conc=Q_(100., nM),
+        base_conc=Q_(100.0, nM),
     ) -> TileSet:
         """
         Given some :any:`TileSet`\ s, or lists of :any:`Tile`\ s from which to
         take tiles, generate an TileSet from the mix.
         """
         from .flatish import BaseSSTile
+
         newts = TileSet()
 
         if isinstance(tilesets_or_lists, (TileList, TileSet)):
@@ -1607,11 +1626,11 @@ class Mix(AbstractComponent):
                     else:
                         tile = tl_or_ts[name]
                     new_tile = tile.copy()
-                    if isinstance(new_tile, BaseSSTile) and ((seq := getattr(row["component"], "sequence", None)) is not None):
+                    if isinstance(new_tile, BaseSSTile) and (
+                        (seq := getattr(row["component"], "sequence", None)) is not None
+                    ):
                         new_tile.sequence |= seq
-                    new_tile.stoic = float(
-                        Q_(row["concentration_nM"], nM) / base_conc
-                    )
+                    new_tile.stoic = float(Q_(row["concentration_nM"], nM) / base_conc)
                     newts.tiles.add(new_tile)
                     break
                 except KeyError:
