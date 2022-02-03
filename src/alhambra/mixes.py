@@ -1460,7 +1460,7 @@ class Mix(AbstractComponent):
     actions: Sequence[AbstractAction]
     name: str
     fixed_total_volume: Optional[Quantity[float]] = attrs.field(
-        converter=_parse_vol_optional, default=None
+        converter=_parse_vol_optional, default=None, kw_only=True
     )
     fixed_concentration: Union[str, Quantity[float], None] = None
     buffer_name: Optional[str] = None
