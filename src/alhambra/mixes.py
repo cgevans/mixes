@@ -112,7 +112,7 @@ class WellPos:
     platesize: Literal[96, 384] = 96
 
     @row.validator
-    def _validate_row(self, v: int):
+    def _validate_row(self, v: int) -> None:
         rmax = 8 if self.platesize == 96 else 16
         if (v <= 0) or (v > rmax):
             raise ValueError(
@@ -120,7 +120,7 @@ class WellPos:
             )
 
     @col.validator
-    def _validate_col(self, v: int):
+    def _validate_col(self, v: int) -> None:
         cmax = 12 if self.platesize == 96 else 24
         if (v <= 0) or (v > cmax):
             raise ValueError(
@@ -227,7 +227,7 @@ class MixLine:
     location: str | None = None
     note: str | None = None
 
-    def toline(self, incea: bool):
+    def toline(self, incea: bool) -> Sequence[str]:
         if incea:
             return [
                 _formatter(getattr(self, x), x)
@@ -429,7 +429,7 @@ class Component(AbstractComponent):
                     return True
                 return np.allclose(x, y)
             case x, y:
-                return x == y
+                return bool(x == y)
         return False
 
     @property
@@ -703,7 +703,7 @@ class FixedConcentration(AbstractAction):
 
     def dest_concentrations(
         self, mix_vol: Quantity[float] = Q_(np.nan, uL)
-    ) -> Quantity[float]:
+    ) -> pd.Series:
         return pd.Series([self.dest_concentration(mix_vol)], dtype="pint[nM]")
 
     def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> Quantity[float]:
@@ -1526,7 +1526,7 @@ class Mix(AbstractComponent):
         mvol = sum(c.tx_volume(self.total_volume) for c in self.actions)
         return self.total_volume - mvol
 
-    def table(self, tablefmt: TableFormat | str = "pipe", validate: bool = True):
+    def table(self, tablefmt: TableFormat | str = "pipe", validate: bool = True) -> str:
         """Generate a table describing the mix.
 
         Parameters
@@ -1544,7 +1544,7 @@ class Mix(AbstractComponent):
             try:
                 self.validate(mixlines=mixlines)
             except ValueError as e:
-                e.args = e.args + self.table(validate=False)
+                e.args = e.args + (self.table(validate=False),)
                 raise e
 
         mixlines.append(
@@ -1571,7 +1571,7 @@ class Mix(AbstractComponent):
             mixlines.append(MixLine("Buffer", None, None, self.buffer_volume))
         return mixlines
 
-    def validate(self, mixlines: Sequence[MixLine] | None = None):
+    def validate(self, mixlines: Sequence[MixLine] | None = None) -> None:
         if mixlines is None:
             mixlines = self.mixlines()
         tx_vols = [m.total_tx_vol for m in mixlines if m.total_tx_vol is not None]
@@ -1594,7 +1594,7 @@ class Mix(AbstractComponent):
             cps.loc[mcomp.index, "component"] = mcomp.component
         return cps
 
-    def _repr_markdown_(self):
+    def _repr_markdown_(self) -> str:
         return str(self)
 
     def infoline(self) -> str:
@@ -1607,7 +1607,7 @@ class Mix(AbstractComponent):
             elems.append("Test tube name: {self.test_tube_name}")
         return ", ".join(elems)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Table: {self.infoline()}\n\n" + self.table()
 
     def to_tileset(
@@ -1615,13 +1615,15 @@ class Mix(AbstractComponent):
         tilesets_or_lists: TileSet | TileList | Iterable[TileSet | TileList],
         *,
         seed: bool | Seed = False,
-        base_conc=Q_(100.0, nM),
+        base_conc: pint.Quantity | str = Q_(100.0, nM),
     ) -> TileSet:
         """
         Given some :any:`TileSet`\ s, or lists of :any:`Tile`\ s from which to
         take tiles, generate an TileSet from the mix.
         """
         from .flatish import BaseSSTile
+
+        base_conc = _parse_conc_required(base_conc)
 
         newts = TileSet()
 
@@ -1676,7 +1678,7 @@ class Mix(AbstractComponent):
         return (None, None)
 
 
-def _format_location(loc: tuple[str | None, WellPos | None]):
+def _format_location(loc: tuple[str | None, WellPos | None]) -> str:
     match loc:
         case str(p), WellPos() as w:
             return f"{p}: {w}"
@@ -1687,7 +1689,7 @@ def _format_location(loc: tuple[str | None, WellPos | None]):
     raise ValueError
 
 
-def load_reference(filename_or_file):
+def load_reference(filename_or_file: str) -> pd.DataFrame:
     """
     Load reference information from a CSV file.
 
