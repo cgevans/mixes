@@ -1459,11 +1459,14 @@ class Mix(AbstractComponent):
 
     actions: Sequence[AbstractAction]
     name: str
-    test_tube_name: str | None = None
+    test_tube_name: str | None = attrs.field(kw_only=True, default=None)
+    "A short name, eg, for labelling a test tube."
     fixed_total_volume: Optional[Quantity[float]] = attrs.field(
         converter=_parse_vol_optional, default=None, kw_only=True
     )
-    fixed_concentration: Union[str, Quantity[float], None] = None
+    fixed_concentration: Union[str, Quantity[float], None] = attrs.field(
+        default=None, kw_only=True
+    )
     buffer_name: Optional[str] = None
     reference: pd.DataFrame | None = None
 
@@ -1594,11 +1597,18 @@ class Mix(AbstractComponent):
     def _repr_markdown_(self):
         return str(self)
 
+    def infoline(self) -> str:
+        elems = [
+            f"Mix: {self.name}",
+            f"Conc: {self.concentration:,.2f~#P}",
+            f"Total Vol: {self.total_volume:,.2f~#P}",
+        ]
+        if self.test_tube_name:
+            elems.append("Test tube name: {self.test_tube_name}")
+        return ", ".join(elems)
+
     def __str__(self):
-        return (
-            f"Table: Mix: {self.name}, Conc: {self.concentration:,.2f~#P}, Total Vol: {self.total_volume:,.2f~#P}, Test tube name: {self.test_tube_name}\n\n"
-            + self.table()
-        )
+        return f"Table: {self.infoline()}\n\n" + self.table()
 
     def to_tileset(
         self,
@@ -1655,8 +1665,8 @@ class Mix(AbstractComponent):
         return newts
 
     def with_reference(self: Mix, reference: pd.DataFrame) -> Mix:
-        new = attrs.evolve(self, 
-            actions=[action.with_reference(reference) for action in self.actions]
+        new = attrs.evolve(
+            self, actions=[action.with_reference(reference) for action in self.actions]
         )
         new.reference = reference
         return new
