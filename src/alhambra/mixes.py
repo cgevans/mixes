@@ -1459,6 +1459,7 @@ class Mix(AbstractComponent):
 
     actions: Sequence[AbstractAction]
     name: str
+    test_tube_name: str | None = None
     fixed_total_volume: Optional[Quantity[float]] = attrs.field(
         converter=_parse_vol_optional, default=None, kw_only=True
     )
@@ -1595,7 +1596,7 @@ class Mix(AbstractComponent):
 
     def __str__(self):
         return (
-            f"Table: Mix: {self.name}, Conc: {self.concentration:,.2f~#P}, Total Vol: {self.total_volume:,.2f~#P}\n\n"
+            f"Table: Mix: {self.name}, Conc: {self.concentration:,.2f~#P}, Total Vol: {self.total_volume:,.2f~#P}, Test tube name: {self.test_tube_name}\n\n"
             + self.table()
         )
 
@@ -1654,12 +1655,8 @@ class Mix(AbstractComponent):
         return newts
 
     def with_reference(self: Mix, reference: pd.DataFrame) -> Mix:
-        new = Mix(
-            name=self.name,
-            actions=[action.with_reference(reference) for action in self.actions],
-            fixed_total_volume=self.fixed_total_volume,
-            fixed_concentration=self.fixed_concentration,
-            buffer_name=self.buffer_name,
+        new = attrs.evolve(self, 
+            actions=[action.with_reference(reference) for action in self.actions]
         )
         new.reference = reference
         return new
