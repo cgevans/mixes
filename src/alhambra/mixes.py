@@ -1197,14 +1197,14 @@ class MultiFixedConcentration(AbstractAction):
     ...     Component("c4", "100 nM")
     ... ]
 
-    >>> print(Mix([MultiFixedConcentration(components, "40 nM")], name="example", fixed_total_volume="25 uL"))
+    >>> print(Mix([MultiFixedConcentration(components, "20 nM")], name="example", fixed_total_volume="25 uL"))
     Table: Mix: example, Conc: 40.00 nM, Total Vol: 25.00 µl
     <BLANKLINE>
     | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
     |:-----------|:----------|:----------|:----|:------------|:-------------|:------|:-------|
-    | c1, c2, c3 | 200.00 nM | 40.00 nM  | 3   | 5.00 µl     | 15.00 µl     |       |        |
-    | c4         | 100.00 nM | 40.00 nM  |     | 10.00 µl    | 10.00 µl     |       |        |
-    | Buffer     |           |           |     |             | 0.00 µl      |       |        |
+    | c1, c2, c3 | 200.00 nM | 20.00 nM  | 3   | 2.50 µl     | 7.50 µl      |       |        |
+    | c4         | 100.00 nM | 20.00 nM  |     | 5.00 µl     | 5.00 µl      |       |        |
+    | Buffer     |           |           |     |             | 12.50 µl     |       |        |
     | *Total:*   |           | 40.00 nM  |     |             | 25.00 µl     |       |        |
     """
 
