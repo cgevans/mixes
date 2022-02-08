@@ -98,6 +98,8 @@ MIXHEAD_EA = (
 )
 MIXHEAD_NO_EA = ("Comp", "Src []", "Dest []", "Tx Vol", "Loc", "Note")
 
+class VolumeError(ValueError):
+    pass
 
 @attrs.define(init=False, frozen=True, order=True, hash=True)
 class WellPos:
@@ -1174,23 +1176,20 @@ class MultiFixedConcentration(AbstractAction):
         If True (default), the action tries to display compactly in mix recipes.  If False, it displays
         each component as a separate line.
 
+    min_volume
+        Specifies a minimum volume that must be transferred per component.  Currently, this is for 
+        validation only: it will cause a VolumeError to be raised if a volume is too low.
+
+    Raises
+    ------
+
+    VolumeError
+        One of the volumes to transfer is less than the specified min_volume.
+
     Examples
     --------
 
     >>> from alhambra.mixes import *
-    >>> components = [
-    ...     Component("c1", "200 nM"),
-    ...     Component("c2", "200 nM"),
-    ...     Component("c3", "200 nM"),
-    ... ]
-
-    >>> print(Mix([MultiFixedConcentration(components, "66.67 uL")], name="example", ))
-    Table: Mix: example, Conc: 66.67 nM, Total Vol: 15.00 µl
-    <BLANKLINE>
-    | Comp       | Src []    | Dest []   |   # | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
-    |:-----------|:----------|:----------|----:|:------------|:-------------|:------|:-------|
-    | c1, c2, c3 | 200.00 nM | 66.67 nM  |   3 | 5.00 µl     | 15.00 µl     |       |        |
-
     >>> components = [
     ...     Component("c1", "200 nM"),
     ...     Component("c2", "200 nM"),
@@ -1204,22 +1203,16 @@ class MultiFixedConcentration(AbstractAction):
     | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
     |:-----------|:----------|:----------|:----|:------------|:-------------|:------|:-------|
     | c1, c2, c3 | 200.00 nM | 40.00 nM  | 3   | 5.00 µl     | 15.00 µl     |       |        |
-    | c4         | 100.00 nM | 40.00 nM  | 1   | 10.00 µl    | 10.00 µl     |       |        |
-
-    >>> print(Mix([MultiFixedConcentration(components, "5 uL", equal_conc="max_volume")], name="example"))
-    Table: Mix: example, Conc: 40.00 nM, Total Vol: 12.50 µl
-    <BLANKLINE>
-    | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
-    |:-----------|:----------|:----------|:----|:------------|:-------------|:------|:-------|
-    | c1, c2, c3 | 200.00 nM | 40.00 nM  | 3   | 2.50 µl     | 7.50 µl      |       |        |
-    | c4         | 100.00 nM | 40.00 nM  | 1   | 5.00 µl     | 5.00 µl      |       |        |
-
+    | c4         | 100.00 nM | 40.00 nM  |     | 10.00 µl    | 10.00 µl     |       |        |
+    | Buffer     |           |           |     |             | 0.00 µl      |       |        |
+    | *Total:*   |           | 40.00 nM  |     |             | 25.00 µl     |       |        |
     """
 
     components: Sequence[AbstractComponent]
-    fixed_concentration: Quantity[float] = attrs.field(converter=_parse_conc_required)
+    fixed_concentration: Quantity[float] = attrs.field(converter=_parse_conc_required, on_setattr=attrs.setters.convert)
     set_name: str | None = None
     compact_display: bool = True
+    min_volume: Quantity[float] | None = attrs.field(converter=_parse_vol_optional, default=None, on_setattr=attrs.setters.convert)
 
     def with_reference(self, reference: pd.DataFrame) -> MultiFixedConcentration:
         return attrs.evolve(
@@ -1261,7 +1254,10 @@ class MultiFixedConcentration(AbstractAction):
         # FIXME: THIS IS SILLY
 
     def each_volumes(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> pd.Series:
-        return mix_vol * self.fixed_concentration / self.source_concentrations
+        ea_vols = mix_vol * self.fixed_concentration / self.source_concentrations
+        if (self.min_volume is not None) and np.any(ea_vols < self.min_volume):
+            raise VolumeError("Volume below minimum.")
+        return ea_vols
 
     def tx_volume(self, mix_vol: Quantity[float] = Q_(np.nan, uL)) -> Quantity[float]:
         return self.each_volumes(mix_vol).sum()
@@ -1462,10 +1458,10 @@ class Mix(AbstractComponent):
     test_tube_name: str | None = attrs.field(kw_only=True, default=None)
     "A short name, eg, for labelling a test tube."
     fixed_total_volume: Optional[Quantity[float]] = attrs.field(
-        converter=_parse_vol_optional, default=None, kw_only=True
+        converter=_parse_vol_optional, default=None, kw_only=True, on_setattr=attrs.setters.convert
     )
     fixed_concentration: Union[str, Quantity[float], None] = attrs.field(
-        default=None, kw_only=True
+        default=None, kw_only=True, on_setattr=attrs.setters.convert
     )
     buffer_name: Optional[str] = None
     reference: pd.DataFrame | None = None
