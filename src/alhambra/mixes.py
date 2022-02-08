@@ -7,7 +7,9 @@ from abc import ABC, abstractmethod
 
 import logging
 from multiprocessing.sharedctypes import Value
+from os import PathLike
 from typing import (
+    TYPE_CHECKING,
     Any,
     Iterable,
     Literal,
@@ -66,9 +68,8 @@ __all__ = (
     "AbstractAction",
     "WellPos",
     "MixLine",
-    "load_reference",
-    "compile_reference",
-    "update_reference",
+    "Reference",
+    "load_reference"
 )
 
 log = logging.getLogger("alhambra")
@@ -311,7 +312,7 @@ class AbstractComponent(ABC):
         ...
 
     @abstractmethod
-    def with_reference(self: T, reference: pd.DataFrame) -> T:  # pragma: no cover
+    def with_reference(self: T, reference: Reference) -> T:  # pragma: no cover
         ...
 
 
@@ -448,11 +449,11 @@ class Component(AbstractComponent):
         )
         return df
 
-    def with_reference(self: Component, reference: pd.DataFrame) -> Component:
-        if reference.index.name == "Name":
-            ref_by_name = reference
+    def with_reference(self: Component, reference: Reference) -> Component:
+        if reference.df.index.name == "Name":
+            ref_by_name = reference.df
         else:
-            ref_by_name = reference.set_index("Name")
+            ref_by_name = reference.df.set_index("Name")
         ref_comps = ref_by_name.loc[
             [self.name], :
         ]  # using this format to force a dataframe result
@@ -506,11 +507,11 @@ class Strand(Component):
 
     sequence: str | None = None
 
-    def with_reference(self: Strand, reference: pd.DataFrame) -> Strand:
-        if reference.index.name == "Name":
-            ref_by_name = reference
+    def with_reference(self: Strand, reference: Reference) -> Strand:
+        if reference.df.index.name == "Name":
+            ref_by_name = reference.df
         else:
-            ref_by_name = reference.set_index("Name")
+            ref_by_name = reference.df.set_index("Name")
         ref_comps = ref_by_name.loc[
             [self.name], :
         ]  # using this format to force a dataframe result
@@ -624,7 +625,7 @@ class AbstractAction(ABC):
         ...
 
     @abstractmethod
-    def with_reference(self: T, reference: pd.DataFrame) -> T:  # pragma: no cover
+    def with_reference(self: T, reference: Reference) -> T:  # pragma: no cover
         """Returns a copy of the action updated from a reference dataframe."""
         ...
 
@@ -738,7 +739,7 @@ class FixedConcentration(AbstractAction):
             )
         ]
 
-    def with_reference(self, reference: pd.DataFrame) -> FixedConcentration:
+    def with_reference(self, reference: Reference) -> FixedConcentration:
         return FixedConcentration(
             self.component.with_reference(reference), self.fixed_concentration
         )
@@ -801,7 +802,7 @@ class FixedVolume(AbstractAction):
             )
         ]
 
-    def with_reference(self, reference: pd.DataFrame) -> FixedVolume:
+    def with_reference(self, reference: Reference) -> FixedVolume:
         return FixedVolume(self.component.with_reference(reference), self.fixed_volume)
 
     @property
@@ -922,7 +923,7 @@ class MultiFixedVolume(AbstractAction):
         Literal["max_fill"], str
     ] = True
 
-    def with_reference(self, reference: pd.DataFrame) -> MultiFixedVolume:
+    def with_reference(self, reference: Reference) -> MultiFixedVolume:
         return MultiFixedVolume(
             [c.with_reference(reference) for c in self.components],
             self.fixed_volume,
@@ -1214,7 +1215,7 @@ class MultiFixedConcentration(AbstractAction):
     compact_display: bool = True
     min_volume: Quantity[float] | None = attrs.field(converter=_parse_vol_optional, default=None, on_setattr=attrs.setters.convert)
 
-    def with_reference(self, reference: pd.DataFrame) -> MultiFixedConcentration:
+    def with_reference(self, reference: Reference) -> MultiFixedConcentration:
         return attrs.evolve(
             self, components=[c.with_reference(reference) for c in self.components]
         )
@@ -1441,7 +1442,7 @@ class FixedRatio(AbstractAction):
             )
         ]
 
-    def with_reference(self, reference: pd.DataFrame) -> FixedRatio:
+    def with_reference(self, reference: Reference) -> FixedRatio:
         return FixedRatio(
             self.component.with_reference(reference), self.source_value, self.dest_value
         )
@@ -1464,7 +1465,7 @@ class Mix(AbstractComponent):
         default=None, kw_only=True, on_setattr=attrs.setters.convert
     )
     buffer_name: Optional[str] = None
-    reference: pd.DataFrame | None = None
+    reference: Reference | None = None
 
     def __attrs_post_init__(self) -> None:
         if self.reference is not None:
@@ -1663,7 +1664,7 @@ class Mix(AbstractComponent):
 
         return newts
 
-    def with_reference(self: Mix, reference: pd.DataFrame) -> Mix:
+    def with_reference(self: Mix, reference: Reference) -> Mix:
         new = attrs.evolve(
             self, actions=[action.with_reference(reference) for action in self.actions]
         )
@@ -1685,160 +1686,188 @@ def _format_location(loc: tuple[str | None, WellPos | None]) -> str:
             return ""
     raise ValueError
 
-
-def load_reference(filename_or_file: str) -> pd.DataFrame:
-    """
-    Load reference information from a CSV file.
-
-    The reference information loaded by this function should be compiled manually, fitting the :ref:`mix reference` format, or
-    be loaded with :func:`compile_reference` or :func:`update_reference`.
-    """
-    df = pd.read_csv(filename_or_file)
-
-    return df.reindex(
-        ["Name", "Plate", "Well", "Concentration (nM)", "Sequence"],
-        axis="columns",
-    )
-
+_REF_COLUMNS = ["Name", "Plate", "Well", "Concentration (nM)", "Sequence"]
+_REF_DTYPES = [object, object, object, np.float64, object]
 
 RefFile: TypeAlias = "str | tuple[str, pint.Quantity | str | dict[str, pint.Quantity]]"
 
-REF_COLUMNS = ["Name", "Plate", "Well", "Concentration (nM)", "Sequence"]
+def _new_ref_df() -> pd.DataFrame:
+    df = pd.DataFrame(columns=_REF_COLUMNS)
+    df['Concentration (nM)'] =  df['Concentration (nM)'].astype("float")
+    return df
 
+if TYPE_CHECKING:
+    from pandas.core.indexing import _LocIndexer
 
-def update_reference(
-    reference: pd.DataFrame | None, files: Sequence[RefFile] | RefFile, round: int = -1
-) -> pd.DataFrame:
-    """
-    Update reference information.
+@attrs.define()
+class Reference:
+    df: pd.DataFrame = attrs.field(factory=_new_ref_df)
 
-    This updates an existing reference dataframe with new files, with the same methods as :func:`compile_reference`.
-    """
-    if reference is None:
-        reference = pd.DataFrame(columns=REF_COLUMNS)
+    @property
+    def loc(self) -> _LocIndexer:
+        return self.df.loc
 
-    if isinstance(files, str) or (
-        len(files) == 2 and isinstance(files[1], str) and not Path(files[1]).exists()
-    ):
-        files = [cast(RefFile, files)]
+    def __eq__(self: Reference, other: object):
+        match other:
+            case Reference() as r:
+                return ((r.df == self.df) | (r.df.isna() & self.df.isna())).all().all()
+            case pd.DataFrame() as rdf:
+                return ((rdf == self.df) | (rdf.isna() & self.df.isna())).all().all()
+        return False
 
-    # FIXME: how to deal with repeats?
-    for filename in files:
-        filetype = None
-        all_conc = None
-        conc_dict: dict[str, pint.Quantity] = {}
+    @classmethod
+    def from_csv(cls, filename_or_file: str | PathLike[str]) -> Reference:
+        """
+        Load reference information from a CSV file.
 
-        if isinstance(filename, tuple):
-            conc_info = filename[1]
-            filepath = Path(filename[0])
+        The reference information loaded by this function should be compiled manually, fitting the :ref:`mix reference` format, or
+        be loaded with :func:`compile_reference` or :func:`update_reference`.
+        """
+        df = pd.read_csv(filename_or_file, dtype={"Concentration (nM)": "float"})
 
-            if isinstance(conc_info, Mapping):
-                conc_dict = {k: _parse_conc_required(v) for k, v in conc_info.values()}
-                if "default" in conc_dict:
-                    all_conc = _parse_conc_required(conc_dict["default"])
-                    del conc_dict["default"]
-            else:
-                all_conc = _parse_conc_required(conc_info)
+        df = df.reindex(
+            ["Name", "Plate", "Well", "Concentration (nM)", "Sequence"],
+            axis="columns"
+        )
 
-        if filepath.suffix in (".xls", ".xlsx"):
-            data: dict[str, pd.DataFrame] = pd.read_excel(filepath, sheet_name=None)
-            if "Plate Specs" in data:
-                if len(data) > 1:
-                    raise ValueError(
-                        f"Plate specs file {filepath} should only have one sheet, but has {len(data)}."
+        return cls(df)
+
+    def to_csv(self, filename: str | PathLike[str]) -> None:
+        self.df.to_csv(filename, index=None, float_format="%.6f")
+
+    def update(self: Reference, files: Sequence[RefFile] | RefFile, round: int = -1) -> Reference:
+        """
+        Update reference information.
+
+        This updates an existing reference dataframe with new files, with the same methods as :func:`compile_reference`.
+        """
+        if isinstance(files, str) or (
+            len(files) == 2 and isinstance(files[1], str) and not Path(files[1]).exists()
+        ):
+            files = [cast(RefFile, files)]
+
+        # FIXME: how to deal with repeats?
+        for filename in files:
+            filetype = None
+            all_conc = None
+            conc_dict: dict[str, pint.Quantity] = {}
+
+            if isinstance(filename, tuple):
+                conc_info = filename[1]
+                filepath = Path(filename[0])
+
+                if isinstance(conc_info, Mapping):
+                    conc_dict = {k: _parse_conc_required(v) for k, v in conc_info.values()}
+                    if "default" in conc_dict:
+                        all_conc = _parse_conc_required(conc_dict["default"])
+                        del conc_dict["default"]
+                else:
+                    all_conc = _parse_conc_required(conc_info)
+
+            if filepath.suffix in (".xls", ".xlsx"):
+                data: dict[str, pd.DataFrame] = pd.read_excel(filepath, sheet_name=None)
+                if "Plate Specs" in data:
+                    if len(data) > 1:
+                        raise ValueError(
+                            f"Plate specs file {filepath} should only have one sheet, but has {len(data)}."
+                        )
+                    sheet: pd.DataFrame = data["Plate Specs"]
+                    filetype = "plate-specs"
+
+                    sheet.loc[:, "Concentration (nM)"] = 1000 * sheet.loc[
+                        :, "Measured Concentration µM "
+                    ].round(round)
+                    sheet.loc[:, "Sequence"] = [
+                        x.replace(" ", "") for x in sheet.loc[:, "Sequence"]
+                    ]
+                    sheet.rename(
+                        {
+                            "Plate Name": "Plate",
+                            "Well Position": "Well",
+                            "Sequence Name": "Name",
+                        },
+                        axis="columns",
+                        inplace=True,
                     )
-                sheet: pd.DataFrame = data["Plate Specs"]
-                filetype = "plate-specs"
 
-                sheet.loc[:, "Concentration (nM)"] = 1000 * sheet.loc[
-                    :, "Measured Concentration µM "
-                ].round(round)
-                sheet.loc[:, "Sequence"] = [
-                    x.replace(" ", "") for x in sheet.loc[:, "Sequence"]
-                ]
-                sheet.rename(
-                    {
-                        "Plate Name": "Plate",
-                        "Well Position": "Well",
-                        "Sequence Name": "Name",
-                    },
-                    axis="columns",
-                    inplace=True,
+                    self.df = pd.concat(
+                        (self.df, sheet.loc[:, _REF_COLUMNS]), ignore_index=True
+                    )
+
+                    continue
+
+                else:
+                    # FIXME: need better check here
+                    # if not all(
+                    #    next(iter(data.values())).columns
+                    #    == ["Well Position", "Name", "Sequence"]
+                    # ):
+                    #    raise ValueError
+                    filetype = "plates-order"
+                    for k, v in data.items():
+                        if "Plate" in v.columns:
+                            # There's already a plate column.  That's problematic.  Let's check,
+                            # then delete it.
+                            if not all(v["Plate"] == k):
+                                raise ValueError(
+                                    "Not all rows in sheet {k} have same plate value (normal IDT order files do not have a plate column)."
+                                )
+                            del v["Plate"]
+                        v["Concentration (nM)"] = conc_dict.get(
+                            k, all_conc if all_conc is not None else Q_(np.nan, nM)
+                        ).m_as(nM)
+                    all_seqs = (
+                        pd.concat(
+                            data.values(), keys=data.keys(), names=["Plate"], copy=False
+                        )
+                        .reset_index()
+                        .drop(columns=["level_1"])
+                    )
+                    all_seqs.rename({"Well Position": "Well"}, axis="columns", inplace=True)
+
+                    self.df = pd.concat((self.df, all_seqs), ignore_index=True)
+                    continue
+
+            if filepath.suffix == ".csv":
+                tubedata = pd.read_csv(filepath)
+                filetype = "idt-bulk"
+
+            if filepath.suffix == ".txt":
+                tubedata = pd.read_table(filepath)
+                filetype = "idt-bulk"
+
+            if filetype == "idt-bulk":
+                tubedata["Plate"] = "tube"
+                tubedata["Well"] = None
+                tubedata["Concentration (nM)"] = (
+                    all_conc.m_as(nM) if all_conc is not None else np.nan
                 )
-
-                reference = pd.concat(
-                    (reference, sheet.loc[:, REF_COLUMNS]), ignore_index=True
+                self.df = pd.concat(
+                    (self.df, tubedata.loc[:, _REF_COLUMNS]), ignore_index=True
                 )
-
                 continue
 
-            else:
-                # FIXME: need better check here
-                # if not all(
-                #    next(iter(data.values())).columns
-                #    == ["Well Position", "Name", "Sequence"]
-                # ):
-                #    raise ValueError
-                filetype = "plates-order"
-                for k, v in data.items():
-                    if "Plate" in v.columns:
-                        # There's already a plate column.  That's problematic.  Let's check,
-                        # then delete it.
-                        if not all(v["Plate"] == k):
-                            raise ValueError(
-                                "Not all rows in sheet {k} have same plate value (normal IDT order files do not have a plate column)."
-                            )
-                        del v["Plate"]
-                    v["Concentration (nM)"] = conc_dict.get(
-                        k, all_conc if all_conc is not None else Q_(np.nan, nM)
-                    ).m_as(nM)
-                all_seqs = (
-                    pd.concat(
-                        data.values(), keys=data.keys(), names=["Plate"], copy=False
-                    )
-                    .reset_index()
-                    .drop(columns=["level_1"])
-                )
-                all_seqs.rename({"Well Position": "Well"}, axis="columns", inplace=True)
+            raise NotImplementedError
 
-                reference = pd.concat((reference, all_seqs), ignore_index=True)
-                continue
+        self.df["Concentration (nM)"] = self.df["Concentration (nM)"].round(6)
 
-        if filepath.suffix == ".csv":
-            tubedata = pd.read_csv(filepath)
-            filetype = "idt-bulk"
+        # FIXME: validation
 
-        if filepath.suffix == ".txt":
-            tubedata = pd.read_table(filepath)
-            filetype = "idt-bulk"
+        return self
 
-        if filetype == "idt-bulk":
-            tubedata["Plate"] = "tube"
-            tubedata["Well"] = None
-            tubedata["Concentration (nM)"] = (
-                all_conc.m_as(nM) if all_conc is not None else np.nan
-            )
-            reference = pd.concat(
-                (reference, tubedata.loc[:, REF_COLUMNS]), ignore_index=True
-            )
-            continue
+    @classmethod
+    def compile(cls, files: Sequence[RefFile] | RefFile, round: int = -1) -> Reference:
+        """
+        Compile reference information.
 
-        raise NotImplementedError
+        This loads information from the following sources:
 
-    # FIXME: validation
+        - An IDT plate order spreadsheet.  This does not include concentration.  To add concentration information, list it as a tuple of
+        :code:`(file, concentration)`.
+        - An IDT bulk order entry text file.
+        - An IDT plate spec sheet.
+        """
+        return cls().update(files, round=round)
 
-    return reference
-
-
-def compile_reference(files: Sequence[RefFile] | RefFile) -> pd.DataFrame:
-    """
-    Compile reference information.
-
-    This loads information from the following sources:
-
-    - An IDT plate order spreadsheet.  This does not include concentration.  To add concentration information, list it as a tuple of
-      :code:`(file, concentration)`.
-    - An IDT bulk order entry text file.
-    - An IDT plate spec sheet.
-    """
-    return update_reference(None, files)
+def load_reference(filename_or_file: str) -> Reference:
+    return Reference.from_csv(filename_or_file)
