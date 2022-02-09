@@ -1659,8 +1659,6 @@ class Mix(AbstractComponent):
             mixlines = self.mixlines()
         ntx = [(m.name, m.total_tx_vol) for m in mixlines if m.total_tx_vol is not None]
 
-        print(ntx)
-        print(mixlines)
         nan_vols = [n for n, x in ntx if math.isnan(x.m)]
         if nan_vols:
             raise VolumeError(
