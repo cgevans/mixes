@@ -89,13 +89,6 @@ nM = ureg.nM
 Q_ = ureg.Quantity
 "Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`"
 
-# FIXME : fixes very strange bug in pint
-ureg("1000.0 nM").to_compact()
-ureg("1000.0 nL").to_compact()
-ureg("1000.0 uM").to("nM")
-ureg("1000.0 nM").to("µM")
-
-
 ROW_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWX"
 
 MIXHEAD_EA = (
