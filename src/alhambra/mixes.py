@@ -1102,13 +1102,13 @@ class MultiFixedVolume(AbstractAction):
                 if pd.isna(plate_vol_comps["well"].iloc[0]):
                     if not pd.isna(plate_vol_comps["well"]).all():
                         raise ValueError
-                    names += [", ".join(n for n in plate_vol_comps["names"])]
-                    ea_vols += [(vol)]
-                    tot_vols += [(vol * len(plate_vol_comps))]
-                    numbers += [(len(plate_vol_comps))]
-                    source_concs += [(plate_vol_comps["source_concs"].iloc[0])]
-                    dest_concs += [(plate_vol_comps["dest_concs"].iloc[0])]
-                    locations += [plate]
+                    names.append(", ".join(n for n in plate_vol_comps["names"]))
+                    ea_vols.append((vol))
+                    tot_vols.append((vol * len(plate_vol_comps)))
+                    numbers.append((len(plate_vol_comps)))
+                    source_concs.append((plate_vol_comps["source_concs"].iloc[0]))
+                    dest_concs.append((plate_vol_comps["dest_concs"].iloc[0]))
+                    locations.append(plate)
                     continue
                 byrow = mixgaps(
                     sorted(list(plate_vol_comps["well"]), key=WellPos.key_byrow),
@@ -1363,13 +1363,13 @@ class MultiFixedConcentration(AbstractAction):
                 if pd.isna(plate_vol_comps["well"].iloc[0]):
                     if not pd.isna(plate_vol_comps["well"]).all():
                         raise ValueError
-                    names += [", ".join(n for n in plate_vol_comps["names"])]
-                    ea_vols += [(vol)]
-                    tot_vols += [(vol * len(plate_vol_comps))]
-                    numbres += [(len(plate_vol_comps))]
-                    source_concs += [(plate_vol_comps["source_concs"].iloc[0])]
-                    dest_concs += [(plate_vol_comps["dest_concs"].iloc[0])]
-                    locations += [plate]
+                    names.append(", ".join(n for n in plate_vol_comps["names"]))
+                    ea_vols.append((vol))
+                    tot_vols.append((vol * len(plate_vol_comps)))
+                    numbres.append((len(plate_vol_comps)))
+                    source_concs.append((plate_vol_comps["source_concs"].iloc[0]))
+                    dest_concs.append((plate_vol_comps["dest_concs"].iloc[0]))
+                    locations.append(plate)
                     continue
                 byrow = mixgaps(
                     sorted(list(plate_vol_comps["well"]), key=WellPos.key_byrow),
