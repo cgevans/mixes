@@ -192,11 +192,17 @@ class WellPos:
 
     def key_byrow(self) -> tuple[int, int]:
         "Get a tuple (row, col) key that can be used for ordering by row."
-        return (self.row, self.col)
+        try:
+            return (self.row, self.col)
+        except AttributeError:
+            return (-1, -1)
 
     def key_bycol(self) -> tuple[int, int]:
         "Get a tuple (col, row) key that can be used for ordering by column."
-        return (self.col, self.row)
+        try:
+            return (self.col, self.row)
+        except AttributeError:
+            return (-1, -1)
 
     def next_byrow(self) -> WellPos:
         "Get the next well, moving right along rows, then down."
@@ -1070,7 +1076,7 @@ class MultiFixedVolume(AbstractAction):
             by=["plate", "ea_vols", "well"], ascending=[True, False, True]
         )
 
-        names, source_concs, dest_concs, numbres, ea_vols, tot_vols, locations = (
+        names, source_concs, dest_concs, numbers, ea_vols, tot_vols, locations = (
             [],
             [],
             [],
@@ -1082,16 +1088,16 @@ class MultiFixedVolume(AbstractAction):
 
         for plate, plate_comps in locdf.groupby("plate"):
             for vol, plate_vol_comps in plate_comps.groupby("ea_vols"):
-                if plate == "":
+                if pd.isna(plate_vol_comps["well"].iloc[0]):
                     if not pd.isna(plate_vol_comps["well"]).all():
                         raise ValueError
                     names += [", ".join(n for n in plate_vol_comps["names"])]
                     ea_vols += [(vol)]
                     tot_vols += [(vol * len(plate_vol_comps))]
-                    numbres += [(len(plate_vol_comps))]
+                    numbers += [(len(plate_vol_comps))]
                     source_concs += [(plate_vol_comps["source_concs"].iloc[0])]
                     dest_concs += [(plate_vol_comps["dest_concs"].iloc[0])]
-                    locations += [""]
+                    locations += [plate]
                     continue
                 byrow = mixgaps(
                     sorted(list(plate_vol_comps["well"]), key=WellPos.key_byrow),
@@ -1124,7 +1130,7 @@ class MultiFixedVolume(AbstractAction):
 
                 names.append(", ".join(n for n in plate_vol_comps["names"]))
                 ea_vols.append((vol))
-                numbres.append((len(plate_vol_comps)))
+                numbers.append((len(plate_vol_comps)))
                 tot_vols.append((vol * len(plate_vol_comps)))
                 source_concs.append((plate_vol_comps["source_concs"].iloc[0]))
                 dest_concs.append((plate_vol_comps["dest_concs"].iloc[0]))
@@ -1146,7 +1152,7 @@ class MultiFixedVolume(AbstractAction):
                 names,
                 source_concs,
                 dest_concs,
-                numbres,
+                numbers,
                 ea_vols,
                 tot_vols,
                 locations,
@@ -1335,7 +1341,7 @@ class MultiFixedConcentration(AbstractAction):
 
         for plate, plate_comps in locdf.groupby("plate"):
             for vol, plate_vol_comps in plate_comps.groupby("ea_vols"):
-                if plate == "":
+                if pd.isna(plate_vol_comps["well"].iloc[0]):
                     if not pd.isna(plate_vol_comps["well"]).all():
                         raise ValueError
                     names += [", ".join(n for n in plate_vol_comps["names"])]
@@ -1344,7 +1350,7 @@ class MultiFixedConcentration(AbstractAction):
                     numbres += [(len(plate_vol_comps))]
                     source_concs += [(plate_vol_comps["source_concs"].iloc[0])]
                     dest_concs += [(plate_vol_comps["dest_concs"].iloc[0])]
-                    locations += [""]
+                    locations += [plate]
                     continue
                 byrow = mixgaps(
                     sorted(list(plate_vol_comps["well"]), key=WellPos.key_byrow),
