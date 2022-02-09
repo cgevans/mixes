@@ -3,6 +3,8 @@ A module for handling mixes.
 """
 
 from __future__ import annotations
+
+import io
 from abc import ABC, abstractmethod
 from decimal import Decimal
 
@@ -1957,5 +1959,5 @@ class Reference:
         return cls().update(files, round=round)
 
 
-def load_reference(filename_or_file: str) -> Reference:
+def load_reference(filename_or_file: str | io.TextIOBase) -> Reference:
     return Reference.from_csv(filename_or_file)
