@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from decimal import Decimal
 
 import logging
+import math
 from os import PathLike
 from typing import (
     TYPE_CHECKING,
@@ -42,7 +43,7 @@ import warnings
 
 from pint.quantity import Quantity
 
-DNAN = Decimal('nan')
+DNAN = Decimal("nan")
 
 warnings.filterwarnings(
     "ignore",
@@ -348,6 +349,7 @@ def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be molarity)."
                 )
+            x = Q_(Decimal(x.m), x.u)
             return x.to_compact()
         case None:
             return Q_(DNAN, nM)
@@ -368,6 +370,7 @@ def _parse_conc_required(v: str | pint.Quantity) -> pint.Quantity:
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be molarity)."
                 )
+            x = Q_(Decimal(x.m), x.u)
             return x.to_compact()
     raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
 
@@ -386,6 +389,7 @@ def _parse_vol_optional(v: str | pint.Quantity | None) -> pint.Quantity:
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be volume)."
                 )
+            x = Q_(Decimal(x.m), x.u)
             return x.to_compact()
         case None:
             return Q_(DNAN, uL)
@@ -406,6 +410,7 @@ def _parse_vol_required(v: str | pint.Quantity) -> pint.Quantity:
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be volume)."
                 )
+            x = Q_(Decimal(x.m), x.u)
             return x.to_compact()
     raise ValueError(f"{v} is not a valid quantity here (should be volume).")
 
@@ -424,7 +429,7 @@ def _parse_wellpos_optional(v: str | WellPos | None) -> WellPos | None:
     except:
         pass
     try:
-        if np.isnan(v): # type: ignore
+        if np.isnan(v):  # type: ignore
             return None
     except:
         pass
@@ -437,11 +442,11 @@ class Component(AbstractComponent):
 
     name: str
     concentration: Quantity[Decimal] = attrs.field(
-        converter=_parse_conc_optional, default=None
+        converter=_parse_conc_optional, default=None, on_setattr=attrs.setters.convert
     )
     plate: str | None = attrs.field(default=None, kw_only=True)
     well: WellPos | None = attrs.field(
-        converter=_parse_wellpos_optional, default=None, kw_only=True
+        converter=_parse_wellpos_optional, default=None, kw_only=True, on_setattr=attrs.setters.convert
     )
 
     def __eq__(self, other: Any) -> bool:
@@ -451,7 +456,7 @@ class Component(AbstractComponent):
             return False
         match (self.concentration, other.concentration):
             case (Quantity() as x, Quantity() as y):
-                if Decimal(x.m).is_nan() and Decimal(y.m).is_nan():
+                if math.isnan(x.m) and math.isnan(y.m):
                     return True
                 return x == y
             case x, y:
@@ -485,7 +490,9 @@ class Component(AbstractComponent):
         matches = []
         for _, ref_comp in ref_comps.iterrows():
             ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], nM)
-            if not self.concentration.m.is_nan() and not (ref_conc == self.concentration):
+            if not math.isnan(self.concentration.m) and not (
+                ref_conc == self.concentration
+            ):
                 mismatches.append(("Concentration (nM)", ref_comp))
                 continue
 
@@ -541,7 +548,7 @@ class Strand(Component):
         matches = []
         for _, ref_comp in ref_comps.iterrows():
             ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], nM)
-            if not self.concentration.m.is_nan() and not (
+            if not math.isnan(self.concentration.m) and not (
                 ref_conc == self.concentration
             ):
                 mismatches.append(("Concentration (nM)", ref_comp))
@@ -662,7 +669,9 @@ class AbstractAction(ABC):
         """
         raise ValueError("Single destination concentration not defined.")
 
-    def dest_concentrations(self, mix_vol: pint.Quantity) -> Sequence[Quantity[Decimal]]:
+    def dest_concentrations(
+        self, mix_vol: pint.Quantity
+    ) -> Sequence[Quantity[Decimal]]:
         raise ValueError
 
 
@@ -718,7 +727,7 @@ class FixedConcentration(AbstractAction):
     """
 
     component: AbstractComponent
-    fixed_concentration: Quantity[Decimal] = attrs.field(converter=_parse_conc_required)
+    fixed_concentration: Quantity[Decimal] = attrs.field(converter=_parse_conc_required, on_setattr=attrs.setters.convert)
 
     def dest_concentration(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
@@ -785,12 +794,12 @@ class FixedVolume(AbstractAction):
     """
 
     component: AbstractComponent
-    fixed_volume: Quantity[Decimal] = attrs.field(converter=_parse_vol_required)
+    fixed_volume: Quantity[Decimal] = attrs.field(converter=_parse_vol_required, on_setattr=attrs.setters.convert)
 
     def dest_concentration(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
     ) -> Quantity[Decimal]:
-        return (self.component.concentration * self.fixed_volume / mix_vol)
+        return self.component.concentration * self.fixed_volume / mix_vol
 
     def dest_concentrations(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
@@ -937,7 +946,7 @@ class MultiFixedVolume(AbstractAction):
     """
 
     components: Sequence[AbstractComponent]
-    fixed_volume: Quantity[Decimal] = attrs.field(converter=_parse_vol_required)
+    fixed_volume: Quantity[Decimal] = attrs.field(converter=_parse_vol_required, on_setattr=attrs.setters.convert)
     set_name: str | None = None
     compact_display: bool = True
     equal_conc: bool | Literal["max_volume", "min_volume"] | tuple[
@@ -976,7 +985,7 @@ class MultiFixedVolume(AbstractAction):
             # FIXME: add checks
             newdf.loc[comps.index, "concentration_nM"] = newdf.loc[
                 comps.index, "concentration_nM"
-            ].add(comps.concentration_nM, fill_value=Decimal('0.0'))
+            ].add(comps.concentration_nM, fill_value=Decimal("0.0"))
             newdf.loc[comps.index, "component"] = comps.component
 
         return newdf
@@ -984,26 +993,23 @@ class MultiFixedVolume(AbstractAction):
     def dest_concentrations(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
     ) -> Sequence[Quantity[Decimal]]:
-        return [x*y/mix_vol for x, y in zip(self.source_concentrations, self.each_volumes(mix_vol))]
+        return [
+            x * y / mix_vol
+            for x, y in zip(self.source_concentrations, self.each_volumes(mix_vol))
+        ]
 
-    def each_volumes(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Sequence[Quantity[Decimal]]:
+    def each_volumes(
+        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
+    ) -> Sequence[Quantity[Decimal]]:
         match self.equal_conc:
             case str("min_volume"):
                 sc = self.source_concentrations
                 scmax = max(sc)
-                return [
-                    self.fixed_volume
-                    * scmax
-                    / x for x in sc
-                ]
+                return [self.fixed_volume * scmax / x for x in sc]
             case str("max_volume") | ("max_fill", _):
                 sc = self.source_concentrations
                 scmin = min(sc)
-                return [
-                    self.fixed_volume
-                    * scmin
-                    / x for x in sc
-                ]
+                return [self.fixed_volume * scmin / x for x in sc]
             case bool(True):
                 sc = self.source_concentrations
                 if any(x != sc[0] for x in sc):
@@ -1011,14 +1017,14 @@ class MultiFixedVolume(AbstractAction):
                 return [self.fixed_volume.to(uL)] * len(self.components)
             case bool(False):
                 return [self.fixed_volume.to(uL)] * len(self.components)
-                    
+
         raise ValueError(f"equal_conc={repr(self.equal_conc)} not understood")
 
     def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
         match self.equal_conc:
             case ("max_fill", str(buffername)):
                 return self.fixed_volume * len(self.components)
-        return sum(self.each_volumes(mix_vol))
+        return sum(self.each_volumes(mix_vol), ureg("0.0 uL"))
 
     def _mixlines(
         self, mix_vol: Quantity[Decimal], locations: pd.DataFrame | None = None
@@ -1043,9 +1049,7 @@ class MultiFixedVolume(AbstractAction):
 
         match self.equal_conc:
             case ("max_fill", str(buffername)):
-                fv = (
-                    self.fixed_volume * len(self.components) - self.each_volumes().sum()
-                )
+                fv = self.fixed_volume * len(self.components) - sum(self.each_volumes())
                 if not fv == Q_(Decimal("0.0"), uL):
                     ml.append(MixLine(buffername, None, None, fv))
 
@@ -1233,7 +1237,7 @@ class MultiFixedConcentration(AbstractAction):
     )
     set_name: str | None = None
     compact_display: bool = True
-    min_volume: Quantity[Decimal] | None = attrs.field(
+    min_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_optional, default=None, on_setattr=attrs.setters.convert
     )
 
@@ -1244,8 +1248,7 @@ class MultiFixedConcentration(AbstractAction):
 
     @property
     def source_concentrations(self):
-        concs = pd.Series(
-            [c.concentration.to(nM) for c in self.components])
+        concs = pd.Series([c.concentration.to(nM) for c in self.components])
         return concs
 
     def all_components(self, mix_vol: Quantity[Decimal]) -> pd.DataFrame:
@@ -1264,7 +1267,7 @@ class MultiFixedConcentration(AbstractAction):
             # FIXME: add checks
             newdf.loc[comps.index, "concentration_nM"] = newdf.loc[
                 comps.index, "concentration_nM"
-            ].add(comps.concentration_nM, fill_value=Decimal('0.0'))
+            ].add(comps.concentration_nM, fill_value=Decimal("0.0"))
             newdf.loc[comps.index, "component"] = comps.component
 
         return newdf
@@ -1273,11 +1276,17 @@ class MultiFixedConcentration(AbstractAction):
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
     ) -> Sequence[Quantity[Decimal]]:
         return [self.fixed_concentration] * len(self.components)
-        # FIXME: THIS IS SILLY
 
-    def each_volumes(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Sequence[Quantity[Decimal]]:
-        ea_vols = [mix_vol * self.fixed_concentration / y for y in self.source_concentrations]
-        if (self.min_volume is not None) and any(x < self.min_volume for x in ea_vols):
+    def each_volumes(
+        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
+    ) -> Sequence[Quantity[Decimal]]:
+        ea_vols = [
+            mix_vol * (self.fixed_concentration / y).to("")
+            for y in self.source_concentrations
+        ]
+        if not math.isnan(self.min_volume.m) and any(
+            x < self.min_volume for x in ea_vols
+        ):
             raise VolumeError("Volume below minimum.")
         return ea_vols
 
@@ -1527,7 +1536,7 @@ class Mix(AbstractComponent):
         otherwise, the sum of the transfer volumes of each component.
         """
         if self.fixed_total_volume is not None and not (
-            self.fixed_total_volume.m.is_nan()
+            math.isnan(self.fixed_total_volume.m)
         ):
             return self.fixed_total_volume
         else:
@@ -1596,7 +1605,7 @@ class Mix(AbstractComponent):
         if mixlines is None:
             mixlines = self.mixlines()
         tx_vols = [m.total_tx_vol for m in mixlines if m.total_tx_vol is not None]
-        if any(x.magnitude.is_nan() for x in tx_vols):
+        if any(math.isnan(x.magnitude) for x in tx_vols):
             raise ValueError("Some volumes are undefined.")
         if any(x < Q_(Decimal("0.0"), uL) for x in tx_vols):
             raise ValueError("Some volumes are negative.")
@@ -1735,6 +1744,9 @@ class Reference:
     def loc(self) -> _LocIndexer:
         return self.df.loc
 
+    def __getitem__(self, key: Any) -> Any:
+        return self.df.__getitem__(key)
+
     def __eq__(self: Reference, other: object):
         match other:
             case Reference() as r:
@@ -1764,7 +1776,7 @@ class Reference:
             cdf = cdf.loc[cdf["Plate"] == plate, :]
         if well is not None:
             cdf = cdf.loc[cdf["Well"] == str(well), :]
-        if not concentration.m.is_nan():
+        if not math.isnan(concentration.m):
             conc = concentration.m_as("nM")
             cdf = cdf.loc[cdf["Concentration (nM)"] == conc, :]
         if sequence is not None:
@@ -1782,12 +1794,13 @@ class Reference:
         valref = self.search(name, plate, well, concentration, sequence)
 
         if len(valref) == 1:
-            return Q_(valref.df['Concentration (nM)'].iloc[0], nM)
+            return Q_(valref.df["Concentration (nM)"].iloc[0], nM)
         elif len(valref) > 1:
-            raise ValueError(f"Found multiple possible components: {str(valref)}", valref)
-        
-        raise ValueError("Did not find any matching components.")
+            raise ValueError(
+                f"Found multiple possible components: {str(valref)}", valref
+            )
 
+        raise ValueError("Did not find any matching components.")
 
     @classmethod
     def from_csv(cls, filename_or_file: str | PathLike[str]) -> Reference:
