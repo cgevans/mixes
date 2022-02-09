@@ -45,7 +45,6 @@ import warnings
 
 from pint.quantity import Quantity
 
-DNAN = Decimal("nan")
 
 warnings.filterwarnings(
     "ignore",
@@ -91,6 +90,10 @@ nM = ureg.nM
 Q_ = ureg.Quantity
 "Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`"
 
+
+DNAN = Decimal("nan")
+ZERO_VOL = Q_(Decimal("0.0"), "µL")
+
 ROW_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWX"
 
 MIXHEAD_EA = (
@@ -108,6 +111,47 @@ MIXHEAD_NO_EA = ("Comp", "Src []", "Dest []", "Tx Vol", "Loc", "Note")
 
 class VolumeError(ValueError):
     pass
+
+
+T = TypeVar("T")
+
+
+@overload
+def _ratio(
+    top: Sequence[pint.Quantity[T]], bottom: Sequence[pint.Quantity[T]]
+) -> Sequence[T]:
+    ...
+
+
+@overload
+def _ratio(top: pint.Quantity[T], bottom: Sequence[pint.Quantity[T]]) -> Sequence[T]:
+    ...
+
+
+@overload
+def _ratio(top: Sequence[pint.Quantity[T]], bottom: pint.Quantity[T]) -> Sequence[T]:
+    ...
+
+
+@overload
+def _ratio(top: pint.Quantity[T], bottom: pint.Quantity[T]) -> T:
+    ...
+
+
+def _ratio(
+    top: pint.Quantity[T] | Sequence[pint.Quantity[T]],
+    bottom: pint.Quantity[T] | Sequence[pint.Quantity[T]],
+) -> T | Sequence[T]:
+    match (top, bottom):
+        case (t, b) if isinstance(t, Sequence) and isinstance(b, Sequence):
+            return [(x / y).m_as("") for x, y in zip(t, b, strict=True)]
+        case (t, b) if isinstance(t, Sequence):
+            return [(x / b).m_as("") for x in t]
+        case (t, b) if isinstance(b, Sequence):
+            return [(t / y).m_as("") for y in b]
+        case (t, b):
+            return (top / bottom).m_as("")  # type: ignore  # mypy can't figure this out
+    raise Exception("Unreachable")
 
 
 @attrs.define(init=False, frozen=True, order=True, hash=True)
@@ -290,9 +334,6 @@ def _formatter(x: int | float | str | None, t: str = "") -> str:
     raise TypeError
 
 
-T = TypeVar("T")
-
-
 class AbstractComponent(ABC):
     """Abstract class for a component in a mix."""
 
@@ -441,7 +482,10 @@ class Component(AbstractComponent):
     )
     plate: str | None = attrs.field(default=None, kw_only=True)
     well: WellPos | None = attrs.field(
-        converter=_parse_wellpos_optional, default=None, kw_only=True, on_setattr=attrs.setters.convert
+        converter=_parse_wellpos_optional,
+        default=None,
+        kw_only=True,
+        on_setattr=attrs.setters.convert,
     )
 
     def __eq__(self, other: Any) -> bool:
@@ -722,7 +766,9 @@ class FixedConcentration(AbstractAction):
     """
 
     component: AbstractComponent
-    fixed_concentration: Quantity[Decimal] = attrs.field(converter=_parse_conc_required, on_setattr=attrs.setters.convert)
+    fixed_concentration: Quantity[Decimal] = attrs.field(
+        converter=_parse_conc_required, on_setattr=attrs.setters.convert
+    )
 
     def dest_concentration(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
@@ -735,17 +781,18 @@ class FixedConcentration(AbstractAction):
         return [self.dest_concentration(mix_vol)]
 
     def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
-        retval: Quantity[Decimal] = (
-            mix_vol * self.fixed_concentration / self.component.concentration
+        retval: Quantity[Decimal] = mix_vol * _ratio(
+            self.fixed_concentration, self.component.concentration
         )
         retval.check("L")
         return retval
 
     def all_components(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> pd.DataFrame:
         comps = self.component.all_components()
-        comps.concentration_nM *= (
-            (self.fixed_concentration / self.component.concentration).to("").magnitude
+        comps.concentration_nM *= _ratio(
+            self.fixed_concentration, self.component.concentration
         )
+
         return comps
 
     def _mixlines(
@@ -789,12 +836,14 @@ class FixedVolume(AbstractAction):
     """
 
     component: AbstractComponent
-    fixed_volume: Quantity[Decimal] = attrs.field(converter=_parse_vol_required, on_setattr=attrs.setters.convert)
+    fixed_volume: Quantity[Decimal] = attrs.field(
+        converter=_parse_vol_required, on_setattr=attrs.setters.convert
+    )
 
     def dest_concentration(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
     ) -> Quantity[Decimal]:
-        return self.component.concentration * self.fixed_volume / mix_vol
+        return self.component.concentration * _ratio(self.fixed_volume, mix_vol)
 
     def dest_concentrations(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
@@ -806,11 +855,10 @@ class FixedVolume(AbstractAction):
 
     def all_components(self, mix_vol: Quantity[Decimal]) -> pd.DataFrame:
         comps = self.component.all_components()
-        comps.concentration_nM *= (
-            (self.dest_concentration(mix_vol) / self.component.concentration)
-            .to("")
-            .magnitude
+        comps.concentration_nM *= _ratio(
+            self.dest_concentration(mix_vol), self.component.concentration
         )
+
         return comps
 
     def _mixlines(
@@ -941,7 +989,9 @@ class MultiFixedVolume(AbstractAction):
     """
 
     components: Sequence[AbstractComponent]
-    fixed_volume: Quantity[Decimal] = attrs.field(converter=_parse_vol_required, on_setattr=attrs.setters.convert)
+    fixed_volume: Quantity[Decimal] = attrs.field(
+        converter=_parse_vol_required, on_setattr=attrs.setters.convert
+    )
     set_name: str | None = None
     compact_display: bool = True
     equal_conc: bool | Literal["max_volume", "min_volume"] | tuple[
@@ -973,7 +1023,7 @@ class MultiFixedVolume(AbstractAction):
             self.source_concentrations,
         ):
             comps = comp.all_components()
-            comps.concentration_nM *= (dc / sc).to("").magnitude
+            comps.concentration_nM *= _ratio(dc, sc)
 
             newdf, _ = newdf.align(comps)
 
@@ -989,8 +1039,8 @@ class MultiFixedVolume(AbstractAction):
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
     ) -> Sequence[Quantity[Decimal]]:
         return [
-            x * y / mix_vol
-            for x, y in zip(self.source_concentrations, self.each_volumes(mix_vol))
+            x * y
+            for x,y in zip(self.source_concentrations, _ratio(self.each_volumes(mix_vol), mix_vol))
         ]
 
     def each_volumes(
@@ -1000,11 +1050,11 @@ class MultiFixedVolume(AbstractAction):
             case str("min_volume"):
                 sc = self.source_concentrations
                 scmax = max(sc)
-                return [self.fixed_volume * scmax / x for x in sc]
+                return [self.fixed_volume * x for x in _ratio(scmax, sc)]
             case str("max_volume") | ("max_fill", _):
                 sc = self.source_concentrations
                 scmin = min(sc)
-                return [self.fixed_volume * scmin / x for x in sc]
+                return [self.fixed_volume * x for x in _ratio(scmin, sc)]
             case bool(True):
                 sc = self.source_concentrations
                 if any(x != sc[0] for x in sc):
@@ -1243,7 +1293,7 @@ class MultiFixedConcentration(AbstractAction):
 
     @property
     def source_concentrations(self):
-        concs = pd.Series([c.concentration.to(nM) for c in self.components])
+        concs = [c.concentration for c in self.components]
         return concs
 
     def all_components(self, mix_vol: Quantity[Decimal]) -> pd.DataFrame:
@@ -1255,7 +1305,7 @@ class MultiFixedConcentration(AbstractAction):
             self.source_concentrations,
         ):
             comps = comp.all_components()
-            comps.concentration_nM *= (dc / sc).to("").magnitude
+            comps.concentration_nM *= _ratio(dc, sc)
 
             newdf, _ = newdf.align(comps)
 
@@ -1276,13 +1326,21 @@ class MultiFixedConcentration(AbstractAction):
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
     ) -> Sequence[Quantity[Decimal]]:
         ea_vols = [
-            mix_vol * (self.fixed_concentration / y).to("")
-            for y in self.source_concentrations
+            mix_vol * r
+            for r in _ratio(self.fixed_concentration, self.source_concentrations)
         ]
-        if not math.isnan(self.min_volume.m) and any(
-            x < self.min_volume for x in ea_vols
-        ):
-            raise VolumeError("Volume below minimum.")
+        if not math.isnan(self.min_volume.m):
+            below_min = []
+            for comp, vol in zip(self.components, ea_vols, strict=True):
+                if vol < self.min_volume:
+                    below_min.append((comp.name, vol))
+            if below_min:
+                raise VolumeError(
+                    "Volume of some components is below minimum: "
+                    + ", ".join(f"{n} at {v}" for n, v in below_min)
+                    + ".",
+                    below_min,
+                )
         return ea_vols
 
     def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
@@ -1517,7 +1575,7 @@ class Mix(AbstractComponent):
         elif isinstance(self.fixed_concentration, str):
             ac = self.all_components()
             return ureg.Quantity(
-                ac.loc[self.fixed_concentration, "concentration_nM"], ureg.nM
+                Decimal(ac.loc[self.fixed_concentration, "concentration_nM"]), ureg.nM
             )
         elif self.fixed_concentration is None:
             return self.actions[0].dest_concentrations(self.total_volume)[0]
@@ -1599,11 +1657,43 @@ class Mix(AbstractComponent):
     def validate(self, mixlines: Sequence[MixLine] | None = None) -> None:
         if mixlines is None:
             mixlines = self.mixlines()
-        tx_vols = [m.total_tx_vol for m in mixlines if m.total_tx_vol is not None]
-        if any(math.isnan(x.magnitude) for x in tx_vols):
-            raise ValueError("Some volumes are undefined.")
-        if any(x < Q_(Decimal("0.0"), uL) for x in tx_vols):
-            raise ValueError("Some volumes are negative.")
+        ntx = [(m.name, m.total_tx_vol) for m in mixlines if m.total_tx_vol is not None]
+
+        print(ntx)
+        print(mixlines)
+        nan_vols = [n for n, x in ntx if math.isnan(x.m)]
+        if nan_vols:
+            raise VolumeError(
+                "Some volumes aren't defined (mix probably isn't fully specified): "
+                + ", ".join(x or "" for x in nan_vols)
+                + "."
+            )
+
+        tot_vol = self.total_volume
+        high_vols = [(n, x) for n, x in ntx if x > tot_vol]
+        if high_vols:
+            raise VolumeError(
+                "Some items have higher transfer volume than total mix volume of "
+                f"{tot_vol} "
+                "(target concentration probably too high for source): "
+                + ", ".join(f"f{n} at {x}" for n, x in high_vols)
+                + "."
+            )
+
+        # We'll check the last tx_vol first, because it is usually buffer.
+        if ntx[-1][1] < ZERO_VOL:
+            raise VolumeError(
+                f"Last mix component ({ntx[-1][0]}) has volume {ntx[-1][1]} < 0 µL. "
+                "Component target concentrations probably too high."
+            )
+
+        neg_vols = [(n, x) for n, x in ntx if x < ZERO_VOL]
+        if neg_vols:
+            raise VolumeError(
+                "Some volumes are negative: "
+                + ", ".join(f"{n} at {x}" for n, x in neg_vols)
+                + "."
+            )
 
     def all_components(self) -> pd.DataFrame:
         """
@@ -1669,7 +1759,7 @@ class Mix(AbstractComponent):
                         (seq := getattr(row["component"], "sequence", None)) is not None
                     ):
                         new_tile.sequence |= seq
-                    new_tile.stoic = float(Q_(row["concentration_nM"], nM) / base_conc)
+                    new_tile.stoic = float(_ratio(Q_(row["concentration_nM"], nM), base_conc))
                     newts.tiles.add(new_tile)
                     break
                 except KeyError:
