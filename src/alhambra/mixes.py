@@ -2104,8 +2104,6 @@ class Reference:
 
             raise NotImplementedError
 
-        self.df["Concentration (nM)"] = self.df["Concentration (nM)"].round(6)
-
         # FIXME: validation
 
         return self
