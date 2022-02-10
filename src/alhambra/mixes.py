@@ -321,7 +321,7 @@ class MixLine:
         will be distinguished in some way in tables (eg, italics) and will not be included in calculations.
     """
 
-    names: list[str]
+    names: list[str] = attrs.field(converter=list)
     source_conc: Quantity[Decimal] | str | None = None
     dest_conc: Quantity[Decimal] | str | None = None
     total_tx_vol: Quantity[Decimal] | None = None
@@ -331,6 +331,16 @@ class MixLine:
     wells: list[WellPos] = attrs.field(factory=list)
     note: str | None = None
     fake: bool = False
+
+    @wells.validator
+    def _check_wells(self, _: str, v: Any) -> None:
+        if (not isinstance(v, list)) or any(not isinstance(x, WellPos) for x in v):
+            raise TypeError(f"MixLine.wells of {v} is not a list of WellPos.")
+
+    @names.validator
+    def _check_names(self, _: str, v: Any) -> None:
+        if (not isinstance(v, list)) or any(not isinstance(x, str) for x in v):
+            raise TypeError(f"MixLine.names of {v} is not a list of strings.")
 
     @property
     def location(self) -> str:
@@ -1279,7 +1289,7 @@ class MultiFixedVolume(AbstractAction):
 
         return [
             MixLine(
-                [name],
+                name,
                 source_conc=source_conc,
                 dest_conc=dest_conc,
                 number=number,
