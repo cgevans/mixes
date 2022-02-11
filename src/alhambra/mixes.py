@@ -2170,6 +2170,44 @@ class Mix(AbstractComponent):
         return plate_map
 
 
+_ALL_TABLEFMTS = [
+    "plain",
+    "simple",
+    "github",
+    "grid",
+    "fancy_grid",
+    "pipe",
+    "orgtbl",
+    "jira",
+    "presto",
+    "pretty",
+    "psql",
+    "rst",
+    "mediawiki",
+    "moinmoin",
+    "youtrack",
+    "html",
+    "unsafehtml",
+    "latex",
+    "latex_raw",
+    "latex_booktabs",
+    "latex_longtable",
+    "textile",
+    "tsv",
+]
+
+_SUPPORTED_TABLEFMTS_TITLE = [
+    "github",
+    "html",
+    "unsafehtml",
+    "rst",
+    "latex",
+    "latex_raw",
+    "latex_booktabs",
+    "latex_longtable",
+]
+
+
 @attrs.define()
 class PlateMap:
     """
@@ -2201,7 +2239,33 @@ class PlateMap:
     def to_table(
         self,
         well_marker: Optional[str] = None,
-        tablefmt="github",
+        title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
+        warn_unsupported_title_format: bool = True,
+        tablefmt: Literal[
+            "plain",
+            "simple",
+            "github",
+            "grid",
+            "fancy_grid",
+            "pipe",
+            "orgtbl",
+            "jira",
+            "presto",
+            "pretty",
+            "psql",
+            "rst",
+            "mediawiki",
+            "moinmoin",
+            "youtrack",
+            "html",
+            "unsafehtml",
+            "latex",
+            "latex_raw",
+            "latex_booktabs",
+            "latex_longtable",
+            "textile",
+            "tsv",
+        ] = "github",
         floatfmt="g",
         numalign="default",
         stralign="default",
@@ -2235,6 +2299,15 @@ class PlateMap:
             then it is put there instead. This is useful for printing plate maps that just put,
             for instance, an `'X'` in the well to pipette (e.g., specify ``well_marker='X'``),
             e.g., for experimental mixes that use only some strands in the plate.
+        :param title_level:
+            The "title" is the first line of the returned string, which contains the plate's name
+            and volume to pipette. The `title_level` controls the size, with 1 being the largest size,
+            (header level 1, e.g., # title in Markdown or <h1>title</h1> in HTML).
+        :param warn_unsupported_title_format:
+            If True, prints a warning if `tablefmt` is a currently unsupported option for the title.
+            The currently supported formats for the title are 'github', 'html', 'unsafehtml', 'rst',
+            'latex', 'latex_raw', 'latex_booktabs', "latex_longtable". If `tablefmt` is another valid
+            option, then the title will be the Markdown format, i.e., same as for `tablefmt` = 'github'.
         :param tablefmt:
             By default set to `'github'` to create a Markdown table. For other options see
             https://github.com/astanin/python-tabulate#readme
@@ -2255,6 +2328,24 @@ class PlateMap:
         :return:
             a Markdown representation of this plate map
         """
+        if title_level not in [1, 2, 3, 4, 5, 6]:
+            raise ValueError(
+                f"title_level must be integer from 1 to 6 but is {title_level}"
+            )
+
+        if tablefmt not in _ALL_TABLEFMTS:
+            raise ValueError(
+                f"tablefmt {tablefmt} not recognized; "
+                f'choose one of {", ".join(_ALL_TABLEFMTS)}'
+            )
+        elif (
+            tablefmt not in _SUPPORTED_TABLEFMTS_TITLE and warn_unsupported_title_format
+        ):
+            print(
+                f'{"*"*99}\n* WARNING: title formatting not supported for tablefmt = {tablefmt}; '
+                f'using Markdown format\n{"*"*99}'
+            )
+
         num_rows = len(self.plate_type.rows())
         num_cols = len(self.plate_type.cols())
         table = [[" " for _ in range(num_cols + 1)] for _ in range(num_rows)]
@@ -2275,7 +2366,8 @@ class PlateMap:
                 if not well_pos.is_last():
                     well_pos = well_pos.advance()
 
-        title = f"## {self.plate_name}, {self.vol_each} each"
+        title = self._create_title(title_level, tablefmt)
+
         header = [" "] + [str(col) for col in self.plate_type.cols()]
 
         table = tabulate(
@@ -2292,6 +2384,97 @@ class PlateMap:
         )
         table_with_title = f"{title}\n{table}"
         return table_with_title
+
+    def _create_title(
+        self,
+        level: int,
+        tablefmt: Literal[
+            "plain",
+            "simple",
+            "github",
+            "grid",
+            "fancy_grid",
+            "pipe",
+            "orgtbl",
+            "jira",
+            "presto",
+            "pretty",
+            "psql",
+            "rst",
+            "mediawiki",
+            "moinmoin",
+            "youtrack",
+            "html",
+            "unsafehtml",
+            "latex",
+            "latex_raw",
+            "latex_booktabs",
+            "latex_longtable",
+            "textile",
+            "tsv",
+        ],
+    ):
+        raw_title = f"{self.plate_name}, {self.vol_each} each"
+        if tablefmt in ["html", "unsafehtml"]:
+            title = f"<h{level}>{raw_title}</h{level}>"
+        elif tablefmt == "rst":
+            # https://draft-edx-style-guide.readthedocs.io/en/latest/ExampleRSTFile.html#heading-levels
+            # #############
+            # Heading 1
+            # #############
+            #
+            # *************
+            # Heading 2
+            # *************
+            #
+            # ===========
+            # Heading 3
+            # ===========
+            #
+            # Heading 4
+            # ************
+            #
+            # Heading 5
+            # ===========
+            #
+            # Heading 6
+            # ~~~~~~~~~~~
+            raw_title_width = len(raw_title)
+            if level == 1:
+                line = "#" * raw_title_width
+            elif level in [2, 4]:
+                line = "*" * raw_title_width
+            elif level in [3, 5]:
+                line = "=" * raw_title_width
+            else:
+                line = "~" * raw_title_width
+
+            if level in [1, 2, 3]:
+                title = f"{line}\n{raw_title}\n{line}"
+            else:
+                title = f"{raw_title}\n{line}"
+        elif tablefmt in ["latex", "latex_raw", "latex_booktabs", "latex_longtable"]:
+            if level == 1:
+                size = r"\Huge"
+            elif level == 2:
+                size = r"\huge"
+            elif level == 3:
+                size = r"\LARGE"
+            elif level == 4:
+                size = r"\Large"
+            elif level == 5:
+                size = r"\large"
+            elif level == 6:
+                size = r"\normalsize"
+            else:
+                assert False
+            newline = r"\\"
+            noindent = r"\noindent"
+            title = f"{noindent} {{ {size} {raw_title} }} {newline}"
+        else:  # use the title for tablefmt == "github"
+            hashes = "#" * level
+            title = f"{hashes} {raw_title}"
+        return title
 
 
 def _format_location(loc: tuple[str | None, WellPos | None]) -> str:
