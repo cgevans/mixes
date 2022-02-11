@@ -94,16 +94,16 @@ ZERO_VOL = Q_(Decimal("0.0"), "µL")
 ROW_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWX"
 
 MIXHEAD_EA = (
-    "Comp",
-    "Src []",
-    "Dest []",
+    "Component",
+    "[Src]",
+    "[Dest]",
     "#",
     "Ea Tx Vol",
     "Tot Tx Vol",
-    "Loc",
+    "Location",
     "Note",
 )
-MIXHEAD_NO_EA = ("Comp", "Src []", "Dest []", "Tx Vol", "Loc", "Note")
+MIXHEAD_NO_EA = ("Component", "[Src]", "[Dest]", "Tx Vol", "Location", "Note")
 
 
 class VolumeError(ValueError):
@@ -337,7 +337,7 @@ class MixLine:
         and interpretable for calculations involving the mix.
 
     number
-        The number of components added / substeps
+        The number of components added / subste
 
     each_tx_vol
         The volume per component / substep.  May be omitted, or a descriptive string.
@@ -937,6 +937,7 @@ class FixedConcentration(AbstractAction):
                 names=[self.component.name],
                 source_conc=self.component.concentration,
                 dest_conc=self.dest_concentration(mix_vol),
+                each_tx_vol=self.tx_volume(mix_vol),
                 total_tx_vol=self.tx_volume(mix_vol),
                 plate=self.component.plate,
                 wells=self.component._well_list,
@@ -1004,6 +1005,7 @@ class FixedVolume(AbstractAction):
                 source_conc=self.component.concentration,
                 dest_conc=self.dest_concentration(mix_vol),
                 total_tx_vol=self.tx_volume(mix_vol),
+                each_tx_vol=self.tx_volume(mix_vol),
                 plate=self.component.location[0],
                 wells=([well] if well else []),
             )
