@@ -2177,11 +2177,26 @@ class PlateMap:
     """
 
     plate_name: str
-    plate_type: PlateType
-    vol_each: Quantity[Decimal]
-    well_to_strand_name: dict[str, str]
+    """Name of this plate."""
 
-    def to_markdown(
+    plate_type: PlateType
+    """Type of this plate (96-well or 384-well)."""
+
+    vol_each: Quantity[Decimal]
+    """Volume to pipette of each strand listed in this plate."""
+
+    well_to_strand_name: dict[str, str]
+    """dictionary mapping the name of each well (e.g., "C4") to the name of the strand in that well.
+    
+    Wells with no strand in the PlateMap are not keys in the dictionary."""
+
+    def __str__(self) -> str:
+        return self.to_table()
+
+    def _repr_markdown_(self) -> str:
+        return self.to_table(tablefmt="github")
+
+    def to_table(
         self,
         well_marker: Optional[str] = None,
         tablefmt="github",
@@ -2194,17 +2209,29 @@ class PlateMap:
         colalign=None,
     ) -> str:
         """
-        Exports this plate map to Markdown format, with a header indicating information such as the
-        plate's name and volume to pipette. It uses the Python tabulate package
-        (https://pypi.org/project/tabulate/).
+        Exports this plate map to string format, with a header indicating information such as the
+        plate's name and volume to pipette. By default the text format is Markdown, which can be
+        rendered in a jupyter notebook using ``display`` and ``Markdown`` from the package
+        IPython.display:
+
+        .. code-block:: python
+
+            plate_maps = mix.plate_maps()
+            maps_strs = '\n\n'.join(plate_map.to_table())
+            from IPython.display import display, Markdown
+            display(Markdown(maps_strs))
+
+        It uses the Python tabulate package (https://pypi.org/project/tabulate/).
         The parameters are identical to that of the `tabulate` function and are passed along to it,
         except for `tabular_data` and `headers`, which are computed from this plate map.
-
+        In particular, the parameter `tablefmt` has default value `'github'`,
+        which creates a Markdown format. To create other formats such as HTML, change the value of
+        `tablefmt`; see https://github.com/astanin/python-tabulate#readme for other possible formats.
 
         :param well_marker:
             By default the strand's name is put in the relevant plate entry. If `well_marker` is specified,
             then it is put there instead. This is useful for printing plate maps that just put,
-            for instance, an `'X'` in the well to pipette (e.g., specify `well_marker` = `'X'`),
+            for instance, an `'X'` in the well to pipette (e.g., specify ``well_marker='X'``),
             e.g., for experimental mixes that use only some strands in the plate.
         :param tablefmt:
             By default set to `'github'` to create a Markdown table. For other options see
@@ -2248,9 +2275,8 @@ class PlateMap:
 
         title = f"## {self.plate_name}, {self.vol_each} each"
         header = [" "] + [str(col) for col in self.plate_type.cols()]
-        from tabulate import tabulate
 
-        markdown_table = tabulate(
+        table = tabulate(
             tabular_data=table,
             headers=header,
             tablefmt=tablefmt,
@@ -2262,8 +2288,8 @@ class PlateMap:
             disable_numparse=disable_numparse,
             colalign=colalign,
         )
-        markdown = f"{title}\n{markdown_table}"
-        return markdown
+        table_with_title = f"{title}\n{table}"
+        return table_with_title
 
 
 def _format_location(loc: tuple[str | None, WellPos | None]) -> str:
