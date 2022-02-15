@@ -24,7 +24,9 @@ from typing import (
     TypeVar,
     Union,
     cast,
-    overload, Tuple,
+    overload, 
+    Callable,
+    Tuple
 )
 from pathlib import Path
 
@@ -2265,7 +2267,7 @@ class PlateMap:
 
     def to_table(
         self,
-        well_marker: Optional[str] = None,
+        well_marker: None | str | Callable[[str], str] = None,
         title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
         warn_unsupported_title_format: bool = True,
         tablefmt: Literal[
@@ -2322,10 +2324,16 @@ class PlateMap:
         `tablefmt`; see https://github.com/astanin/python-tabulate#readme for other possible formats.
 
         :param well_marker:
-            By default the strand's name is put in the relevant plate entry. If `well_marker` is specified,
-            then it is put there instead. This is useful for printing plate maps that just put,
+            By default the strand's name is put in the relevant plate entry. If `well_marker` is specified
+            and is a string, then that string is put into every well with a strand in the plate map instead.
+            This is useful for printing plate maps that just put,
             for instance, an `'X'` in the well to pipette (e.g., specify ``well_marker='X'``),
             e.g., for experimental mixes that use only some strands in the plate.
+            To enable the string to depend on the well position
+            (instead of being the same string in every well), `well_marker` can also be a function
+            that takes as input a string representing the well (such as ``"B3"`` or ``"E11"``),
+            and outputs a string. For example, giving the identity function
+            ``mix.to_table(well_marker=lambda x: x)`` puts the well address itself in the well.
         :param title_level:
             The "title" is the first line of the returned string, which contains the plate's name
             and volume to pipette. The `title_level` controls the size, with 1 being the largest size,
@@ -2386,9 +2394,11 @@ class PlateMap:
                 well_str = str(well_pos)
                 if well_str in self.well_to_strand_name:
                     strand_name = self.well_to_strand_name[well_str]
-                    well_marker_to_use = (
-                        well_marker if well_marker is not None else strand_name
-                    )
+                    well_marker_to_use = strand_name
+                    if isinstance(well_marker, str):
+                        well_marker_to_use = well_marker
+                    elif callable(well_marker):
+                        well_marker_to_use = well_marker(well_str)
                     table[r][c] = well_marker_to_use
                 if not well_pos.is_last():
                     well_pos = well_pos.advance()
