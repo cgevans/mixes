@@ -358,7 +358,7 @@ class MixLine:
         will be distinguished in some way in tables (eg, italics) and will not be included in calculations.
     """
 
-    names: list[str] = attrs.field(converter=list)
+    names: list[str] = attrs.field(factory=list)
     source_conc: Quantity[Decimal] | str | None = None
     dest_conc: Quantity[Decimal] | str | None = None
     total_tx_vol: Quantity[Decimal] | None = None
@@ -437,18 +437,17 @@ class MixLine:
 def _formatter(
     x: int | float | str | list[str] | Quantity[Decimal] | None, italic: bool = False
 ) -> str:
-    match x:
-        case int(y) | str(y):
-            out = str(y)
-        case None:
+    if isinstance(x, (int, str)):
+            out = str(x)
+    elif x is None:
             out = ""
-        case float(y):
-            out = f"{y:,.2f}"
-        case Quantity() as y:
-            out = f"{y:,.2f~#P}"
-        case list() | pd.Series() | np.array() as x:
+    elif isinstance(x, float):
+            out = f"{x:,.2f}"
+    elif isinstance(x, Quantity):
+            out = f"{x:,.2f~#P}"
+    elif isinstance(x, (list, np.ndarray, pd.Series)):
             out = ", ".join(_formatter(y) for y in x)
-        case _:
+    else:
             raise TypeError
     if not out:
         return ""
@@ -467,12 +466,12 @@ class AbstractComponent(ABC):
         ...
 
     @property
-    def location(self) -> tuple[None | str, WellPos | None]:
-        return (None, None)
+    def location(self) -> tuple[str, WellPos | None]:
+        return ("", None)
 
     @property
-    def plate(self) -> None | str:
-        return None
+    def plate(self) -> str:
+        return ""
 
     @property
     def well(self) -> WellPos | None:
@@ -636,7 +635,7 @@ class Component(AbstractComponent):
         return False
 
     @property
-    def location(self) -> tuple[str | None, WellPos | None]:
+    def location(self) -> tuple[str, WellPos | None]:
         return (self.plate, self.well)
 
     def all_components(self) -> pd.DataFrame:
@@ -1989,8 +1988,8 @@ class Mix(AbstractComponent):
         return new
 
     @property
-    def location(self) -> tuple[None | str, WellPos | None]:
-        return (None, None)
+    def location(self) -> tuple[str, WellPos | None]:
+        return ("", None)
 
     def vol_to_tube_names(
         self, validate: bool = True
@@ -2516,11 +2515,10 @@ class Reference:
         return self.df.__getitem__(key)
 
     def __eq__(self: Reference, other: object):
-        match other:
-            case Reference() as r:
-                return ((r.df == self.df) | (r.df.isna() & self.df.isna())).all().all()
-            case pd.DataFrame() as rdf:
-                return ((rdf == self.df) | (rdf.isna() & self.df.isna())).all().all()
+        if isinstance(other, Reference):
+                return ((other.df == self.df) | (other.df.isna() & self.df.isna())).all().all()
+        elif isinstance(other, pd.DataFrame):
+                return ((other == self.df) | (other.isna() & self.df.isna())).all().all()
         return False
 
     def __len__(self) -> int:
@@ -2571,7 +2569,7 @@ class Reference:
         raise ValueError("Did not find any matching components.")
 
     @classmethod
-    def from_csv(cls, filename_or_file: str | PathLike[str]) -> Reference:
+    def from_csv(cls, filename_or_file: str | io.TextIOBase | PathLike[str]) -> Reference:
         """
         Load reference information from a CSV file.
 
