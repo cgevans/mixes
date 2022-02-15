@@ -236,7 +236,7 @@ class WellPos:
             case WellPos(row, col, platesize):  # type: ignore
                 return (row == self.row) and (col == self.col)
             case str(ws):
-                return self == WellPos(other, platesize=self.platesize)
+                return self == WellPos(ws, platesize=self.platesize)
             case _:
                 return False
         return False
@@ -847,6 +847,15 @@ class AbstractAction(ABC):
     ) -> Sequence[Quantity[Decimal]]:
         raise ValueError
 
+    @property
+    @abstractmethod
+    def components(self) -> list[AbstractComponent]:
+        ...
+
+    @abstractmethod
+    def each_volumes(self, total_volume: Quantity[Decimal]) -> list[Quantity[Decimal]]:
+        ...
+
 
 def findloc(locations: pd.DataFrame | None, name: str) -> str | None:
     match findloc_tuples(locations, name):
@@ -954,6 +963,13 @@ class FixedConcentration(AbstractAction):
     def name(self) -> str:
         return self.component.name
 
+    def each_volumes(self, total_volume: Quantity[Decimal]) -> list[Quantity[Decimal]]:
+        return [self.tx_volume(total_volume)]
+
+    @property
+    def components(self) -> list[AbstractComponent]:
+        return [self.component]
+
 
 @attrs.define()
 class FixedVolume(AbstractAction):
@@ -1018,6 +1034,13 @@ class FixedVolume(AbstractAction):
     @property
     def name(self) -> str:
         return self.component.name
+
+    def each_volumes(self, total_volume: Quantity[Decimal]) -> list[Quantity[Decimal]]:
+        return [self.tx_volume(total_volume)]
+
+    @property
+    def components(self) -> list[AbstractComponent]:
+        return [self.component]
 
 
 def mixgaps(wl: Iterable[WellPos], by: Literal["row", "col"]) -> int:
@@ -1756,6 +1779,14 @@ class Mix(AbstractComponent):
             self.actions = [
                 action.with_reference(self.reference) for action in self.actions
             ]
+        if self.actions is None:
+            raise ValueError(
+                f"Mix.actions must contain at least one action, but it was not specified"
+            )
+        elif len(self.actions) == 0:
+            raise ValueError(
+                f"Mix.actions must contain at least one action, but it is empty"
+            )
 
     @property
     def concentration(self) -> Quantity[Decimal]:
@@ -1783,7 +1814,7 @@ class Mix(AbstractComponent):
     @property
     def total_volume(self) -> Quantity[Decimal]:
         """
-        Total volume of the the mix.  If the mix has a fixed total volume, then that,
+        Total volume of the mix.  If the mix has a fixed total volume, then that,
         otherwise, the sum of the transfer volumes of each component.
         """
         if self.fixed_total_volume is not None and not (
@@ -1841,12 +1872,10 @@ class Mix(AbstractComponent):
         )
 
     def mixlines(self) -> Sequence[MixLine]:
-        tv = self.total_volume
-
         mixlines: list[MixLine] = []
 
         for action in self.actions:
-            mixlines += action._mixlines(tv)
+            mixlines += action._mixlines(self.total_volume)
 
         if self.fixed_total_volume is not None:
             mixlines.append(MixLine(["Buffer"], None, None, self.buffer_volume))
@@ -1892,6 +1921,21 @@ class Mix(AbstractComponent):
                 + "; ".join(f"{', '.join(n)} at {x}" for n, x in neg_vols)
                 + "."
             )
+
+        # check for sufficient volume in intermediate mixes
+        # XXX: this assumes 1-1 correspondence between mixlines and actions (true in current implementation)
+        for action in self.actions:
+            for component, volume in zip(
+                action.components, action.each_volumes(self.total_volume)
+            ):
+                if isinstance(component, Mix):
+                    if component.fixed_total_volume < volume:
+                        raise VolumeError(
+                            f'intermediate Mix "{component.name}" needs {volume} to create '
+                            f'Mix "{self.name}", but Mix "{component.name}" contains only '
+                            f"{component.fixed_total_volume}."
+                        )
+            # for each_vol, component in zip(mixline.each_tx_vol, action.all_components()):
 
     def all_components(self) -> pd.DataFrame:
         """
@@ -2388,7 +2432,10 @@ class PlateMap:
         for r in range(num_rows):
             table[r][0] = self.plate_type.rows()[r]
 
-        well_pos = WellPos(1, 1, platesize=self.plate_type.num_wells_per_plate())
+        if self.plate_type is PlateType.wells96:
+            well_pos = WellPos(1, 1, platesize=96)
+        else:
+            well_pos = WellPos(1, 1, platesize=384)
         for c in range(1, num_cols + 1):
             for r in range(num_rows):
                 well_str = str(well_pos)
