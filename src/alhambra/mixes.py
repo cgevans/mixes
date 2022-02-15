@@ -1881,12 +1881,25 @@ class Mix(AbstractComponent):
             mixlines.append(MixLine(["Buffer"], None, None, self.buffer_volume))
         return mixlines
 
+    def has_fixed_concentration_action(self) -> bool:
+        return any(isinstance(action, (FixedConcentration, MultiFixedConcentration))
+                   for action in self.actions)
+
+    def has_fixed_total_volume(self) -> bool:
+        return not math.isnan(self.fixed_total_volume.m)
+
     def validate(self, mixlines: Sequence[MixLine] | None = None) -> None:
         if mixlines is None:
             mixlines = self.mixlines()
         ntx = [
             (m.names, m.total_tx_vol) for m in mixlines if m.total_tx_vol is not None
         ]
+
+        # special case check for FixedConcentration/MultiFixedConcentration action(s) used
+        # without corresponding Mix.fixed_total_volume
+        if not self.has_fixed_total_volume() and self.has_fixed_concentration_action():
+            raise VolumeError('If a FixedConcentration action or MultiFixedConcentration action is used, '
+                              'then Mix.fixed_total_volume must be specified.')
 
         nan_vols = [", ".join(n) for n, x in ntx if math.isnan(x.m)]
         if nan_vols:
