@@ -1838,7 +1838,17 @@ class Mix(AbstractComponent):
         mvol = sum(c.tx_volume(self.total_volume) for c in self.actions)
         return self.total_volume - mvol
 
-    def table(self, tablefmt: TableFormat | str = "pipe", validate: bool = True) -> str:
+    def table(self,
+              tablefmt: TableFormat | str = "pipe",
+              validate: bool = True,
+              floatfmt="g",
+              numalign="default",
+              stralign="default",
+              missingval="",
+              showindex="default",
+              disable_numparse=False,
+              colalign=None,
+        ) -> str:
         """Generate a table describing the mix.
 
         Parameters
@@ -1869,6 +1879,13 @@ class Mix(AbstractComponent):
             [ml.toline(include_numbers) for ml in mixlines],
             MIXHEAD_EA if include_numbers else MIXHEAD_NO_EA,
             tablefmt=tablefmt,
+            floatfmt=floatfmt,
+            numalign=numalign,
+            stralign=stralign,
+            missingval=missingval,
+            showindex=showindex,
+            disable_numparse=disable_numparse,
+            colalign=colalign,
         )
 
     def mixlines(self) -> Sequence[MixLine]:
@@ -2096,6 +2113,69 @@ class Mix(AbstractComponent):
             entry = f"## tubes, {vol} each\n{joined_names}"
             entries.append(entry)
         return "\n".join(entries)
+
+    def instructions(self,
+                     plate_type: PlateType = PlateType.wells96,
+                     validate: bool = True,
+                     combine_plate_actions: bool = True,
+                     well_marker: None | str | Callable[[str], str] = None,
+                     title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
+                     warn_unsupported_title_format: bool = True,
+                     tablefmt: str | TableFormat = "github",
+                     floatfmt="g",
+                     numalign="default",
+                     stralign="default",
+                     missingval="",
+                     showindex="default",
+                     disable_numparse=False,
+                     colalign=None,
+        ) -> str:
+        """
+        Returns string combiniing the string results of calling :meth:`Mix.table` and
+        :meth:`Mix.plate_maps` (then calling :meth:`PlateMap.to_table` on each :class:`PlateMap`).
+
+        :return:
+            pipetting instructions in the form of strings combining results of :meth:`Mix.table` and
+            :meth:`Mix.plate_maps`
+        """
+        table_str = self.table(
+            validate=validate,
+            tablefmt=tablefmt,
+            floatfmt=floatfmt,
+            numalign=numalign,
+            stralign=stralign,
+            missingval=missingval,
+            showindex=showindex,
+            disable_numparse=disable_numparse,
+            colalign=colalign,
+        )
+        plate_map_strs = []
+        plate_maps = self.plate_maps(
+            plate_type=plate_type,
+            validate=validate,
+            combine_plate_actions=combine_plate_actions,
+        )
+        for plate_map in plate_maps:
+            plate_map_str = plate_map.to_table(
+                well_marker=well_marker,
+                title_level=title_level,
+                warn_unsupported_title_format=warn_unsupported_title_format,
+                tablefmt=tablefmt,
+                floatfmt=floatfmt,
+                numalign=numalign,
+                stralign=stralign,
+                missingval=missingval,
+                showindex=showindex,
+                disable_numparse=disable_numparse,
+                colalign=colalign,
+            )
+            plate_map_strs.append(plate_map_str)
+
+        raw_table_title = f'Instructions for creating mix "{self.name}"'
+        if self.test_tube_name is not None:
+            raw_table_title += f'test tube name={self.test_tube_name}'
+        table_title = _format_title(raw_table_title, level=title_level, tablefmt=tablefmt)
+        return table_title + '\n\n' + table_str + '\n\n' + '\n\n'.join(plate_map_strs)
 
     def plate_maps(
         self,
@@ -2327,31 +2407,7 @@ class PlateMap:
         well_marker: None | str | Callable[[str], str] = None,
         title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
         warn_unsupported_title_format: bool = True,
-        tablefmt: Literal[
-            "plain",
-            "simple",
-            "github",
-            "grid",
-            "fancy_grid",
-            "pipe",
-            "orgtbl",
-            "jira",
-            "presto",
-            "pretty",
-            "psql",
-            "rst",
-            "mediawiki",
-            "moinmoin",
-            "youtrack",
-            "html",
-            "unsafehtml",
-            "latex",
-            "latex_raw",
-            "latex_booktabs",
-            "latex_longtable",
-            "textile",
-            "tsv",
-        ] = "github",
+        tablefmt: str | TableFormat = "github",
         floatfmt="g",
         numalign="default",
         stralign="default",
@@ -2463,7 +2519,8 @@ class PlateMap:
                 if not well_pos.is_last():
                     well_pos = well_pos.advance()
 
-        title = self._create_title(title_level, tablefmt)
+        raw_title = f"{self.plate_name}, {self.vol_each} each"
+        title = _format_title(raw_title, title_level, tablefmt)
 
         header = [" "] + [str(col) for col in self.plate_type.cols()]
 
@@ -2482,96 +2539,73 @@ class PlateMap:
         table_with_title = f"{title}\n{table}"
         return table_with_title
 
-    def _create_title(
-        self,
-        level: int,
-        tablefmt: Literal[
-            "plain",
-            "simple",
-            "github",
-            "grid",
-            "fancy_grid",
-            "pipe",
-            "orgtbl",
-            "jira",
-            "presto",
-            "pretty",
-            "psql",
-            "rst",
-            "mediawiki",
-            "moinmoin",
-            "youtrack",
-            "html",
-            "unsafehtml",
-            "latex",
-            "latex_raw",
-            "latex_booktabs",
-            "latex_longtable",
-            "textile",
-            "tsv",
-        ],
-    ):
-        raw_title = f"{self.plate_name}, {self.vol_each} each"
-        if tablefmt in ["html", "unsafehtml"]:
-            title = f"<h{level}>{raw_title}</h{level}>"
-        elif tablefmt == "rst":
-            # https://draft-edx-style-guide.readthedocs.io/en/latest/ExampleRSTFile.html#heading-levels
-            # #############
-            # Heading 1
-            # #############
-            #
-            # *************
-            # Heading 2
-            # *************
-            #
-            # ===========
-            # Heading 3
-            # ===========
-            #
-            # Heading 4
-            # ************
-            #
-            # Heading 5
-            # ===========
-            #
-            # Heading 6
-            # ~~~~~~~~~~~
-            raw_title_width = len(raw_title)
-            if level == 1:
-                line = "#" * raw_title_width
-            elif level in [2, 4]:
-                line = "*" * raw_title_width
-            elif level in [3, 5]:
-                line = "=" * raw_title_width
-            else:
-                line = "~" * raw_title_width
+def _format_title(
+    raw_title: str,
+    level: int,
+    tablefmt: str | TableFormat,
+) -> str:
+    # formats a title for a table produced using tabulate,
+    # in the formats tabulate understands
+    if tablefmt in ["html", "unsafehtml"]:
+        title = f"<h{level}>{raw_title}</h{level}>"
+    elif tablefmt == "rst":
+        # https://draft-edx-style-guide.readthedocs.io/en/latest/ExampleRSTFile.html#heading-levels
+        # #############
+        # Heading 1
+        # #############
+        #
+        # *************
+        # Heading 2
+        # *************
+        #
+        # ===========
+        # Heading 3
+        # ===========
+        #
+        # Heading 4
+        # ************
+        #
+        # Heading 5
+        # ===========
+        #
+        # Heading 6
+        # ~~~~~~~~~~~
+        raw_title_width = len(raw_title)
+        if level == 1:
+            line = "#" * raw_title_width
+        elif level in [2, 4]:
+            line = "*" * raw_title_width
+        elif level in [3, 5]:
+            line = "=" * raw_title_width
+        else:
+            line = "~" * raw_title_width
 
-            if level in [1, 2, 3]:
-                title = f"{line}\n{raw_title}\n{line}"
-            else:
-                title = f"{raw_title}\n{line}"
-        elif tablefmt in ["latex", "latex_raw", "latex_booktabs", "latex_longtable"]:
-            if level == 1:
-                size = r"\Huge"
-            elif level == 2:
-                size = r"\huge"
-            elif level == 3:
-                size = r"\LARGE"
-            elif level == 4:
-                size = r"\Large"
-            elif level == 5:
-                size = r"\large"
-            elif level == 6:
-                size = r"\normalsize"
-            else:
-                assert False
-            newline = r"\\"
-            noindent = r"\noindent"
-            title = f"{noindent} {{ {size} {raw_title} }} {newline}"
-        else:  # use the title for tablefmt == "github"
-            hashes = "#" * level
-            title = f"{hashes} {raw_title}"
-        return title
+        if level in [1, 2, 3]:
+            title = f"{line}\n{raw_title}\n{line}"
+        else:
+            title = f"{raw_title}\n{line}"
+    elif tablefmt in ["latex", "latex_raw", "latex_booktabs", "latex_longtable"]:
+        if level == 1:
+            size = r"\Huge"
+        elif level == 2:
+            size = r"\huge"
+        elif level == 3:
+            size = r"\LARGE"
+        elif level == 4:
+            size = r"\Large"
+        elif level == 5:
+            size = r"\large"
+        elif level == 6:
+            size = r"\normalsize"
+        else:
+            assert False
+        newline = r"\\"
+        noindent = r"\noindent"
+        title = f"{noindent} {{ {size} {raw_title} }} {newline}"
+    else:  # use the title for tablefmt == "github"
+        hashes = "#" * level
+        title = f"{hashes} {raw_title}"
+    return title
 
 
 def _format_location(loc: tuple[str | None, WellPos | None]) -> str:
