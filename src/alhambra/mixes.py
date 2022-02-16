@@ -2221,11 +2221,13 @@ class Mix(AbstractComponent):
             )
             plate_map_strs.append(plate_map_str)
 
+        # make title for whole instructions a bit bigger, if we can
+        table_title_level = title_level if title_level == 1 else title_level - 1
         raw_table_title = f'Instructions for creating mix "{self.name}"'
         if self.test_tube_name is not None:
             raw_table_title += f"test tube name={self.test_tube_name}"
         table_title = _format_title(
-            raw_table_title, level=title_level, tablefmt=tablefmt
+            raw_table_title, level=table_title_level, tablefmt=tablefmt
         )
         return table_title + "\n\n" + table_str + "\n\n" + "\n\n".join(plate_map_strs)
 
