@@ -24,9 +24,9 @@ from typing import (
     TypeVar,
     Union,
     cast,
-    overload, 
+    overload,
     Callable,
-    Tuple
+    Tuple,
 )
 from pathlib import Path
 
@@ -440,17 +440,17 @@ def _formatter(
     x: int | float | str | list[str] | Quantity[Decimal] | None, italic: bool = False
 ) -> str:
     if isinstance(x, (int, str)):
-            out = str(x)
+        out = str(x)
     elif x is None:
-            out = ""
+        out = ""
     elif isinstance(x, float):
-            out = f"{x:,.2f}"
+        out = f"{x:,.2f}"
     elif isinstance(x, Quantity):
-            out = f"{x:,.2f~#P}"
+        out = f"{x:,.2f~#P}"
     elif isinstance(x, (list, np.ndarray, pd.Series)):
-            out = ", ".join(_formatter(y) for y in x)
+        out = ", ".join(_formatter(y) for y in x)
     else:
-            raise TypeError
+        raise TypeError
     if not out:
         return ""
     if italic:
@@ -1838,17 +1838,18 @@ class Mix(AbstractComponent):
         mvol = sum(c.tx_volume(self.total_volume) for c in self.actions)
         return self.total_volume - mvol
 
-    def table(self,
-              tablefmt: TableFormat | str = "pipe",
-              validate: bool = True,
-              floatfmt="g",
-              numalign="default",
-              stralign="default",
-              missingval="",
-              showindex="default",
-              disable_numparse=False,
-              colalign=None,
-        ) -> str:
+    def table(
+        self,
+        tablefmt: TableFormat | str = "pipe",
+        validate: bool = True,
+        floatfmt="g",
+        numalign="default",
+        stralign="default",
+        missingval="",
+        showindex="default",
+        disable_numparse=False,
+        colalign=None,
+    ) -> str:
         """Generate a table describing the mix.
 
         Parameters
@@ -1899,8 +1900,10 @@ class Mix(AbstractComponent):
         return mixlines
 
     def has_fixed_concentration_action(self) -> bool:
-        return any(isinstance(action, (FixedConcentration, MultiFixedConcentration))
-                   for action in self.actions)
+        return any(
+            isinstance(action, (FixedConcentration, MultiFixedConcentration))
+            for action in self.actions
+        )
 
     def has_fixed_total_volume(self) -> bool:
         return not math.isnan(self.fixed_total_volume.m)
@@ -1915,8 +1918,10 @@ class Mix(AbstractComponent):
         # special case check for FixedConcentration/MultiFixedConcentration action(s) used
         # without corresponding Mix.fixed_total_volume
         if not self.has_fixed_total_volume() and self.has_fixed_concentration_action():
-            raise VolumeError('If a FixedConcentration action or MultiFixedConcentration action is used, '
-                              'then Mix.fixed_total_volume must be specified.')
+            raise VolumeError(
+                "If a FixedConcentration action or MultiFixedConcentration action is used, "
+                "then Mix.fixed_total_volume must be specified."
+            )
 
         nan_vols = [", ".join(n) for n, x in ntx if math.isnan(x.m)]
         if nan_vols:
@@ -2114,22 +2119,23 @@ class Mix(AbstractComponent):
             entries.append(entry)
         return "\n".join(entries)
 
-    def instructions(self,
-                     plate_type: PlateType = PlateType.wells96,
-                     validate: bool = True,
-                     combine_plate_actions: bool = True,
-                     well_marker: None | str | Callable[[str], str] = None,
-                     title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
-                     warn_unsupported_title_format: bool = True,
-                     tablefmt: str | TableFormat = "github",
-                     floatfmt="g",
-                     numalign="default",
-                     stralign="default",
-                     missingval="",
-                     showindex="default",
-                     disable_numparse=False,
-                     colalign=None,
-        ) -> str:
+    def instructions(
+        self,
+        plate_type: PlateType = PlateType.wells96,
+        validate: bool = True,
+        combine_plate_actions: bool = True,
+        well_marker: None | str | Callable[[str], str] = None,
+        title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
+        warn_unsupported_title_format: bool = True,
+        tablefmt: str | TableFormat = "github",
+        floatfmt="g",
+        numalign="default",
+        stralign="default",
+        missingval="",
+        showindex="default",
+        disable_numparse=False,
+        colalign=None,
+    ) -> str:
         """
         Returns string combiniing the string results of calling :meth:`Mix.table` and
         :meth:`Mix.plate_maps` (then calling :meth:`PlateMap.to_table` on each :class:`PlateMap`).
@@ -2217,9 +2223,11 @@ class Mix(AbstractComponent):
 
         raw_table_title = f'Instructions for creating mix "{self.name}"'
         if self.test_tube_name is not None:
-            raw_table_title += f'test tube name={self.test_tube_name}'
-        table_title = _format_title(raw_table_title, level=title_level, tablefmt=tablefmt)
-        return table_title + '\n\n' + table_str + '\n\n' + '\n\n'.join(plate_map_strs)
+            raw_table_title += f"test tube name={self.test_tube_name}"
+        table_title = _format_title(
+            raw_table_title, level=title_level, tablefmt=tablefmt
+        )
+        return table_title + "\n\n" + table_str + "\n\n" + "\n\n".join(plate_map_strs)
 
     def plate_maps(
         self,
@@ -2325,7 +2333,7 @@ class Mix(AbstractComponent):
                 raise e
 
         # not used if combine_plate_actions is False
-        plate_maps_dict: dict[Tuple[str,Quantity[Decimal]], PlateMap] = {}
+        plate_maps_dict: dict[Tuple[str, Quantity[Decimal]], PlateMap] = {}
         plate_maps = []
         # each MixLine but the last is a (plate, volume) pair
         for mixline in mixlines:
@@ -2339,7 +2347,9 @@ class Mix(AbstractComponent):
             key = (mixline.plate, mixline.each_tx_vol)
             if combine_plate_actions:
                 existing_plate = plate_maps_dict.get(key)
-            plate_map = self._plate_map_from_mixline(mixline, plate_type, existing_plate)
+            plate_map = self._plate_map_from_mixline(
+                mixline, plate_type, existing_plate
+            )
             if combine_plate_actions:
                 plate_maps_dict[key] = plate_map
             if existing_plate is None:
@@ -2348,7 +2358,10 @@ class Mix(AbstractComponent):
         return plate_maps
 
     def _plate_map_from_mixline(
-        self, mixline: MixLine, plate_type: PlateType, existing_plate_map: PlateMap | None,
+        self,
+        mixline: MixLine,
+        plate_type: PlateType,
+        existing_plate_map: PlateMap | None,
     ) -> PlateMap:
         # If existing_plate is None, return new plate map; otherwise update existing_plate_map and return it
         assert mixline.plate != "tube"
@@ -2373,9 +2386,11 @@ class Mix(AbstractComponent):
 
             for well_str, strand_name in well_to_strand_name.items():
                 if well_str in existing_plate_map.well_to_strand_name:
-                    raise ValueError(f'a previous mix action already specified well {well_str} '
-                                     f'with strand {strand_name}, '
-                                     f'but each strand in a mix must be unique')
+                    raise ValueError(
+                        f"a previous mix action already specified well {well_str} "
+                        f"with strand {strand_name}, "
+                        f"but each strand in a mix must be unique"
+                    )
                 existing_plate_map.well_to_strand_name[well_str] = strand_name
             return existing_plate_map
 
@@ -2583,6 +2598,7 @@ class PlateMap:
         table_with_title = f"{title}\n{table}"
         return table_with_title
 
+
 def _format_title(
     raw_title: str,
     level: int,
@@ -2692,9 +2708,11 @@ class Reference:
 
     def __eq__(self: Reference, other: object):
         if isinstance(other, Reference):
-                return ((other.df == self.df) | (other.df.isna() & self.df.isna())).all().all()
+            return (
+                ((other.df == self.df) | (other.df.isna() & self.df.isna())).all().all()
+            )
         elif isinstance(other, pd.DataFrame):
-                return ((other == self.df) | (other.isna() & self.df.isna())).all().all()
+            return ((other == self.df) | (other.isna() & self.df.isna())).all().all()
         return False
 
     def __len__(self) -> int:
@@ -2745,7 +2763,9 @@ class Reference:
         raise ValueError("Did not find any matching components.")
 
     @classmethod
-    def from_csv(cls, filename_or_file: str | io.TextIOBase | PathLike[str]) -> Reference:
+    def from_csv(
+        cls, filename_or_file: str | io.TextIOBase | PathLike[str]
+    ) -> Reference:
         """
         Load reference information from a CSV file.
 
