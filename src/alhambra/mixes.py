@@ -2125,7 +2125,7 @@ class Mix(AbstractComponent):
         validate: bool = True,
         combine_plate_actions: bool = True,
         well_marker: None | str | Callable[[str], str] = None,
-        title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
+        title_level: Literal[1, 2, 3, 4, 5, 6] = 3,
         warn_unsupported_title_format: bool = True,
         tablefmt: str | TableFormat = "pipe",
         floatfmt="g",
@@ -2469,7 +2469,7 @@ class PlateMap:
     def to_table(
         self,
         well_marker: None | str | Callable[[str], str] = None,
-        title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
+        title_level: Literal[1, 2, 3, 4, 5, 6] = 3,
         warn_unsupported_title_format: bool = True,
         tablefmt: str | TableFormat = "pipe",
         floatfmt="g",
