@@ -2454,7 +2454,7 @@ class PlateMap:
 
     well_to_strand_name: dict[str, str]
     """dictionary mapping the name of each well (e.g., "C4") to the name of the strand in that well.
-    
+
     Wells with no strand in the PlateMap are not keys in the dictionary."""
 
     def __str__(self) -> str:
