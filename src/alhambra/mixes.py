@@ -24,9 +24,9 @@ from typing import (
     TypeVar,
     Union,
     cast,
-    overload, 
+    overload,
     Callable,
-    Tuple
+    Tuple,
 )
 from pathlib import Path
 
@@ -440,17 +440,17 @@ def _formatter(
     x: int | float | str | list[str] | Quantity[Decimal] | None, italic: bool = False
 ) -> str:
     if isinstance(x, (int, str)):
-            out = str(x)
+        out = str(x)
     elif x is None:
-            out = ""
+        out = ""
     elif isinstance(x, float):
-            out = f"{x:,.2f}"
+        out = f"{x:,.2f}"
     elif isinstance(x, Quantity):
-            out = f"{x:,.2f~#P}"
+        out = f"{x:,.2f~#P}"
     elif isinstance(x, (list, np.ndarray, pd.Series)):
-            out = ", ".join(_formatter(y) for y in x)
+        out = ", ".join(_formatter(y) for y in x)
     else:
-            raise TypeError
+        raise TypeError
     if not out:
         return ""
     if italic:
@@ -1838,7 +1838,18 @@ class Mix(AbstractComponent):
         mvol = sum(c.tx_volume(self.total_volume) for c in self.actions)
         return self.total_volume - mvol
 
-    def table(self, tablefmt: TableFormat | str = "pipe", validate: bool = True) -> str:
+    def table(
+        self,
+        tablefmt: TableFormat | str = "pipe",
+        validate: bool = True,
+        floatfmt="g",
+        numalign="default",
+        stralign="default",
+        missingval="",
+        showindex="default",
+        disable_numparse=False,
+        colalign=None,
+    ) -> str:
         """Generate a table describing the mix.
 
         Parameters
@@ -1869,6 +1880,13 @@ class Mix(AbstractComponent):
             [ml.toline(include_numbers) for ml in mixlines],
             MIXHEAD_EA if include_numbers else MIXHEAD_NO_EA,
             tablefmt=tablefmt,
+            floatfmt=floatfmt,
+            numalign=numalign,
+            stralign=stralign,
+            missingval=missingval,
+            showindex=showindex,
+            disable_numparse=disable_numparse,
+            colalign=colalign,
         )
 
     def mixlines(self) -> Sequence[MixLine]:
@@ -1882,8 +1900,10 @@ class Mix(AbstractComponent):
         return mixlines
 
     def has_fixed_concentration_action(self) -> bool:
-        return any(isinstance(action, (FixedConcentration, MultiFixedConcentration))
-                   for action in self.actions)
+        return any(
+            isinstance(action, (FixedConcentration, MultiFixedConcentration))
+            for action in self.actions
+        )
 
     def has_fixed_total_volume(self) -> bool:
         return not math.isnan(self.fixed_total_volume.m)
@@ -1898,8 +1918,10 @@ class Mix(AbstractComponent):
         # special case check for FixedConcentration/MultiFixedConcentration action(s) used
         # without corresponding Mix.fixed_total_volume
         if not self.has_fixed_total_volume() and self.has_fixed_concentration_action():
-            raise VolumeError('If a FixedConcentration action or MultiFixedConcentration action is used, '
-                              'then Mix.fixed_total_volume must be specified.')
+            raise VolumeError(
+                "If a FixedConcentration action or MultiFixedConcentration action is used, "
+                "then Mix.fixed_total_volume must be specified."
+            )
 
         nan_vols = [", ".join(n) for n, x in ntx if math.isnan(x.m)]
         if nan_vols:
@@ -2097,6 +2119,118 @@ class Mix(AbstractComponent):
             entries.append(entry)
         return "\n".join(entries)
 
+    def instructions(
+        self,
+        plate_type: PlateType = PlateType.wells96,
+        validate: bool = True,
+        combine_plate_actions: bool = True,
+        well_marker: None | str | Callable[[str], str] = None,
+        title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
+        warn_unsupported_title_format: bool = True,
+        tablefmt: str | TableFormat = "github",
+        floatfmt="g",
+        numalign="default",
+        stralign="default",
+        missingval="",
+        showindex="default",
+        disable_numparse=False,
+        colalign=None,
+    ) -> str:
+        """
+        Returns string combiniing the string results of calling :meth:`Mix.table` and
+        :meth:`Mix.plate_maps` (then calling :meth:`PlateMap.to_table` on each :class:`PlateMap`).
+
+        :param plate_type:
+            96-well or 384-well plate; default is 96-well.
+        :param validate:
+            Ensure volumes make sense.
+        :param combine_plate_actions:
+            If True, then if multiple actions in the Mix take the same volume from the same plate,
+            they will be combined into a single :class:`PlateMap`.
+        :param well_marker:
+            By default the strand's name is put in the relevant plate entry. If `well_marker` is specified
+            and is a string, then that string is put into every well with a strand in the plate map instead.
+            This is useful for printing plate maps that just put,
+            for instance, an `'X'` in the well to pipette (e.g., specify ``well_marker='X'``),
+            e.g., for experimental mixes that use only some strands in the plate.
+            To enable the string to depend on the well position
+            (instead of being the same string in every well), `well_marker` can also be a function
+            that takes as input a string representing the well (such as ``"B3"`` or ``"E11"``),
+            and outputs a string. For example, giving the identity function
+            ``mix.to_table(well_marker=lambda x: x)`` puts the well address itself in the well.
+        :param title_level:
+            The "title" is the first line of the returned string, which contains the plate's name
+            and volume to pipette. The `title_level` controls the size, with 1 being the largest size,
+            (header level 1, e.g., # title in Markdown or <h1>title</h1> in HTML).
+        :param warn_unsupported_title_format:
+            If True, prints a warning if `tablefmt` is a currently unsupported option for the title.
+            The currently supported formats for the title are 'github', 'html', 'unsafehtml', 'rst',
+            'latex', 'latex_raw', 'latex_booktabs', "latex_longtable". If `tablefmt` is another valid
+            option, then the title will be the Markdown format, i.e., same as for `tablefmt` = 'github'.
+        :param tablefmt:
+            By default set to `'github'` to create a Markdown table. For other options see
+            https://github.com/astanin/python-tabulate#readme
+        :param floatfmt:
+            See https://github.com/astanin/python-tabulate#readme
+        :param numalign:
+            See https://github.com/astanin/python-tabulate#readme
+        :param stralign:
+            See https://github.com/astanin/python-tabulate#readme
+        :param missingval:
+            See https://github.com/astanin/python-tabulate#readme
+        :param showindex:
+            See https://github.com/astanin/python-tabulate#readme
+        :param disable_numparse:
+            See https://github.com/astanin/python-tabulate#readme
+        :param colalign:
+            See https://github.com/astanin/python-tabulate#readme
+        :return:
+            pipetting instructions in the form of strings combining results of :meth:`Mix.table` and
+            :meth:`Mix.plate_maps`
+        """
+        table_str = self.table(
+            validate=validate,
+            tablefmt=tablefmt,
+            floatfmt=floatfmt,
+            numalign=numalign,
+            stralign=stralign,
+            missingval=missingval,
+            showindex=showindex,
+            disable_numparse=disable_numparse,
+            colalign=colalign,
+        )
+        plate_map_strs = []
+        plate_maps = self.plate_maps(
+            plate_type=plate_type,
+            validate=validate,
+            combine_plate_actions=combine_plate_actions,
+        )
+        for plate_map in plate_maps:
+            plate_map_str = plate_map.to_table(
+                well_marker=well_marker,
+                title_level=title_level,
+                warn_unsupported_title_format=warn_unsupported_title_format,
+                tablefmt=tablefmt,
+                floatfmt=floatfmt,
+                numalign=numalign,
+                stralign=stralign,
+                missingval=missingval,
+                showindex=showindex,
+                disable_numparse=disable_numparse,
+                colalign=colalign,
+            )
+            plate_map_strs.append(plate_map_str)
+
+        # make title for whole instructions a bit bigger, if we can
+        table_title_level = title_level if title_level == 1 else title_level - 1
+        raw_table_title = f'Instructions for creating mix "{self.name}"'
+        if self.test_tube_name is not None:
+            raw_table_title += f"test tube name={self.test_tube_name}"
+        table_title = _format_title(
+            raw_table_title, level=table_title_level, tablefmt=tablefmt
+        )
+        return table_title + "\n\n" + table_str + "\n\n" + "\n\n".join(plate_map_strs)
+
     def plate_maps(
         self,
         plate_type: PlateType = PlateType.wells96,
@@ -2201,7 +2335,7 @@ class Mix(AbstractComponent):
                 raise e
 
         # not used if combine_plate_actions is False
-        plate_maps_dict: dict[Tuple[str,Quantity[Decimal]], PlateMap] = {}
+        plate_maps_dict: dict[Tuple[str, Quantity[Decimal]], PlateMap] = {}
         plate_maps = []
         # each MixLine but the last is a (plate, volume) pair
         for mixline in mixlines:
@@ -2215,7 +2349,9 @@ class Mix(AbstractComponent):
             key = (mixline.plate, mixline.each_tx_vol)
             if combine_plate_actions:
                 existing_plate = plate_maps_dict.get(key)
-            plate_map = self._plate_map_from_mixline(mixline, plate_type, existing_plate)
+            plate_map = self._plate_map_from_mixline(
+                mixline, plate_type, existing_plate
+            )
             if combine_plate_actions:
                 plate_maps_dict[key] = plate_map
             if existing_plate is None:
@@ -2224,7 +2360,10 @@ class Mix(AbstractComponent):
         return plate_maps
 
     def _plate_map_from_mixline(
-        self, mixline: MixLine, plate_type: PlateType, existing_plate_map: PlateMap | None,
+        self,
+        mixline: MixLine,
+        plate_type: PlateType,
+        existing_plate_map: PlateMap | None,
     ) -> PlateMap:
         # If existing_plate is None, return new plate map; otherwise update existing_plate_map and return it
         assert mixline.plate != "tube"
@@ -2249,9 +2388,11 @@ class Mix(AbstractComponent):
 
             for well_str, strand_name in well_to_strand_name.items():
                 if well_str in existing_plate_map.well_to_strand_name:
-                    raise ValueError(f'a previous mix action already specified well {well_str} '
-                                     f'with strand {strand_name}, '
-                                     f'but each strand in a mix must be unique')
+                    raise ValueError(
+                        f"a previous mix action already specified well {well_str} "
+                        f"with strand {strand_name}, "
+                        f"but each strand in a mix must be unique"
+                    )
                 existing_plate_map.well_to_strand_name[well_str] = strand_name
             return existing_plate_map
 
@@ -2327,31 +2468,7 @@ class PlateMap:
         well_marker: None | str | Callable[[str], str] = None,
         title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
         warn_unsupported_title_format: bool = True,
-        tablefmt: Literal[
-            "plain",
-            "simple",
-            "github",
-            "grid",
-            "fancy_grid",
-            "pipe",
-            "orgtbl",
-            "jira",
-            "presto",
-            "pretty",
-            "psql",
-            "rst",
-            "mediawiki",
-            "moinmoin",
-            "youtrack",
-            "html",
-            "unsafehtml",
-            "latex",
-            "latex_raw",
-            "latex_booktabs",
-            "latex_longtable",
-            "textile",
-            "tsv",
-        ] = "github",
+        tablefmt: str | TableFormat = "github",
         floatfmt="g",
         numalign="default",
         stralign="default",
@@ -2418,7 +2535,7 @@ class PlateMap:
         :param colalign:
             See https://github.com/astanin/python-tabulate#readme
         :return:
-            a Markdown representation of this plate map
+            a string representation of this plate map
         """
         if title_level not in [1, 2, 3, 4, 5, 6]:
             raise ValueError(
@@ -2463,7 +2580,8 @@ class PlateMap:
                 if not well_pos.is_last():
                     well_pos = well_pos.advance()
 
-        title = self._create_title(title_level, tablefmt)
+        raw_title = f"{self.plate_name}, {self.vol_each} each"
+        title = _format_title(raw_title, title_level, tablefmt)
 
         header = [" "] + [str(col) for col in self.plate_type.cols()]
 
@@ -2482,96 +2600,74 @@ class PlateMap:
         table_with_title = f"{title}\n{table}"
         return table_with_title
 
-    def _create_title(
-        self,
-        level: int,
-        tablefmt: Literal[
-            "plain",
-            "simple",
-            "github",
-            "grid",
-            "fancy_grid",
-            "pipe",
-            "orgtbl",
-            "jira",
-            "presto",
-            "pretty",
-            "psql",
-            "rst",
-            "mediawiki",
-            "moinmoin",
-            "youtrack",
-            "html",
-            "unsafehtml",
-            "latex",
-            "latex_raw",
-            "latex_booktabs",
-            "latex_longtable",
-            "textile",
-            "tsv",
-        ],
-    ):
-        raw_title = f"{self.plate_name}, {self.vol_each} each"
-        if tablefmt in ["html", "unsafehtml"]:
-            title = f"<h{level}>{raw_title}</h{level}>"
-        elif tablefmt == "rst":
-            # https://draft-edx-style-guide.readthedocs.io/en/latest/ExampleRSTFile.html#heading-levels
-            # #############
-            # Heading 1
-            # #############
-            #
-            # *************
-            # Heading 2
-            # *************
-            #
-            # ===========
-            # Heading 3
-            # ===========
-            #
-            # Heading 4
-            # ************
-            #
-            # Heading 5
-            # ===========
-            #
-            # Heading 6
-            # ~~~~~~~~~~~
-            raw_title_width = len(raw_title)
-            if level == 1:
-                line = "#" * raw_title_width
-            elif level in [2, 4]:
-                line = "*" * raw_title_width
-            elif level in [3, 5]:
-                line = "=" * raw_title_width
-            else:
-                line = "~" * raw_title_width
 
-            if level in [1, 2, 3]:
-                title = f"{line}\n{raw_title}\n{line}"
-            else:
-                title = f"{raw_title}\n{line}"
-        elif tablefmt in ["latex", "latex_raw", "latex_booktabs", "latex_longtable"]:
-            if level == 1:
-                size = r"\Huge"
-            elif level == 2:
-                size = r"\huge"
-            elif level == 3:
-                size = r"\LARGE"
-            elif level == 4:
-                size = r"\Large"
-            elif level == 5:
-                size = r"\large"
-            elif level == 6:
-                size = r"\normalsize"
-            else:
-                assert False
-            newline = r"\\"
-            noindent = r"\noindent"
-            title = f"{noindent} {{ {size} {raw_title} }} {newline}"
-        else:  # use the title for tablefmt == "github"
-            hashes = "#" * level
-            title = f"{hashes} {raw_title}"
-        return title
+def _format_title(
+    raw_title: str,
+    level: int,
+    tablefmt: str | TableFormat,
+) -> str:
+    # formats a title for a table produced using tabulate,
+    # in the formats tabulate understands
+    if tablefmt in ["html", "unsafehtml"]:
+        title = f"<h{level}>{raw_title}</h{level}>"
+    elif tablefmt == "rst":
+        # https://draft-edx-style-guide.readthedocs.io/en/latest/ExampleRSTFile.html#heading-levels
+        # #############
+        # Heading 1
+        # #############
+        #
+        # *************
+        # Heading 2
+        # *************
+        #
+        # ===========
+        # Heading 3
+        # ===========
+        #
+        # Heading 4
+        # ************
+        #
+        # Heading 5
+        # ===========
+        #
+        # Heading 6
+        # ~~~~~~~~~~~
+        raw_title_width = len(raw_title)
+        if level == 1:
+            line = "#" * raw_title_width
+        elif level in [2, 4]:
+            line = "*" * raw_title_width
+        elif level in [3, 5]:
+            line = "=" * raw_title_width
+        else:
+            line = "~" * raw_title_width
+
+        if level in [1, 2, 3]:
+            title = f"{line}\n{raw_title}\n{line}"
+        else:
+            title = f"{raw_title}\n{line}"
+    elif tablefmt in ["latex", "latex_raw", "latex_booktabs", "latex_longtable"]:
+        if level == 1:
+            size = r"\Huge"
+        elif level == 2:
+            size = r"\huge"
+        elif level == 3:
+            size = r"\LARGE"
+        elif level == 4:
+            size = r"\Large"
+        elif level == 5:
+            size = r"\large"
+        elif level == 6:
+            size = r"\normalsize"
+        else:
+            assert False
+        newline = r"\\"
+        noindent = r"\noindent"
+        title = f"{noindent} {{ {size} {raw_title} }} {newline}"
+    else:  # use the title for tablefmt == "github"
+        hashes = "#" * level
+        title = f"{hashes} {raw_title}"
+    return title
 
 
 def _format_location(loc: tuple[str | None, WellPos | None]) -> str:
@@ -2614,9 +2710,11 @@ class Reference:
 
     def __eq__(self: Reference, other: object):
         if isinstance(other, Reference):
-                return ((other.df == self.df) | (other.df.isna() & self.df.isna())).all().all()
+            return (
+                ((other.df == self.df) | (other.df.isna() & self.df.isna())).all().all()
+            )
         elif isinstance(other, pd.DataFrame):
-                return ((other == self.df) | (other.isna() & self.df.isna())).all().all()
+            return ((other == self.df) | (other.isna() & self.df.isna())).all().all()
         return False
 
     def __len__(self) -> int:
@@ -2667,7 +2765,9 @@ class Reference:
         raise ValueError("Did not find any matching components.")
 
     @classmethod
-    def from_csv(cls, filename_or_file: str | io.TextIOBase | PathLike[str]) -> Reference:
+    def from_csv(
+        cls, filename_or_file: str | io.TextIOBase | PathLike[str]
+    ) -> Reference:
         """
         Load reference information from a CSV file.
 
