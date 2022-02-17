@@ -2425,6 +2425,9 @@ _ALL_TABLEFMTS = [
 
 _SUPPORTED_TABLEFMTS_TITLE = [
     "github",
+    "pipe",
+    "simple",
+    "grid",
     "html",
     "unsafehtml",
     "rst",
