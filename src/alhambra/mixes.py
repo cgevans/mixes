@@ -1997,7 +1997,7 @@ class Mix(AbstractComponent):
             f"Component Count: {len(self.all_components())}",
         ]
         if self.test_tube_name:
-            elems.append(f"Test tube name: {self.test_tube_name}")
+            elems.append(f'; Test tube name: "{self.test_tube_name}"')
         return ", ".join(elems)
 
     def __str__(self) -> str:
