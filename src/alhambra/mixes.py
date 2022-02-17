@@ -2127,7 +2127,7 @@ class Mix(AbstractComponent):
         well_marker: None | str | Callable[[str], str] = None,
         title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
         warn_unsupported_title_format: bool = True,
-        tablefmt: str | TableFormat = "github",
+        tablefmt: str | TableFormat = "pipe",
         floatfmt="g",
         numalign="default",
         stralign="default",
@@ -2464,14 +2464,14 @@ class PlateMap:
         return self.to_table()
 
     def _repr_markdown_(self) -> str:
-        return self.to_table(tablefmt="github")
+        return self.to_table(tablefmt="pipe")
 
     def to_table(
         self,
         well_marker: None | str | Callable[[str], str] = None,
         title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
         warn_unsupported_title_format: bool = True,
-        tablefmt: str | TableFormat = "github",
+        tablefmt: str | TableFormat = "pipe",
         floatfmt="g",
         numalign="default",
         stralign="default",
@@ -2667,7 +2667,7 @@ def _format_title(
         newline = r"\\"
         noindent = r"\noindent"
         title = f"{noindent} {{ {size} {raw_title} }} {newline}"
-    else:  # use the title for tablefmt == "github"
+    else:  # use the title for tablefmt == "pipe"
         hashes = "#" * level
         title = f"{hashes} {raw_title}"
     return title
