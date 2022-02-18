@@ -1842,6 +1842,7 @@ class Mix(AbstractComponent):
         self,
         tablefmt: TableFormat | str = "pipe",
         validate: bool = True,
+        buffer_name: str = 'Buffer',
         floatfmt="g",
         numalign="default",
         stralign="default",
@@ -1860,8 +1861,11 @@ class Mix(AbstractComponent):
 
         validate
             Ensure volumes make sense.
+
+        buffer_name
+            Name of the buffer to use. (Default="Buffer")
         """
-        mixlines = list(self.mixlines())
+        mixlines = list(self.mixlines(buffer_name=buffer_name))
 
         if validate:
             try:
@@ -1889,14 +1893,14 @@ class Mix(AbstractComponent):
             colalign=colalign,
         )
 
-    def mixlines(self) -> Sequence[MixLine]:
+    def mixlines(self, buffer_name: str = "Buffer") -> Sequence[MixLine]:
         mixlines: list[MixLine] = []
 
         for action in self.actions:
             mixlines += action._mixlines(self.total_volume)
 
         if self.fixed_total_volume is not None:
-            mixlines.append(MixLine(["Buffer"], None, None, self.buffer_volume))
+            mixlines.append(MixLine([buffer_name], None, None, self.buffer_volume))
         return mixlines
 
     def has_fixed_concentration_action(self) -> bool:
@@ -2127,6 +2131,7 @@ class Mix(AbstractComponent):
         well_marker: None | str | Callable[[str], str] = None,
         title_level: Literal[1, 2, 3, 4, 5, 6] = 3,
         warn_unsupported_title_format: bool = True,
+        buffer_name: str = 'Buffer',
         tablefmt: str | TableFormat = "pipe",
         floatfmt="g",
         numalign="default",
@@ -2190,6 +2195,7 @@ class Mix(AbstractComponent):
         """
         table_str = self.table(
             validate=validate,
+            buffer_name=buffer_name,
             tablefmt=tablefmt,
             floatfmt=floatfmt,
             numalign=numalign,
@@ -2223,7 +2229,7 @@ class Mix(AbstractComponent):
 
         # make title for whole instructions a bit bigger, if we can
         table_title_level = title_level if title_level == 1 else title_level - 1
-        raw_table_title = f'To create mix "{self.name}":'
+        raw_table_title = f'Mix "{self.name}":'
         if self.test_tube_name is not None:
             raw_table_title += f' (test tube name: "{self.test_tube_name}")'
         table_title = _format_title(
@@ -2583,7 +2589,7 @@ class PlateMap:
                 if not well_pos.is_last():
                     well_pos = well_pos.advance()
 
-        raw_title = f"{self.plate_name}, {self.vol_each} each"
+        raw_title = f'plate "{self.plate_name}", {self.vol_each} each'
         title = _format_title(raw_title, title_level, tablefmt)
 
         header = [" "] + [str(col) for col in self.plate_type.cols()]
