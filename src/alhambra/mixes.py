@@ -1842,7 +1842,7 @@ class Mix(AbstractComponent):
         self,
         tablefmt: TableFormat | str = "pipe",
         validate: bool = True,
-        buffer_name: str = 'Buffer',
+        buffer_name: str = "Buffer",
         stralign="default",
         missingval="",
         showindex="default",
@@ -1997,7 +1997,7 @@ class Mix(AbstractComponent):
             f"Component Count: {len(self.all_components())}",
         ]
         if self.test_tube_name:
-            elems.append(f'Test tube name: {self.test_tube_name}')
+            elems.append(f"Test tube name: {self.test_tube_name}")
         return ", ".join(elems)
 
     def __str__(self) -> str:
@@ -2127,7 +2127,7 @@ class Mix(AbstractComponent):
         well_marker: None | str | Callable[[str], str] = None,
         title_level: Literal[1, 2, 3, 4, 5, 6] = 3,
         warn_unsupported_title_format: bool = True,
-        buffer_name: str = 'Buffer',
+        buffer_name: str = "Buffer",
         tablefmt: str | TableFormat = "pipe",
     ) -> str:
         """
