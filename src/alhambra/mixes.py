@@ -1997,7 +1997,7 @@ class Mix(AbstractComponent):
             f"Component Count: {len(self.all_components())}",
         ]
         if self.test_tube_name:
-            elems.append(f'; Test tube name: "{self.test_tube_name}"')
+            elems.append(f'Test tube name: {self.test_tube_name}')
         return ", ".join(elems)
 
     def __str__(self) -> str:
@@ -2223,9 +2223,9 @@ class Mix(AbstractComponent):
 
         # make title for whole instructions a bit bigger, if we can
         table_title_level = title_level if title_level == 1 else title_level - 1
-        raw_table_title = f'Instructions for creating mix "{self.name}"'
+        raw_table_title = f'To create mix "{self.name}":'
         if self.test_tube_name is not None:
-            raw_table_title += f"test tube name={self.test_tube_name}"
+            raw_table_title += f' (test tube name: "{self.test_tube_name}")'
         table_title = _format_title(
             raw_table_title, level=table_title_level, tablefmt=tablefmt
         )
