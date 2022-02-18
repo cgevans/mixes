@@ -1843,8 +1843,6 @@ class Mix(AbstractComponent):
         tablefmt: TableFormat | str = "pipe",
         validate: bool = True,
         buffer_name: str = 'Buffer',
-        floatfmt="g",
-        numalign="default",
         stralign="default",
         missingval="",
         showindex="default",
@@ -1884,8 +1882,6 @@ class Mix(AbstractComponent):
             [ml.toline(include_numbers) for ml in mixlines],
             MIXHEAD_EA if include_numbers else MIXHEAD_NO_EA,
             tablefmt=tablefmt,
-            floatfmt=floatfmt,
-            numalign=numalign,
             stralign=stralign,
             missingval=missingval,
             showindex=showindex,
@@ -2133,13 +2129,6 @@ class Mix(AbstractComponent):
         warn_unsupported_title_format: bool = True,
         buffer_name: str = 'Buffer',
         tablefmt: str | TableFormat = "pipe",
-        floatfmt="g",
-        numalign="default",
-        stralign="default",
-        missingval="",
-        showindex="default",
-        disable_numparse=False,
-        colalign=None,
     ) -> str:
         """
         Returns string combiniing the string results of calling :meth:`Mix.table` and
@@ -2175,20 +2164,6 @@ class Mix(AbstractComponent):
         :param tablefmt:
             By default set to `'github'` to create a Markdown table. For other options see
             https://github.com/astanin/python-tabulate#readme
-        :param floatfmt:
-            See https://github.com/astanin/python-tabulate#readme
-        :param numalign:
-            See https://github.com/astanin/python-tabulate#readme
-        :param stralign:
-            See https://github.com/astanin/python-tabulate#readme
-        :param missingval:
-            See https://github.com/astanin/python-tabulate#readme
-        :param showindex:
-            See https://github.com/astanin/python-tabulate#readme
-        :param disable_numparse:
-            See https://github.com/astanin/python-tabulate#readme
-        :param colalign:
-            See https://github.com/astanin/python-tabulate#readme
         :return:
             pipetting instructions in the form of strings combining results of :meth:`Mix.table` and
             :meth:`Mix.plate_maps`
@@ -2197,13 +2172,6 @@ class Mix(AbstractComponent):
             validate=validate,
             buffer_name=buffer_name,
             tablefmt=tablefmt,
-            floatfmt=floatfmt,
-            numalign=numalign,
-            stralign=stralign,
-            missingval=missingval,
-            showindex=showindex,
-            disable_numparse=disable_numparse,
-            colalign=colalign,
         )
         plate_map_strs = []
         plate_maps = self.plate_maps(
@@ -2217,13 +2185,6 @@ class Mix(AbstractComponent):
                 title_level=title_level,
                 warn_unsupported_title_format=warn_unsupported_title_format,
                 tablefmt=tablefmt,
-                floatfmt=floatfmt,
-                numalign=numalign,
-                stralign=stralign,
-                missingval=missingval,
-                showindex=showindex,
-                disable_numparse=disable_numparse,
-                colalign=colalign,
             )
             plate_map_strs.append(plate_map_str)
 
@@ -2478,8 +2439,6 @@ class PlateMap:
         title_level: Literal[1, 2, 3, 4, 5, 6] = 3,
         warn_unsupported_title_format: bool = True,
         tablefmt: str | TableFormat = "pipe",
-        floatfmt="g",
-        numalign="default",
         stralign="default",
         missingval="",
         showindex="default",
@@ -2529,10 +2488,6 @@ class PlateMap:
         :param tablefmt:
             By default set to `'github'` to create a Markdown table. For other options see
             https://github.com/astanin/python-tabulate#readme
-        :param floatfmt:
-            See https://github.com/astanin/python-tabulate#readme
-        :param numalign:
-            See https://github.com/astanin/python-tabulate#readme
         :param stralign:
             See https://github.com/astanin/python-tabulate#readme
         :param missingval:
@@ -2598,8 +2553,6 @@ class PlateMap:
             tabular_data=table,
             headers=header,
             tablefmt=tablefmt,
-            floatfmt=floatfmt,
-            numalign=numalign,
             stralign=stralign,
             missingval=missingval,
             showindex=showindex,
