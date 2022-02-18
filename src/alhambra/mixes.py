@@ -1435,7 +1435,9 @@ class MultiFixedConcentration(AbstractAction):
     set_name: str | None = None
     compact_display: bool = True
     min_volume: Quantity[Decimal] = attrs.field(
-        converter=_parse_vol_optional, default=Q_(DNAN, uL), on_setattr=attrs.setters.convert
+        converter=_parse_vol_optional,
+        default=Q_(DNAN, uL),
+        on_setattr=attrs.setters.convert,
     )
 
     def with_reference(self, reference: Reference) -> MultiFixedConcentration:
