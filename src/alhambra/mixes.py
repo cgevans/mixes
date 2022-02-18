@@ -498,6 +498,9 @@ class AbstractComponent(ABC):
     def with_reference(self: T, reference: Reference) -> T:  # pragma: no cover
         ...
 
+    def printed_name(self) -> str:
+        return self.name
+
 
 def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
     match v:
@@ -889,6 +892,7 @@ def findloc_tuples(
     return (loc["Name"], loc["Plate"], well)
 
 
+
 @attrs.define()
 class FixedConcentration(AbstractAction):
     """A mix action adding one component, at a fixed destination concentration.
@@ -942,7 +946,7 @@ class FixedConcentration(AbstractAction):
     ) -> list[MixLine]:
         return [
             MixLine(
-                names=[self.component.name],
+                names=[self.component.printed_name()],
                 source_conc=self.component.concentration,
                 dest_conc=self.dest_concentration(mix_vol),
                 each_tx_vol=self.tx_volume(mix_vol),
@@ -1016,7 +1020,7 @@ class FixedVolume(AbstractAction):
 
         return [
             MixLine(
-                names=[self.component.name],
+                names=[self.component.printed_name()],
                 source_conc=self.component.concentration,
                 dest_conc=self.dest_concentration(mix_vol),
                 total_tx_vol=self.tx_volume(mix_vol),
@@ -1237,7 +1241,7 @@ class MultiFixedVolume(AbstractAction):
         if not self.compact_display:
             ml = [
                 MixLine(
-                    [comp.name],
+                    [comp.printed_name()],
                     comp.concentration,
                     dc,
                     ev,
@@ -1283,7 +1287,7 @@ class MultiFixedVolume(AbstractAction):
 
         locdf = pd.DataFrame(
             {
-                "names": [c.name for c in self.components],
+                "names": [c.printed_name() for c in self.components],
                 "source_concs": self.source_concentrations,
                 "dest_concs": self.dest_concentrations(mix_vol),
                 "ea_vols": self.each_volumes(mix_vol),
@@ -1506,7 +1510,7 @@ class MultiFixedConcentration(AbstractAction):
         if not self.compact_display:
             ml = [
                 MixLine(
-                    [comp.name],
+                    [comp.printed_name()],
                     comp.concentration,
                     dc,
                     ev,
@@ -1546,7 +1550,7 @@ class MultiFixedConcentration(AbstractAction):
 
         locdf = pd.DataFrame(
             {
-                "names": [c.name for c in self.components],
+                "names": [c.printed_name() for c in self.components],
                 "source_concs": self.source_concentrations,
                 "dest_concs": self.dest_concentrations(mix_vol),
                 "ea_vols": self.each_volumes(mix_vol),
@@ -1794,6 +1798,9 @@ class Mix(AbstractComponent):
                 f"Mix.actions must contain at least one action, but it is empty"
             )
 
+    def printed_name(self) -> str:
+        return self.name + ("" if self.test_tube_name is None else f" (*{self.test_tube_name}*)")
+
     @property
     def concentration(self) -> Quantity[Decimal]:
         """
@@ -1948,12 +1955,14 @@ class Mix(AbstractComponent):
                 + "."
             )
 
-        # ensure
-        low_vols = [(n, x) for n, x in ntx if x < self.min_volume]
-        if len(low_vols) > 0:
-            raise VolumeError(
-                f"Some items have lower transfer volume than min_volume = {self.min_volume}"
-            )
+        # ensure we pipette at least self.min_volume from each source
+        for mixline in mixlines:
+            if mixline.each_tx_vol is not None and mixline.each_tx_vol < self.min_volume:
+                msg = f"Some items have lower transfer volume than min_volume = {self.min_volume}\n" \
+                      f'This is in creating mix "{self.name}", ' \
+                      f'attempting to pipette {mixline.each_tx_vol} of these components:\n' \
+                      f'{mixline.names}'
+                raise VolumeError(msg)
 
         # We'll check the last tx_vol first, because it is usually buffer.
         if ntx[-1][1] < ZERO_VOL:
