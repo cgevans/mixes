@@ -18,11 +18,9 @@ from typing import (
     Iterable,
     Literal,
     Mapping,
-    Optional,
     Sequence,
     TypeAlias,
     TypeVar,
-    Union,
     cast,
     overload,
     Callable,
@@ -541,7 +539,7 @@ def _parse_conc_required(v: str | pint.Quantity) -> pint.Quantity:
     raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
 
 
-def _parse_vol_optional(v: str | pint.Quantity | None) -> pint.Quantity:
+def _parse_vol_optional(v: str | pint.Quantity) -> pint.Quantity:
     match v:
         case str(x):
             q = ureg(x)
@@ -1437,7 +1435,7 @@ class MultiFixedConcentration(AbstractAction):
     set_name: str | None = None
     compact_display: bool = True
     min_volume: Quantity[Decimal] = attrs.field(
-        converter=_parse_vol_optional, default=None, on_setattr=attrs.setters.convert
+        converter=_parse_vol_optional, default=Q_(DNAN, uL), on_setattr=attrs.setters.convert
     )
 
     def with_reference(self, reference: Reference) -> MultiFixedConcentration:
@@ -1762,17 +1760,23 @@ class Mix(AbstractComponent):
     name: str
     test_tube_name: str | None = attrs.field(kw_only=True, default=None)
     "A short name, eg, for labelling a test tube."
-    fixed_total_volume: Optional[Quantity[Decimal]] = attrs.field(
+    fixed_total_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_optional,
-        default=None,
+        default=Q_(DNAN, uL),
         kw_only=True,
         on_setattr=attrs.setters.convert,
     )
-    fixed_concentration: Union[str, Quantity[Decimal], None] = attrs.field(
+    fixed_concentration: str | Quantity[Decimal] | None = attrs.field(
         default=None, kw_only=True, on_setattr=attrs.setters.convert
     )
-    buffer_name: Optional[str] = None
+    buffer_name: str | None = None
     reference: Reference | None = None
+    min_volume: Quantity[Decimal] = attrs.field(
+        converter=_parse_vol_optional,
+        default=Q_(Decimal(0.5), uL),
+        kw_only=True,
+        on_setattr=attrs.setters.convert,
+    )
 
     def __attrs_post_init__(self) -> None:
         if self.reference is not None:
@@ -1940,6 +1944,13 @@ class Mix(AbstractComponent):
                 "(target concentration probably too high for source): "
                 + "; ".join(f"{', '.join(n)} at {x}" for n, x in high_vols)
                 + "."
+            )
+
+        # ensure
+        low_vols = [(n, x) for n, x in ntx if x < self.min_volume]
+        if len(low_vols) > 0:
+            raise VolumeError(
+                f"Some items have lower transfer volume than min_volume = {self.min_volume}"
             )
 
         # We'll check the last tx_vol first, because it is usually buffer.
