@@ -892,7 +892,6 @@ def findloc_tuples(
     return (loc["Name"], loc["Plate"], well)
 
 
-
 @attrs.define()
 class FixedConcentration(AbstractAction):
     """A mix action adding one component, at a fixed destination concentration.
@@ -1799,7 +1798,9 @@ class Mix(AbstractComponent):
             )
 
     def printed_name(self) -> str:
-        return self.name + ("" if self.test_tube_name is None else f" (*{self.test_tube_name}*)")
+        return self.name + (
+            "" if self.test_tube_name is None else f" (*{self.test_tube_name}*)"
+        )
 
     @property
     def concentration(self) -> Quantity[Decimal]:
@@ -1957,11 +1958,16 @@ class Mix(AbstractComponent):
 
         # ensure we pipette at least self.min_volume from each source
         for mixline in mixlines:
-            if mixline.each_tx_vol is not None and mixline.each_tx_vol < self.min_volume:
-                msg = f"Some items have lower transfer volume than min_volume = {self.min_volume}\n" \
-                      f'This is in creating mix "{self.name}", ' \
-                      f'attempting to pipette {mixline.each_tx_vol} of these components:\n' \
-                      f'{mixline.names}'
+            if (
+                mixline.each_tx_vol is not None
+                and mixline.each_tx_vol < self.min_volume
+            ):
+                msg = (
+                    f"Some items have lower transfer volume than min_volume = {self.min_volume}\n"
+                    f'This is in creating mix "{self.name}", '
+                    f"attempting to pipette {mixline.each_tx_vol} of these components:\n"
+                    f"{mixline.names}"
+                )
                 raise VolumeError(msg)
 
         # We'll check the last tx_vol first, because it is usually buffer.
