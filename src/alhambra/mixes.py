@@ -1842,8 +1842,7 @@ class Mix(AbstractComponent):
         self,
         tablefmt: TableFormat | str = "pipe",
         validate: bool = True,
-        floatfmt="g",
-        numalign="default",
+        buffer_name: str = "Buffer",
         stralign="default",
         missingval="",
         showindex="default",
@@ -1860,8 +1859,11 @@ class Mix(AbstractComponent):
 
         validate
             Ensure volumes make sense.
+
+        buffer_name
+            Name of the buffer to use. (Default="Buffer")
         """
-        mixlines = list(self.mixlines())
+        mixlines = list(self.mixlines(buffer_name=buffer_name))
 
         if validate:
             try:
@@ -1880,8 +1882,6 @@ class Mix(AbstractComponent):
             [ml.toline(include_numbers) for ml in mixlines],
             MIXHEAD_EA if include_numbers else MIXHEAD_NO_EA,
             tablefmt=tablefmt,
-            floatfmt=floatfmt,
-            numalign=numalign,
             stralign=stralign,
             missingval=missingval,
             showindex=showindex,
@@ -1889,14 +1889,14 @@ class Mix(AbstractComponent):
             colalign=colalign,
         )
 
-    def mixlines(self) -> Sequence[MixLine]:
+    def mixlines(self, buffer_name: str = "Buffer") -> Sequence[MixLine]:
         mixlines: list[MixLine] = []
 
         for action in self.actions:
             mixlines += action._mixlines(self.total_volume)
 
         if self.fixed_total_volume is not None:
-            mixlines.append(MixLine(["Buffer"], None, None, self.buffer_volume))
+            mixlines.append(MixLine([buffer_name], None, None, self.buffer_volume))
         return mixlines
 
     def has_fixed_concentration_action(self) -> bool:
@@ -2125,16 +2125,10 @@ class Mix(AbstractComponent):
         validate: bool = True,
         combine_plate_actions: bool = True,
         well_marker: None | str | Callable[[str], str] = None,
-        title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
+        title_level: Literal[1, 2, 3, 4, 5, 6] = 3,
         warn_unsupported_title_format: bool = True,
-        tablefmt: str | TableFormat = "github",
-        floatfmt="g",
-        numalign="default",
-        stralign="default",
-        missingval="",
-        showindex="default",
-        disable_numparse=False,
-        colalign=None,
+        buffer_name: str = "Buffer",
+        tablefmt: str | TableFormat = "pipe",
     ) -> str:
         """
         Returns string combiniing the string results of calling :meth:`Mix.table` and
@@ -2170,34 +2164,14 @@ class Mix(AbstractComponent):
         :param tablefmt:
             By default set to `'github'` to create a Markdown table. For other options see
             https://github.com/astanin/python-tabulate#readme
-        :param floatfmt:
-            See https://github.com/astanin/python-tabulate#readme
-        :param numalign:
-            See https://github.com/astanin/python-tabulate#readme
-        :param stralign:
-            See https://github.com/astanin/python-tabulate#readme
-        :param missingval:
-            See https://github.com/astanin/python-tabulate#readme
-        :param showindex:
-            See https://github.com/astanin/python-tabulate#readme
-        :param disable_numparse:
-            See https://github.com/astanin/python-tabulate#readme
-        :param colalign:
-            See https://github.com/astanin/python-tabulate#readme
         :return:
             pipetting instructions in the form of strings combining results of :meth:`Mix.table` and
             :meth:`Mix.plate_maps`
         """
         table_str = self.table(
             validate=validate,
+            buffer_name=buffer_name,
             tablefmt=tablefmt,
-            floatfmt=floatfmt,
-            numalign=numalign,
-            stralign=stralign,
-            missingval=missingval,
-            showindex=showindex,
-            disable_numparse=disable_numparse,
-            colalign=colalign,
         )
         plate_map_strs = []
         plate_maps = self.plate_maps(
@@ -2211,21 +2185,14 @@ class Mix(AbstractComponent):
                 title_level=title_level,
                 warn_unsupported_title_format=warn_unsupported_title_format,
                 tablefmt=tablefmt,
-                floatfmt=floatfmt,
-                numalign=numalign,
-                stralign=stralign,
-                missingval=missingval,
-                showindex=showindex,
-                disable_numparse=disable_numparse,
-                colalign=colalign,
             )
             plate_map_strs.append(plate_map_str)
 
         # make title for whole instructions a bit bigger, if we can
         table_title_level = title_level if title_level == 1 else title_level - 1
-        raw_table_title = f'Instructions for creating mix "{self.name}"'
+        raw_table_title = f'Mix "{self.name}":'
         if self.test_tube_name is not None:
-            raw_table_title += f"test tube name={self.test_tube_name}"
+            raw_table_title += f' (test tube name: "{self.test_tube_name}")'
         table_title = _format_title(
             raw_table_title, level=table_title_level, tablefmt=tablefmt
         )
@@ -2425,6 +2392,9 @@ _ALL_TABLEFMTS = [
 
 _SUPPORTED_TABLEFMTS_TITLE = [
     "github",
+    "pipe",
+    "simple",
+    "grid",
     "html",
     "unsafehtml",
     "rst",
@@ -2461,16 +2431,14 @@ class PlateMap:
         return self.to_table()
 
     def _repr_markdown_(self) -> str:
-        return self.to_table(tablefmt="github")
+        return self.to_table(tablefmt="pipe")
 
     def to_table(
         self,
         well_marker: None | str | Callable[[str], str] = None,
-        title_level: Literal[1, 2, 3, 4, 5, 6] = 2,
+        title_level: Literal[1, 2, 3, 4, 5, 6] = 3,
         warn_unsupported_title_format: bool = True,
-        tablefmt: str | TableFormat = "github",
-        floatfmt="g",
-        numalign="default",
+        tablefmt: str | TableFormat = "pipe",
         stralign="default",
         missingval="",
         showindex="default",
@@ -2520,10 +2488,6 @@ class PlateMap:
         :param tablefmt:
             By default set to `'github'` to create a Markdown table. For other options see
             https://github.com/astanin/python-tabulate#readme
-        :param floatfmt:
-            See https://github.com/astanin/python-tabulate#readme
-        :param numalign:
-            See https://github.com/astanin/python-tabulate#readme
         :param stralign:
             See https://github.com/astanin/python-tabulate#readme
         :param missingval:
@@ -2580,7 +2544,7 @@ class PlateMap:
                 if not well_pos.is_last():
                     well_pos = well_pos.advance()
 
-        raw_title = f"{self.plate_name}, {self.vol_each} each"
+        raw_title = f'plate "{self.plate_name}", {self.vol_each} each'
         title = _format_title(raw_title, title_level, tablefmt)
 
         header = [" "] + [str(col) for col in self.plate_type.cols()]
@@ -2589,8 +2553,6 @@ class PlateMap:
             tabular_data=table,
             headers=header,
             tablefmt=tablefmt,
-            floatfmt=floatfmt,
-            numalign=numalign,
             stralign=stralign,
             missingval=missingval,
             showindex=showindex,
@@ -2664,7 +2626,7 @@ def _format_title(
         newline = r"\\"
         noindent = r"\noindent"
         title = f"{noindent} {{ {size} {raw_title} }} {newline}"
-    else:  # use the title for tablefmt == "github"
+    else:  # use the title for tablefmt == "pipe"
         hashes = "#" * level
         title = f"{hashes} {raw_title}"
     return title
