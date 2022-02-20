@@ -90,6 +90,7 @@ Q_ = ureg.Quantity
 
 DNAN = Decimal("nan")
 ZERO_VOL = Q_(Decimal("0.0"), "µL")
+NAN_VOL = Q_(DNAN, "µL")
 
 ROW_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWX"
 
@@ -361,9 +362,9 @@ class MixLine:
     names: list[str] = attrs.field(factory=list)
     source_conc: Quantity[Decimal] | str | None = None
     dest_conc: Quantity[Decimal] | str | None = None
-    total_tx_vol: Quantity[Decimal] | None = None
+    total_tx_vol: Quantity[Decimal] = NAN_VOL
     number: int = 1
-    each_tx_vol: Quantity[Decimal] | str | None = None
+    each_tx_vol: Quantity[Decimal] = NAN_VOL # | str | None = None
     plate: str = ""
     wells: list[WellPos] = attrs.field(factory=list)
     note: str | None = None
@@ -602,6 +603,8 @@ def _parse_wellpos_optional(v: str | WellPos | None) -> WellPos | None:
         pass
     raise ValueError(f"Can't interpret {v} as well position or None.")
 
+def _none_as_empty_string(v: str | None) -> str:
+    return "" if v is None else v
 
 @attrs.define()
 class Component(AbstractComponent):
@@ -614,7 +617,7 @@ class Component(AbstractComponent):
     # FIXME: this is not a great way to do this: should make code not give None
     # Fortuitously, mypy doesn't support this converter, so problems should give type errors.
     plate: str = attrs.field(
-        default="", kw_only=True, converter=(lambda v: "" if v is None else v)
+        default="", kw_only=True, converter=_none_as_empty_string, on_setattr=attrs.setters.convert
     )
     well: WellPos | None = attrs.field(
         converter=_parse_wellpos_optional,
@@ -1149,7 +1152,7 @@ class MultiFixedVolume(AbstractAction):
 
     """
 
-    components: Sequence[AbstractComponent]
+    components: list[AbstractComponent]
     fixed_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_required, on_setattr=attrs.setters.convert
     )
@@ -1198,7 +1201,7 @@ class MultiFixedVolume(AbstractAction):
 
     def dest_concentrations(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
-    ) -> Sequence[Quantity[Decimal]]:
+    ) -> list[Quantity[Decimal]]:
         return [
             x * y
             for x, y in zip(
@@ -1208,7 +1211,7 @@ class MultiFixedVolume(AbstractAction):
 
     def each_volumes(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
-    ) -> Sequence[Quantity[Decimal]]:
+    ) -> list[Quantity[Decimal]]:
         match self.equal_conc:
             case str("min_volume"):
                 sc = self.source_concentrations
@@ -1236,7 +1239,7 @@ class MultiFixedVolume(AbstractAction):
 
     def _mixlines(
         self, mix_vol: Quantity[Decimal], locations: pd.DataFrame | None = None
-    ) -> Sequence[MixLine]:
+    ) -> list[MixLine]:
         if not self.compact_display:
             ml = [
                 MixLine(
@@ -1275,7 +1278,7 @@ class MultiFixedVolume(AbstractAction):
         else:
             return self.set_name
 
-    def _compactstrs(self, mix_vol: pint.Quantity) -> Sequence[MixLine]:
+    def _compactstrs(self, mix_vol: pint.Quantity) -> list[MixLine]:
         # locs = [(c.name,) + c.location for c in self.components]
         # names = [c.name for c in self.components]
 
@@ -1431,7 +1434,7 @@ class MultiFixedConcentration(AbstractAction):
     | *Total:*   |           | 40.00 nM  |     |             | 25.00 µl     |       |        |
     """
 
-    components: Sequence[AbstractComponent]
+    components: list[AbstractComponent]
     fixed_concentration: Quantity[Decimal] = attrs.field(
         converter=_parse_conc_required, on_setattr=attrs.setters.convert
     )
@@ -1449,7 +1452,7 @@ class MultiFixedConcentration(AbstractAction):
         )
 
     @property
-    def source_concentrations(self):
+    def source_concentrations(self) -> list[Quantity[Decimal]]:
         concs = [c.concentration for c in self.components]
         return concs
 
@@ -1476,12 +1479,12 @@ class MultiFixedConcentration(AbstractAction):
 
     def dest_concentrations(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
-    ) -> Sequence[Quantity[Decimal]]:
+    ) -> list[Quantity[Decimal]]:
         return [self.fixed_concentration] * len(self.components)
 
     def each_volumes(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
-    ) -> Sequence[Quantity[Decimal]]:
+    ) -> list[Quantity[Decimal]]:
         ea_vols = [
             mix_vol * r
             for r in _ratio(self.fixed_concentration, self.source_concentrations)
@@ -1505,7 +1508,7 @@ class MultiFixedConcentration(AbstractAction):
 
     def _mixlines(
         self, mix_vol: Quantity[Decimal], locations: pd.DataFrame | None = None
-    ) -> Sequence[MixLine]:
+    ) -> list[MixLine]:
         if not self.compact_display:
             ml = [
                 MixLine(
@@ -1653,6 +1656,13 @@ class FixedRatio(AbstractAction):
     @property
     def name(self) -> str:
         return self.component.name
+
+    @property
+    def components(self) -> list[AbstractComponent]:
+        return [self.component]
+
+    def each_volumes(self, total_volume: Quantity[Decimal]) -> list[Quantity[Decimal]]:
+        return [self.tx_volume(total_volume)]
 
     def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
         return mix_vol * self.dest_value / self.source_value
@@ -2327,7 +2337,7 @@ class Mix(AbstractComponent):
             try:
                 self.validate(mixlines=mixlines)
             except ValueError as e:
-                e.args = e.args + (self.plate_map_markdown(validate=False),)
+                e.args = e.args + (self.plate_maps(plate_type=plate_type, validate=False, combine_plate_actions=combine_plate_actions),)
                 raise e
 
         # not used if combine_plate_actions is False
@@ -2578,7 +2588,7 @@ class PlateMap:
 
         header = [" "] + [str(col) for col in self.plate_type.cols()]
 
-        table = tabulate(
+        out_table = tabulate(
             tabular_data=table,
             headers=header,
             tablefmt=tablefmt,
@@ -2588,7 +2598,7 @@ class PlateMap:
             disable_numparse=disable_numparse,
             colalign=colalign,
         )
-        table_with_title = f"{title}\n{table}"
+        table_with_title = f"{title}\n{out_table}"
         return table_with_title
 
 
@@ -2699,7 +2709,7 @@ class Reference:
     def __getitem__(self, key: Any) -> Any:
         return self.df.__getitem__(key)
 
-    def __eq__(self: Reference, other: object):
+    def __eq__(self: Reference, other: object) -> bool:
         if isinstance(other, Reference):
             return (
                 ((other.df == self.df) | (other.df.isna() & self.df.isna())).all().all()
