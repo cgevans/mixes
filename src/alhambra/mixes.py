@@ -1970,6 +1970,7 @@ class Mix(AbstractComponent):
                 )
                 raise VolumeError(msg)
 
+
         # We'll check the last tx_vol first, because it is usually buffer.
         if ntx[-1][1] < ZERO_VOL:
             raise VolumeError(
