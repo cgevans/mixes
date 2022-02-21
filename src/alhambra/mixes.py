@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from decimal import Decimal
 
 import decimal
+
 # This needs to be here to make Decimal NaNs behave the way that NaNs
 # *everywhere else in the standard library* behave.
 decimal.setcontext(decimal.ExtendedContext)
@@ -370,14 +371,18 @@ class MixLine:
     dest_conc: Quantity[Decimal] | str | None = None
     total_tx_vol: Quantity[Decimal] = NAN_VOL
     number: int = 1
-    each_tx_vol: Quantity[Decimal] = NAN_VOL # | str | None = None
+    each_tx_vol: Quantity[Decimal] = NAN_VOL  # | str | None = None
     plate: str = ""
     wells: list[WellPos] = attrs.field(factory=list)
     note: str | None = None
     fake: bool = False
 
     def __attrs_post_init__(self):
-        if math.isnan(self.each_tx_vol.m) and not math.isnan(self.total_tx_vol.m) and self.number == 1:
+        if (
+            math.isnan(self.each_tx_vol.m)
+            and not math.isnan(self.total_tx_vol.m)
+            and self.number == 1
+        ):
             self.each_tx_vol = self.total_tx_vol
 
     @wells.validator
@@ -613,8 +618,10 @@ def _parse_wellpos_optional(v: str | WellPos | None) -> WellPos | None:
         pass
     raise ValueError(f"Can't interpret {v} as well position or None.")
 
+
 def _none_as_empty_string(v: str | None) -> str:
     return "" if v is None else v
+
 
 @attrs.define()
 class Component(AbstractComponent):
@@ -627,7 +634,10 @@ class Component(AbstractComponent):
     # FIXME: this is not a great way to do this: should make code not give None
     # Fortuitously, mypy doesn't support this converter, so problems should give type errors.
     plate: str = attrs.field(
-        default="", kw_only=True, converter=_none_as_empty_string, on_setattr=attrs.setters.convert
+        default="",
+        kw_only=True,
+        converter=_none_as_empty_string,
+        on_setattr=attrs.setters.convert,
     )
     well: WellPos | None = attrs.field(
         converter=_parse_wellpos_optional,
@@ -1990,7 +2000,6 @@ class Mix(AbstractComponent):
                 )
                 raise VolumeError(msg)
 
-
         # We'll check the last tx_vol first, because it is usually buffer.
         if ntx[-1][1] < ZERO_VOL:
             raise VolumeError(
@@ -2347,7 +2356,13 @@ class Mix(AbstractComponent):
             try:
                 self.validate(mixlines=mixlines)
             except ValueError as e:
-                e.args = e.args + (self.plate_maps(plate_type=plate_type, validate=False, combine_plate_actions=combine_plate_actions),)
+                e.args = e.args + (
+                    self.plate_maps(
+                        plate_type=plate_type,
+                        validate=False,
+                        combine_plate_actions=combine_plate_actions,
+                    ),
+                )
                 raise e
 
         # not used if combine_plate_actions is False
