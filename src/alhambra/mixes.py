@@ -7,6 +7,12 @@ from __future__ import annotations
 import io
 from abc import ABC, abstractmethod
 from decimal import Decimal
+
+import decimal
+# This needs to be here to make Decimal NaNs behave the way that NaNs
+# *everywhere else in the standard library* behave.
+decimal.setcontext(decimal.ExtendedContext)
+
 import enum
 
 import logging
@@ -369,6 +375,10 @@ class MixLine:
     wells: list[WellPos] = attrs.field(factory=list)
     note: str | None = None
     fake: bool = False
+
+    def __attrs_post_init__(self):
+        if math.isnan(self.each_tx_vol.m) and not math.isnan(self.total_tx_vol.m) and self.number == 1:
+            self.each_tx_vol = self.total_tx_vol
 
     @wells.validator
     def _check_wells(self, _: str, v: Any) -> None:
