@@ -1989,7 +1989,8 @@ class Mix(AbstractComponent):
         # ensure we pipette at least self.min_volume from each source
         for mixline in mixlines:
             if (
-                mixline.each_tx_vol is not None
+                not math.isnan(mixline.each_tx_vol.m)
+                and mixline.each_tx_vol != ZERO_VOL
                 and mixline.each_tx_vol < self.min_volume
             ):
                 msg = (
