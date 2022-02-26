@@ -2188,6 +2188,7 @@ class Mix(AbstractComponent):
         warn_unsupported_title_format: bool = True,
         buffer_name: str = "Buffer",
         tablefmt: str | TableFormat = "pipe",
+        include_plate_maps: bool = True,
     ) -> None:
         """
         Displays in a Jupyter notebook the result of calling :meth:`Mix.instructions()`.
@@ -2222,6 +2223,9 @@ class Mix(AbstractComponent):
         :param tablefmt:
             By default set to `'github'` to create a Markdown table. For other options see
             https://github.com/astanin/python-tabulate#readme
+        :param include_plate_maps:
+            If True, include plate maps as part of displayed instructions, otherwise only include the
+            more compact mixing table (which is always displayed regardless of this parameter).
         :return:
             pipetting instructions in the form of strings combining results of :meth:`Mix.table` and
             :meth:`Mix.plate_maps`
@@ -2236,6 +2240,7 @@ class Mix(AbstractComponent):
             warn_unsupported_title_format=warn_unsupported_title_format,
             buffer_name=buffer_name,
             tablefmt=tablefmt,
+            include_plate_maps=include_plate_maps,
         )
         display(Markdown(ins_str))
 
@@ -2249,6 +2254,7 @@ class Mix(AbstractComponent):
         warn_unsupported_title_format: bool = True,
         buffer_name: str = "Buffer",
         tablefmt: str | TableFormat = "pipe",
+        include_plate_maps: bool = True,
     ) -> str:
         """
         Returns string combiniing the string results of calling :meth:`Mix.table` and
@@ -2284,6 +2290,9 @@ class Mix(AbstractComponent):
         :param tablefmt:
             By default set to `'github'` to create a Markdown table. For other options see
             https://github.com/astanin/python-tabulate#readme
+        :param include_plate_maps:
+            If True, include plate maps as part of displayed instructions, otherwise only include the
+            more compact mixing table (which is always displayed regardless of this parameter).
         :return:
             pipetting instructions in the form of strings combining results of :meth:`Mix.table` and
             :meth:`Mix.plate_maps`
@@ -2294,19 +2303,21 @@ class Mix(AbstractComponent):
             tablefmt=tablefmt,
         )
         plate_map_strs = []
-        plate_maps = self.plate_maps(
-            plate_type=plate_type,
-            validate=validate,
-            combine_plate_actions=combine_plate_actions,
-        )
-        for plate_map in plate_maps:
-            plate_map_str = plate_map.to_table(
-                well_marker=well_marker,
-                title_level=title_level,
-                warn_unsupported_title_format=warn_unsupported_title_format,
-                tablefmt=tablefmt,
+        
+        if include_plate_maps:
+            plate_maps = self.plate_maps(
+                plate_type=plate_type,
+                validate=validate,
+                combine_plate_actions=combine_plate_actions,
             )
-            plate_map_strs.append(plate_map_str)
+            for plate_map in plate_maps:
+                plate_map_str = plate_map.to_table(
+                    well_marker=well_marker,
+                    title_level=title_level,
+                    warn_unsupported_title_format=warn_unsupported_title_format,
+                    tablefmt=tablefmt,
+                )
+                plate_map_strs.append(plate_map_str)
 
         # make title for whole instructions a bit bigger, if we can
         table_title_level = title_level if title_level == 1 else title_level - 1
