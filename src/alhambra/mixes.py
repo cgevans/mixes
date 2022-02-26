@@ -2438,6 +2438,8 @@ class Mix(AbstractComponent):
                 continue
             if mixline.plate.lower() == "tube":
                 continue
+            if mixline.plate == "":
+                continue
             existing_plate = None
             key = (mixline.plate, mixline.each_tx_vol)
             if combine_plate_actions:
