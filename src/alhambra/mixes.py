@@ -2231,6 +2231,7 @@ class Mix(AbstractComponent):
             :meth:`Mix.plate_maps`
         """
         from IPython.display import display, Markdown
+
         ins_str = self.instructions(
             plate_type=plate_type,
             validate=validate,
@@ -2303,7 +2304,7 @@ class Mix(AbstractComponent):
             tablefmt=tablefmt,
         )
         plate_map_strs = []
-        
+
         if include_plate_maps:
             plate_maps = self.plate_maps(
                 plate_type=plate_type,
