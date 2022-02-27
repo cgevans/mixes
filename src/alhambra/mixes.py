@@ -86,7 +86,7 @@ __all__ = (
 log = logging.getLogger("alhambra")
 
 ureg = pint.UnitRegistry(non_int_type=Decimal)
-ureg.default_format = "~#P"
+ureg.default_format = "~#Pf"
 
 uL = ureg.uL
 uM = ureg.uM
@@ -1517,7 +1517,7 @@ class MultiFixedConcentration(AbstractAction):
             if below_min:
                 raise VolumeError(
                     "Volume of some components is below minimum: "
-                    + ", ".join(f"{n} at {v}" for n, v in below_min)
+                    + ", ".join(f"{n} at {v:f}" for n, v in below_min)
                     + ".",
                     below_min,
                 )
@@ -1993,10 +1993,11 @@ class Mix(AbstractComponent):
                 and mixline.each_tx_vol != ZERO_VOL
                 and mixline.each_tx_vol < self.min_volume
             ):
+                # FIXME: why do these need :f?
                 msg = (
-                    f"Some items have lower transfer volume than min_volume = {self.min_volume}\n"
+                    f"Some items have lower transfer volume than {self.min_volume:f}\n"
                     f'This is in creating mix "{self.name}", '
-                    f"attempting to pipette {mixline.each_tx_vol} of these components:\n"
+                    f"attempting to pipette {mixline.each_tx_vol:f} of these components:\n"
                     f"{mixline.names}"
                 )
                 raise VolumeError(msg)
@@ -2025,9 +2026,9 @@ class Mix(AbstractComponent):
                 if isinstance(component, Mix):
                     if component.fixed_total_volume < volume:
                         raise VolumeError(
-                            f'intermediate Mix "{component.name}" needs {volume} to create '
+                            f'intermediate Mix "{component.name}" needs {volume:f} to create '
                             f'Mix "{self.name}", but Mix "{component.name}" contains only '
-                            f"{component.fixed_total_volume}."
+                            f"{component.fixed_total_volume:f}."
                         )
             # for each_vol, component in zip(mixline.each_tx_vol, action.all_components()):
 
@@ -2328,8 +2329,12 @@ class Mix(AbstractComponent):
         table_title = _format_title(
             raw_table_title, level=table_title_level, tablefmt=tablefmt
         )
-        return table_title + "\n\n" + table_str + ("\n\n" + "\n\n".join(plate_map_strs)
-                                                   if len(plate_map_strs) > 0 else '')
+        return (
+            table_title
+            + "\n\n"
+            + table_str
+            + ("\n\n" + "\n\n".join(plate_map_strs) if len(plate_map_strs) > 0 else "")
+        )
 
     def plate_maps(
         self,
