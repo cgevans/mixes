@@ -2328,8 +2328,12 @@ class Mix(AbstractComponent):
         table_title = _format_title(
             raw_table_title, level=table_title_level, tablefmt=tablefmt
         )
-        return table_title + "\n\n" + table_str + ("\n\n" + "\n\n".join(plate_map_strs)
-                                                   if len(plate_map_strs) > 0 else '')
+        return (
+            table_title
+            + "\n\n"
+            + table_str
+            + ("\n\n" + "\n\n".join(plate_map_strs) if len(plate_map_strs) > 0 else "")
+        )
 
     def plate_maps(
         self,
