@@ -86,7 +86,7 @@ __all__ = (
 log = logging.getLogger("alhambra")
 
 ureg = pint.UnitRegistry(non_int_type=Decimal)
-ureg.default_format = "~#Pf"
+ureg.default_format = "~P"
 
 uL = ureg.uL
 uM = ureg.uM
@@ -1517,7 +1517,7 @@ class MultiFixedConcentration(AbstractAction):
             if below_min:
                 raise VolumeError(
                     "Volume of some components is below minimum: "
-                    + ", ".join(f"{n} at {v:f}" for n, v in below_min)
+                    + ", ".join(f"{n} at {v}" for n, v in below_min)
                     + ".",
                     below_min,
                 )
@@ -1995,9 +1995,9 @@ class Mix(AbstractComponent):
             ):
                 # FIXME: why do these need :f?
                 msg = (
-                    f"Some items have lower transfer volume than {self.min_volume:f}\n"
+                    f"Some items have lower transfer volume than {self.min_volume}\n"
                     f'This is in creating mix "{self.name}", '
-                    f"attempting to pipette {mixline.each_tx_vol:f} of these components:\n"
+                    f"attempting to pipette {mixline.each_tx_vol} of these components:\n"
                     f"{mixline.names}"
                 )
                 raise VolumeError(msg)
@@ -2026,9 +2026,9 @@ class Mix(AbstractComponent):
                 if isinstance(component, Mix):
                     if component.fixed_total_volume < volume:
                         raise VolumeError(
-                            f'intermediate Mix "{component.name}" needs {volume:f} to create '
+                            f'intermediate Mix "{component.name}" needs {volume} to create '
                             f'Mix "{self.name}", but Mix "{component.name}" contains only '
-                            f"{component.fixed_total_volume:f}."
+                            f"{component.fixed_total_volume}."
                         )
             # for each_vol, component in zip(mixline.each_tx_vol, action.all_components()):
 
