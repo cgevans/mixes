@@ -1,6 +1,42 @@
 """
 A module for handling "quantitation": measuring concentration of strands,
 and diluting and hydrating to reach a desired concentration.
+
+The main "easy" functions to use are :func:`hydrate_from_specs` and
+:func:`hydrate_and_measure_conc_and_dilute_from_specs`.
+
+>>> from alhambra.quantitate import hydrate_from_specs, hydrate_and_measure_conc_and_dilute_from_specs
+>>> specs_file = 'path/to/coa.csv'
+>>> target_conc_high = '200 uM'
+>>> target_conc_low = '100 uM'
+>>> hydrate_from_specs(
+...     filename=specs_file,
+...     target_conc=target_conc_high,
+...     strands=['5RF', '3RQ'],
+... )
+nmoles = 8.9 nmol
+nmoles = 15.7 nmol
+{'5RF': <Quantity(44.5, 'microliter')>,
+ '3RQ': <Quantity(78.5, 'microliter')>}
+>>> # now go to the lab and add the above quantities of water/buffer to the dry samples,
+>>> # then measure absorbances, e.g., with a NanoDrop, to populate the dict `absorbances` below
+>>> absorbances = {
+...     '5RF': [48.46, 48.28],
+...     '3RQ': [34.36, 34.82],
+... }
+>>> hydrate_and_measure_conc_and_dilute_from_specs(
+...     filename=specs_file,
+...     target_conc_high=target_conc_high,
+...     target_conc_low=target_conc_low,
+...     absorbances=absorbances,
+... )
+{'5RF': (<Quantity(213.931889, 'micromolar')>, <Quantity(48.4210528, 'microliter')>),
+ '3RQ': (<Quantity(190.427429, 'micromolar')>, <Quantity(69.176983, 'microliter')>)}
+
+For convenience in Jupyter notebooks, there are also versions of these functions beginning with ``display_``:
+:func:`display_hydrate_from_specs` and :func:`display_hydrate_and_measure_conc_and_dilute_from_specs`.
+Instead of returning a dictionary, these methods display the result in the Jupyter notebook,
+as nicely-formatted Markdown.
 """
 
 from __future__ import annotations
@@ -399,7 +435,6 @@ def hydrate_and_measure_conc_and_dilute_from_specs(
     ... )
     {'5RF': (<Quantity(213.931889, 'micromolar')>, <Quantity(48.4210528, 'microliter')>),
      '3RQ': (<Quantity(190.427429, 'micromolar')>, <Quantity(69.176983, 'microliter')>)}
-
 
     Note in particular that we do not need to specify the volume prior to the dilution step,
     since it is calculated based on the volume necessary for the first hydration step to
