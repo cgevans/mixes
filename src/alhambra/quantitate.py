@@ -153,7 +153,7 @@ def hydrate(
     """
     target_conc = parse_conc(target_conc)
     nmol = parse_nmol(nmol)
-    print(f'nmoles = {nmol}')
+    print(f"nmoles = {nmol}")
     vol = nmol / target_conc
     vol = vol.to("uL")
     vol = normalize(vol)
@@ -228,7 +228,7 @@ def measure_conc(
             f"absorbance = {absorbance}"
         )
 
-    print(f'extinction coefficient = {ext_coef}')
+    print(f"extinction coefficient = {ext_coef}")
     conc_float = (ave_absorbance / ext_coef) * 10**6
     conc = parse_conc(f"{conc_float} uM")
     conc = normalize(conc)
