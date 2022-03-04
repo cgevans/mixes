@@ -53,7 +53,7 @@ from typing import Any, Iterable, Sequence
 import pint
 import warnings
 
-from alhambra.mixes import __all__, log, ureg, uL, uM, nM, ureg, DNAN
+from alhambra.mixes import __all__, log, uL, uM, nM, ureg, DNAN
 
 Q_ = ureg.Quantity
 
