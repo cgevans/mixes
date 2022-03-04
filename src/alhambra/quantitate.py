@@ -195,7 +195,7 @@ def _has_length(lst: Any) -> bool:
 
 
 def measure_conc(
-    absorbance: float | int | Iterable[float | int],
+    absorbance: float | int | Sequence[float | int],
     ext_coef: float | int,
 ) -> Q_[D]:
     """
@@ -212,7 +212,7 @@ def measure_conc(
     if isinstance(absorbance, (float, int)):
         ave_absorbance = absorbance
     elif _has_length(absorbance):
-        if iterable_is_empty(absorbance):
+        if len(absorbance) == 0:
             raise ValueError(f"absorbance cannot be an empty sequence")
         if not isinstance(absorbance[0], (int, float)):
             raise TypeError(
@@ -304,6 +304,13 @@ def hydrate_and_measure_conc_and_dilute(
     and also actual "start" concentration (i.e., actual concentration after adding initial hydration
     that targeted `target_conc_high`, according to `absorbance`).
 
+    This is on the assumption that the first hydration step could result in a concentration below
+    `target_conc_high`, so `target_conc_high` should be chosen sufficiently larger than
+    `target_conc_low` so that the actual measured concentration after the first step is
+    likely to be above `target_conc_low`, so that it is possible to reach concentration
+    `target_conc_low` with a subsequent dilution step. (As opposed to requiring a vacufuge to
+    concentrate the sample higher).
+
     :param nmol:
         number of nmol (nanomoles) of dry product.
     :param target_conc_high:
@@ -316,8 +323,6 @@ def hydrate_and_measure_conc_and_dilute(
         representing repeated measurements; if the latter then an average is taken.
     :param ext_coef:
         Extinction coefficient in L/mol*cm.
-    :param target_conc:
-        target concentration. If float/int, units are µM (micromolar).
     :param vol_removed:
         Total volume removed from `vol` to measure absorbance.
         For example, if two samples were taken, one at 1 µL and one at 1.5 µL, then set
@@ -360,6 +365,83 @@ def hydrate_and_measure_conc_and_dilute_from_specs(
     absorbances: dict[str, float | int | Sequence[float | int]],
     vols_removed: dict[str, None | float | int | str | Q_[D]] | None = None,
 ) -> dict[str, tuple[Q_[D], Q_[D]]]:
+    """
+    Like :func:`hydrate_and_measure_conc_and_dilute`, but works with multiple strands,
+    using an IDT spec file to look up nmoles and extinction coefficients.
+
+    The intended usage of this method is to be used in conjunction with the function
+    :func:`hydrate_from_specs` as follows.
+
+    >>> from alhambra.quantitate import hydrate_from_specs, hydrate_and_measure_conc_and_dilute_from_specs
+    >>> specs_file = 'path/to/coa.csv'
+    >>> target_conc_high = '200 uM'
+    >>> target_conc_low = '100 uM'
+    >>> hydrate_from_specs(
+    ...     filename=specs_file,
+    ...     target_conc=target_conc_high,
+    ...     strands=['5RF', '3RQ'],
+    ... )
+    nmoles = 8.9 nmol
+    nmoles = 15.7 nmol
+    {'5RF': <Quantity(44.5, 'microliter')>,
+     '3RQ': <Quantity(78.5, 'microliter')>}
+    >>> # now go to the lab and add the above quantities of water/buffer to the dry samples,
+    >>> # then measure absorbances, e.g., with a NanoDrop, to populate the dict `absorbances` below
+    >>> absorbances = {
+    ...     '5RF': [48.46, 48.28],
+    ...     '3RQ': [34.36, 34.82],
+    ... }
+    >>> hydrate_and_measure_conc_and_dilute_from_specs(
+    ...     filename=specs_file,
+    ...     target_conc_high=target_conc_high,
+    ...     target_conc_low=target_conc_low,
+    ...     absorbances=absorbances,
+    ... )
+    {'5RF': (<Quantity(213.931889, 'micromolar')>, <Quantity(48.4210528, 'microliter')>),
+     '3RQ': (<Quantity(190.427429, 'micromolar')>, <Quantity(69.176983, 'microliter')>)}
+
+
+    Note in particular that we do not need to specify the volume prior to the dilution step,
+    since it is calculated based on the volume necessary for the first hydration step to
+    reach concentration `target_conc_high`.
+
+    For convenience in Jupyter notebooks, there are also versions of these functions beginning with
+    ``display_``:
+    :func:`display_hydrate_from_specs` and :func:`display_hydrate_and_measure_conc_and_dilute_from_specs`.
+    Instead of returning a dictionary, these methods display the result in the Jupyter notebook,
+    as nicely-formatted Markdown.
+
+    :param filename:
+        path to IDT Excel/CSV spreadsheet with specs of strands (e.g., coa.csv)
+    :param target_conc_high:
+        target concentration for initial hydration. Should be higher than `target_conc_low`,
+    :param target_conc_low:
+        the "real" target concentration that we will try to hit after the second
+        addition of water/buffer.
+    :param absorbances:
+        UV absorbances at 260 nm. Is a dict mapping each strand name to an "absorbance" as defined
+        in the `absobance` parameter of :func:`hydrate_and_measure_conc_and_dilute`.
+        In other words the value to which each strand name maps
+        can either be a single float/int, or a nonempty sequence of floats/ints
+        representing repeated measurements; if the latter then an average is taken.
+    :param vols_removed:
+        Total volumes removed from `vol` to measure absorbance;
+        is a dict mapping strand names (should be subset of strand names that are keys in `absorbances`).
+        Can be None, or can have strictly fewer strand names than in `absorbances`;
+        defaults are assumed as explained next for any missing strand name key.
+        For example, if two samples were taken, one at 1 µL and one at 1.5 µL, then set
+        `vol_removed` = 2.5 µL.
+        If not specified, it is assumed that each sample is 1 µL, and that the total number of samples
+        taken is the number of entries in `absorbance`.
+        If `absorbance` is a single volume (e.g., ``float``, ``int``, ``str``, ``Quantity[Decimal]``),
+        then it is assumed the number of samples is 1 (i.e., `vol_removed` = 1 µL),
+        otherwise if `absorbance` is a list, then the length of the list is assumed to be the
+        number of samples taken, each at 1 µL.
+    :return:
+        dict mapping each strand name in keys of `absorbances` to a pair (`conc`, `vol_to_add`),
+        where `conc` is the measured concentration according to the absorbance value(s) of that strandm
+        and `vol_to_add` is the volume needed to add to reach concentration `target_conc_low`.
+    """
     if vols_removed is None:
         vols_removed = {}
 
@@ -504,20 +586,20 @@ def find_extinction_coefficient_key(dataframe: pandas.DataFrame) -> str:
 
 
 def measure_conc_from_specs(
-    absorbances: dict[str, float | int | Sequence[float] | Sequence[int]],
     filename: str,
+    absorbances: dict[str, float | int | Sequence[float] | Sequence[int]],
 ) -> dict[str, Q_[D]]:
     """
     Indicates how much volume to add to a dry DNA sample to reach a particular concentration,
     given data in an Excel file in the IDT format.
 
+    :param filename:
+        path to IDT Excel/CSV spreadsheet with specs of strands (e.g., coa.csv)
     :param absorbances:
         dict mapping each strand name to its absorbance value.
         Each absorbance value represents UV absorbance at 260 nm.
         Each can either be a single float/int or a nonempty sequence of floats/ints
         representing repeated measurements; if the latter then an average is taken.
-    :param filename:
-        path to IDT Excel/CSV spreadsheet with specs of strands (e.g., coa.csv)
     :return:
         dict mapping each strand name to a concentration for that strand
     """
@@ -578,8 +660,8 @@ def display_hydrate_and_measure_conc_and_dilute_from_specs(
 
 
 def display_hydrate_from_specs(
-    target_conc: float | int | str | Q_[D],
     filename: str,
+    target_conc: float | int | str | Q_[D],
     strands: Iterable[str] | Iterable[int] | None = None,
 ) -> None:
     """
@@ -587,10 +669,10 @@ def display_hydrate_from_specs(
     given data in an Excel file in the IDT format,
     displaying the result in a jupyter notebook.
 
-    :param target_conc:
-        target concentration. If float/int, units are µM (micromolar).
     :param filename:
         path to IDT Excel/CSV spreadsheet with specs of strands (e.g., coa.csv)
+    :param target_conc:
+        target concentration. If float/int, units are µM (micromolar).
     :param strands:
         strands to hydrate. Can be list of strand names (strings), or list of of ints indicating
         which rows in the Excel spreadsheet to hydrate
@@ -615,26 +697,26 @@ def display_hydrate_from_specs(
 
 
 def display_measure_conc_from_specs(
-    absorbances: dict[str, float | int | Sequence[float] | Sequence[int]],
     filename: str,
+    absorbances: dict[str, float | int | Sequence[float] | Sequence[int]],
 ) -> None:
     """
     Indicates how much volume to add to a dry DNA sample to reach a particular concentration,
     given data in an Excel/CSV file in the IDT format,
     displaying the result in a jupyter notebook.
 
+    :param filename:
+        path to IDT Excel/CSV spreadsheet with specs of strands (e.g., coa.csv)
     :param absorbances:
         dict mapping each strand name to its absorbance value.
         Each absorbance value represents UV absorbance at 260 nm.
         Each can either be a single float/int or a nonempty sequence of floats/ints
         representing repeated measurements; if the latter then an average is taken.
-    :param filename:
-        path to IDT Excel/CSV spreadsheet with specs of strands (e.g., coa.csv)
     """
     from tabulate import tabulate
     from IPython.display import display, Markdown
 
-    names_to_concs = measure_conc_from_specs(absorbances, filename)
+    names_to_concs = measure_conc_from_specs(filename=filename, absorbances=absorbances)
 
     headers = ["name", "concentration"]
     table = tabulate(list(names_to_concs.items()), headers=headers, tablefmt="pipe")
