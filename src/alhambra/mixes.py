@@ -84,7 +84,6 @@ __all__ = (
     "_format_title",
     "ureg",
     "DNAN",
-
 )
 
 log = logging.getLogger("alhambra")
