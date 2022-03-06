@@ -55,7 +55,9 @@ import warnings
 
 from alhambra.mixes import __all__, log, uL, uM, nM, ureg, DNAN
 
-from pint import Quantity as Q_ # to prevent mypy problems when importing Q_ from alhambra.mixes
+from pint import (
+    Quantity as Q_,
+)  # to prevent mypy problems when importing Q_ from alhambra.mixes
 
 warnings.filterwarnings(
     "ignore",
