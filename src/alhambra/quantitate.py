@@ -47,10 +47,19 @@ import warnings
 import pandas
 from decimal import Decimal as D
 import decimal
-from alhambra.mixes import uL, uM, ureg, DNAN
 
-# to prevent mypy problems when importing Q_ from alhambra.mixes
-from pint import Quantity as Q_
+
+ureg = pint.UnitRegistry(non_int_type=D)
+ureg.default_format = "~#P"
+
+uL = ureg.uL
+uM = ureg.uM
+nM = ureg.nM
+DNAN = D("nan")
+
+Q_ = ureg.Quantity
+"Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`"
+
 
 # This needs to be here to make Decimal NaNs behave the way that NaNs
 # *everywhere else in the standard library* behave.
@@ -191,7 +200,6 @@ def hydrate(
     """
     target_conc = parse_conc(target_conc)
     nmol = parse_nmol(nmol)
-    print(f"nmoles = {nmol}")
     vol = nmol / target_conc
     vol = vol.to("uL")
     vol = normalize(vol)
@@ -266,7 +274,6 @@ def measure_conc(
             f"absorbance = {absorbance}"
         )
 
-    print(f"extinction coefficient = {ext_coef}")
     conc_float = (ave_absorbance / ext_coef) * 10**6
     conc = parse_conc(f"{conc_float} uM")
     conc = normalize(conc)
