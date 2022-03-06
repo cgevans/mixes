@@ -2590,6 +2590,11 @@ _ALL_TABLEFMTS = [
     html_with_borders_tablefmt,
 ]
 
+_ALL_TABLEFMTS_NAMES = [
+    (fmt if fmt != html_with_borders_tablefmt else "html_with_borders_tablefmt")
+    for fmt in _ALL_TABLEFMTS
+]
+
 _SUPPORTED_TABLEFMTS_TITLE = [
     "github",
     "pipe",
@@ -2710,7 +2715,7 @@ class PlateMap:
         if tablefmt not in _ALL_TABLEFMTS:
             raise ValueError(
                 f"tablefmt {tablefmt} not recognized; "
-                f'choose one of {", ".join(_ALL_TABLEFMTS)}'
+                f'choose one of {", ".join(_ALL_TABLEFMTS_NAMES)}'
             )
         elif (
             tablefmt not in _SUPPORTED_TABLEFMTS_TITLE and warn_unsupported_title_format
