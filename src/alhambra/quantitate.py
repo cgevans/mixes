@@ -41,7 +41,7 @@ as nicely-formatted Markdown.
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Sequence, Type
 import pint
 import warnings
 import pandas
@@ -57,7 +57,7 @@ uM = ureg.uM
 nM = ureg.nM
 DNAN = D("nan")
 
-Q_ = ureg.Quantity
+Q_: Type[pint.Quantity] = ureg.Quantity
 "Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`"
 
 
