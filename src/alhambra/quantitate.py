@@ -41,25 +41,15 @@ as nicely-formatted Markdown.
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Sequence, Type
+from typing import Any, Iterable, Sequence, Type, cast
 import pint
 import warnings
 import pandas
 from decimal import Decimal as D
 import decimal
 
-
-ureg = pint.UnitRegistry(non_int_type=D)
-ureg.default_format = "~#P"
-
-uL = ureg.uL
-uM = ureg.uM
-nM = ureg.nM
-DNAN = D("nan")
-
-Q_: Type[pint.Quantity] = ureg.Quantity
-"Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`"
-
+from pint import Quantity
+from alhambra.mixes import Q_, ureg, DNAN, uL, uM, nM
 
 # This needs to be here to make Decimal NaNs behave the way that NaNs
 # *everywhere else in the standard library* behave.
@@ -79,7 +69,7 @@ warnings.filterwarnings(
 )
 
 
-def normalize(quantity: Q_[D]) -> Q_[D]:
+def normalize(quantity: Quantity[D]) -> Quantity[D]:
     """
     Normalize `quantity` so that it is "compact" (uses units within the correct "3 orders of magnitude":
     https://pint.readthedocs.io/en/0.18/tutorial.html#simplifying-units)
@@ -106,7 +96,7 @@ def normalize(quantity: Q_[D]) -> Q_[D]:
 
 # TODO: these reproduce _parse_vol_optional and _parse_vol_required in alhambra.mixes
 #  not sure of the difference between _parse_vol_optional and _parse_vol_required
-def parse_vol(vol: float | int | str | Q_[D]) -> Q_[D]:
+def parse_vol(vol: float | int | str | Quantity[D]) -> Quantity[D]:
     """
     Default units for v being a float/int is µL (microliters).
     """
@@ -121,7 +111,7 @@ def parse_vol(vol: float | int | str | Q_[D]) -> Q_[D]:
                     f"{x} is not a valid quantity here (should be volume)."
                 )
             return q
-        case Q_() as x:
+        case Quantity() as x:
             if not x.check(uL):
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be volume)."
@@ -133,7 +123,7 @@ def parse_vol(vol: float | int | str | Q_[D]) -> Q_[D]:
     raise ValueError
 
 
-def parse_conc(conc: float | int | str | Q_[D]) -> Q_[D]:
+def parse_conc(conc: float | int | str | Quantity[D]) -> Quantity[D]:
     """
     Default units for conc being a float/int is µM (micromolar).
     """
@@ -148,7 +138,7 @@ def parse_conc(conc: float | int | str | Q_[D]) -> Q_[D]:
                     f"{x} is not a valid quantity here (should be concentration)."
                 )
             return q
-        case Q_() as x:
+        case Quantity() as x:
             if not x.check(uM):
                 raise ValueError(
                     f"{x} is not a valid quantity here (should be concentration)."
@@ -160,7 +150,7 @@ def parse_conc(conc: float | int | str | Q_[D]) -> Q_[D]:
     raise ValueError
 
 
-def parse_nmol(nmoles: float | int | str | Q_[D]) -> Q_[D]:
+def parse_nmol(nmoles: float | int | str | Quantity[D]) -> Quantity[D]:
     """
     Default units for molar amount being a float/int is nmol (nanomoles).
     """
@@ -173,7 +163,7 @@ def parse_nmol(nmoles: float | int | str | Q_[D]) -> Q_[D]:
             if not q.check(ureg.nmol):
                 raise ValueError(f"{x} is not a valid quantity here (should be nmol).")
             return q
-        case Q_() as x:
+        case Quantity() as x:
             if not x.check(ureg.nmol):
                 raise ValueError(f"{x} is not a valid quantity here (should be nmol).")
             x = Q_(D(x.m), x.u)
@@ -185,9 +175,9 @@ def parse_nmol(nmoles: float | int | str | Q_[D]) -> Q_[D]:
 
 # initial hydration of dry DNA
 def hydrate(
-    target_conc: float | int | str | Q_[D],
-    nmol: float | int | str | Q_[D],
-) -> Q_[D]:
+    target_conc: float | int | str | Quantity[D],
+    nmol: float | int | str | Quantity[D],
+) -> Quantity[D]:
     """
     Indicates how much buffer/water volume to add to a dry DNA sample to reach a particular concentration.
 
@@ -207,10 +197,10 @@ def hydrate(
 
 
 def dilute(
-    target_conc: float | int | str | Q_[D],
-    start_conc: float | int | str | Q_[D],
-    vol: float | int | str | Q_[D],
-) -> Q_[D]:
+    target_conc: float | int | str | Quantity[D],
+    start_conc: float | int | str | Quantity[D],
+    vol: float | int | str | Quantity[D],
+) -> Quantity[D]:
     """
     Indicates how much buffer/water volume to add to a wet DNA sample to reach a particular concentration.
 
@@ -243,7 +233,7 @@ def _has_length(lst: Any) -> bool:
 def measure_conc(
     absorbance: float | int | Sequence[float | int],
     ext_coef: float | int,
-) -> Q_[D]:
+) -> Quantity[D]:
     """
     Calculates concentration of DNA sample given an absorbance reading on a NanoDrop machine.
 
@@ -283,10 +273,10 @@ def measure_conc(
 def measure_conc_and_dilute(
     absorbance: float | int | Sequence[float | int],
     ext_coef: float | int,
-    target_conc: float | int | str | Q_[D],
-    vol: float | int | str | Q_[D],
-    vol_removed: None | float | int | str | Q_[D] = None,
-) -> tuple[Q_[D], Q_[D]]:
+    target_conc: float | int | str | Quantity[D],
+    vol: float | int | str | Quantity[D],
+    vol_removed: None | float | int | str | Quantity[D] = None,
+) -> tuple[Quantity[D], Quantity[D]]:
     """
     Calculates concentration of DNA sample given an absorbance reading on a NanoDrop machine,
     then calculates the amount of buffer/water that must be added to dilute it to a target concentration.
@@ -334,13 +324,13 @@ def measure_conc_and_dilute(
 
 
 def hydrate_and_measure_conc_and_dilute(
-    nmol: float | int | str | Q_[D],
-    target_conc_high: float | int | str | Q_[D],
-    target_conc_low: float | int | str | Q_[D],
+    nmol: float | int | str | Quantity[D],
+    target_conc_high: float | int | str | Quantity[D],
+    target_conc_low: float | int | str | Quantity[D],
     absorbance: float | int | Sequence[float | int],
     ext_coef: float | int,
-    vol_removed: None | float | int | str | Q_[D] = None,
-) -> tuple[Q_[D], Q_[D]]:
+    vol_removed: None | float | int | str | Quantity[D] = None,
+) -> tuple[Quantity[D], Quantity[D]]:
     """
     Assuming :func:`hydrate` is called with parameters `nmol` and `target_conc_high` to give initial
     volumes to add to a dry sample to reach a "high" concentration `target_conc_high`,
@@ -405,11 +395,11 @@ def key_to_prop_from_dataframe(
 
 def hydrate_and_measure_conc_and_dilute_from_specs(
     filename: str,
-    target_conc_high: float | int | str | Q_[D],
-    target_conc_low: float | int | str | Q_[D],
+    target_conc_high: float | int | str | Quantity[D],
+    target_conc_low: float | int | str | Quantity[D],
     absorbances: dict[str, float | int | Sequence[float | int]],
-    vols_removed: dict[str, None | float | int | str | Q_[D]] | None = None,
-) -> dict[str, tuple[Q_[D], Q_[D]]]:
+    vols_removed: dict[str, None | float | int | str | Quantity[D]] | None = None,
+) -> dict[str, tuple[Quantity[D], Quantity[D]]]:
     """
     Like :func:`hydrate_and_measure_conc_and_dilute`, but works with multiple strands,
     using an IDT spec file to look up nmoles and extinction coefficients.
@@ -529,9 +519,9 @@ def iterable_is_empty(iterable: Iterable) -> bool:
 
 def hydrate_from_specs(
     filename: str,
-    target_conc: float | int | str | Q_[D],
+    target_conc: float | int | str | Quantity[D],
     strands: Sequence[str] | Sequence[int] | None = None,
-) -> dict[str, Q_[D]]:
+) -> dict[str, Quantity[D]]:
     """
     Indicates how much volume to add to a dry DNA sample to reach a particular concentration,
     given data in an Excel file in the IDT format.
@@ -566,7 +556,7 @@ def hydrate_from_specs(
         strands[0], str
     ):  # TODO: generalize to iterable
         # if strand names specified, figure out which rows these are
-        names = set(strands)
+        names = set(cast(Sequence[str], strands))
         name_to_row = {}
         for row in range(num_rows):
             name = names_series[row]
@@ -583,7 +573,7 @@ def hydrate_from_specs(
 
     elif strands is not None and isinstance(strands[0], int):
         # is list of indices; subtract 1 to convert them to 0-based indices
-        rows = [row - 2 for row in strands]
+        rows = [row - 2 for row in cast(Sequence[int], strands)]
     else:
         raise ValueError(
             "strands must be None, or list of strings, or list of ints\n"
@@ -632,7 +622,7 @@ def find_extinction_coefficient_key(dataframe: pandas.DataFrame) -> str:
 def measure_conc_from_specs(
     filename: str,
     absorbances: dict[str, float | int | Sequence[float] | Sequence[int]],
-) -> dict[str, Q_[D]]:
+) -> dict[str, Quantity[D]]:
     """
     Indicates how much volume to add to a dry DNA sample to reach a particular concentration,
     given data in an Excel file in the IDT format.
@@ -674,10 +664,10 @@ def measure_conc_from_specs(
 
 def display_hydrate_and_measure_conc_and_dilute_from_specs(
     filename: str,
-    target_conc_high: float | int | str | Q_[D],
-    target_conc_low: float | int | str | Q_[D],
+    target_conc_high: float | int | str | Quantity[D],
+    target_conc_low: float | int | str | Quantity[D],
     absorbances: dict[str, float | int | Sequence[float | int]],
-    vols_removed: dict[str, None | float | int | str | Q_[D]] | None = None,
+    vols_removed: dict[str, None | float | int | str | Quantity[D]] | None = None,
 ) -> None:
     from tabulate import tabulate
     from IPython.display import display, Markdown
@@ -705,8 +695,8 @@ def display_hydrate_and_measure_conc_and_dilute_from_specs(
 
 def display_hydrate_from_specs(
     filename: str,
-    target_conc: float | int | str | Q_[D],
-    strands: Iterable[str] | Iterable[int] | None = None,
+    target_conc: float | int | str | Quantity[D],
+    strands: Sequence[str] | Sequence[int] | None = None,
 ) -> None:
     """
     Indicates how much volume to add to a dry DNA sample to reach a particular concentration,
