@@ -38,7 +38,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pint
-from tabulate import tabulate, TableFormat
+from tabulate import tabulate, TableFormat, Line
 
 from alhambra.seeds import Seed
 
@@ -2512,6 +2512,48 @@ class Mix(AbstractComponent):
             return existing_plate_map
 
 
+
+cell_with_border_css_class = 'cell-with-border'
+
+# https://bitbucket.org/astanin/python-tabulate/issues/57/html-class-options-for-tables
+def _html_row_with_attrs(celltag: str, cell_values: Sequence[str],
+                         colwidths: Sequence[int], colaligns: Sequence[str]) -> str:
+    alignment = { "left":    '',
+                  "right":   ' style="text-align: right;"',
+                  "center":  ' style="text-align: center;"',
+                  "decimal": ' style="text-align: right;"' }
+    values_with_attrs =\
+        [f"<{celltag}{alignment.get(a, '')} class=\"{cell_with_border_css_class}\">{c}</{celltag}>"
+         for c, a in zip(cell_values, colaligns)]
+    return "<tr>" + \
+            "".join(values_with_attrs).rstrip() + \
+            "</tr>"
+
+
+from functools import partial
+
+html_with_borders_tablefmt = TableFormat(
+    lineabove=Line(f"""\
+<style>
+th.{cell_with_border_css_class}, td.{cell_with_border_css_class} {{ 
+    border: 1px solid black; 
+}}
+</style>
+<table>\
+""", "", "", ""),
+    linebelowheader=None,
+    linebetweenrows=None,
+    linebelow=Line("</table>", "", "", ""),
+    headerrow=partial(_html_row_with_attrs, "th"), # type: ignore
+    datarow=partial(_html_row_with_attrs, "td"), # type: ignore
+    padding=0,
+    with_header_hide=None,
+)
+"""
+Pass this as the parameter `tablefmt` in any method that accepts that parameter to have the table
+be an HTML table with borders around each cell.
+"""
+
 _ALL_TABLEFMTS = [
     "plain",
     "simple",
@@ -2536,6 +2578,7 @@ _ALL_TABLEFMTS = [
     "latex_longtable",
     "textile",
     "tsv",
+    html_with_borders_tablefmt,
 ]
 
 _SUPPORTED_TABLEFMTS_TITLE = [
@@ -2550,6 +2593,7 @@ _SUPPORTED_TABLEFMTS_TITLE = [
     "latex_raw",
     "latex_booktabs",
     "latex_longtable",
+    html_with_borders_tablefmt,
 ]
 
 
@@ -2718,7 +2762,7 @@ def _format_title(
 ) -> str:
     # formats a title for a table produced using tabulate,
     # in the formats tabulate understands
-    if tablefmt in ["html", "unsafehtml"]:
+    if tablefmt in ["html", "unsafehtml", html_with_borders_tablefmt]:
         title = f"<h{level}>{raw_title}</h{level}>"
     elif tablefmt == "rst":
         # https://draft-edx-style-guide.readthedocs.io/en/latest/ExampleRSTFile.html#heading-levels
