@@ -41,23 +41,21 @@ as nicely-formatted Markdown.
 
 from __future__ import annotations
 
+from typing import Any, Iterable, Sequence
+import pint
+import warnings
 import pandas
 from decimal import Decimal as D
 import decimal
+from alhambra.mixes import uL, uM, ureg, DNAN
+
+# to prevent mypy problems when importing Q_ from alhambra.mixes
+from pint import Quantity as Q_
 
 # This needs to be here to make Decimal NaNs behave the way that NaNs
 # *everywhere else in the standard library* behave.
 decimal.setcontext(decimal.ExtendedContext)
 
-from typing import Any, Iterable, Sequence
-import pint
-import warnings
-
-from alhambra.mixes import __all__, log, uL, uM, nM, ureg, DNAN
-
-from pint import (
-    Quantity as Q_,
-)  # to prevent mypy problems when importing Q_ from alhambra.mixes
 
 warnings.filterwarnings(
     "ignore",
@@ -325,7 +323,7 @@ def measure_conc_and_dilute(
 
     vol_remaining = vol - vol_removed
     vol_to_add = dilute(target_conc, start_conc, vol_remaining)
-    return (start_conc, vol_to_add)
+    return start_conc, vol_to_add
 
 
 def hydrate_and_measure_conc_and_dilute(
@@ -525,7 +523,7 @@ def iterable_is_empty(iterable: Iterable) -> bool:
 def hydrate_from_specs(
     filename: str,
     target_conc: float | int | str | Q_[D],
-    strands: Iterable[str] | Iterable[int] | None = None,
+    strands: Sequence[str] | Sequence[int] | None = None,
 ) -> dict[str, Q_[D]]:
     """
     Indicates how much volume to add to a dry DNA sample to reach a particular concentration,
@@ -687,7 +685,7 @@ def display_hydrate_and_measure_conc_and_dilute_from_specs(
 
     headers = ["name", "measured conc", "volume to add"]
     table_list = [
-        (name, round(conc, 2), round(vol_to_add, 2))
+        (name, round(conc, 2), round(vol_to_add, 2))  # type: ignore
         for name, (conc, vol_to_add) in names_to_concs_and_vols_to_add.items()
     ]
     table = tabulate(table_list, headers=headers, tablefmt="pipe", floatfmt=".2f")
@@ -726,7 +724,7 @@ def display_hydrate_from_specs(
     headers = ["name", "volume to add"]
     table_list = []
     for name, vol in names_to_vols.items():
-        table_list.append((name, round(vol, 2)))
+        table_list.append((name, round(vol, 2)))  # type: ignore
     table = tabulate(table_list, headers=headers, tablefmt="pipe", floatfmt=".2f")
     from alhambra.mixes import _format_title
 
