@@ -2593,7 +2593,11 @@ _ALL_TABLEFMTS = [
 
 # cast is to shut mypy up; should always be a str if not == html_with_borders_tablefmt
 _ALL_TABLEFMTS_NAMES: list[str] = [
-    (cast(str, fmt) if fmt != html_with_borders_tablefmt else "html_with_borders_tablefmt")
+    (
+        cast(str, fmt)
+        if fmt != html_with_borders_tablefmt
+        else "html_with_borders_tablefmt"
+    )
     for fmt in _ALL_TABLEFMTS
 ]
 
