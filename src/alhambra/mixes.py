@@ -1758,7 +1758,10 @@ class FixedRatio(AbstractAction):
         return v
 
     def _mixlines(
-        self, mix_vol: Quantity[Decimal], locations: pd.DataFrame | None = None
+        self,
+        tablefmt: str | TableFormat,
+        mix_vol: Quantity[Decimal],
+        locations: pd.DataFrame | None = None,
     ) -> list[MixLine]:
         return [
             MixLine(
@@ -1978,7 +1981,7 @@ class Mix(AbstractComponent):
 
         if validate:
             try:
-                self.validate(mixlines=mixlines)
+                self.validate(tablefmt=tablefmt, mixlines=mixlines)
             except ValueError as e:
                 e.args = e.args + (self.table(tablefmt=tablefmt, validate=False),)
                 raise e
@@ -2021,9 +2024,11 @@ class Mix(AbstractComponent):
     def has_fixed_total_volume(self) -> bool:
         return not math.isnan(self.fixed_total_volume.m)
 
-    def validate(self, mixlines: Sequence[MixLine] | None = None) -> None:
+    def validate(
+        self, tablefmt: str | TableFormat, mixlines: Sequence[MixLine] | None = None
+    ) -> None:
         if mixlines is None:
-            mixlines = self.mixlines()
+            mixlines = self.mixlines(tablefmt=tablefmt)
         ntx = [
             (m.names, m.total_tx_vol) for m in mixlines if m.total_tx_vol is not None
         ]
@@ -2205,20 +2210,24 @@ class Mix(AbstractComponent):
         return ("", None)
 
     def vol_to_tube_names(
-        self, validate: bool = True
+        self,
+        tablefmt: str | TableFormat = "pipe",
+        validate: bool = True,
     ) -> dict[Quantity[Decimal], list[str]]:
         """
         :return:
              dict mapping a volume `vol` to a list of names of strands in this mix that should be pipetted
              with volume `vol`
         """
-        mixlines = list(self.mixlines())
+        mixlines = list(self.mixlines(tablefmt=tablefmt))
 
         if validate:
             try:
-                self.validate(mixlines=mixlines)
+                self.validate(tablefmt=tablefmt, mixlines=mixlines)
             except ValueError as e:
-                e.args = e.args + (self.vol_to_tube_names(validate=False),)
+                e.args = e.args + (
+                    self.vol_to_tube_names(tablefmt=tablefmt, validate=False),
+                )
                 raise e
 
         result: dict[Quantity[Decimal], list[str]] = {}
@@ -2238,14 +2247,17 @@ class Mix(AbstractComponent):
         joined_names = "\n".join(mixline.names)
         return f"## tubes, {mixline.each_tx_vol} each\n{joined_names}"
 
-    def tubes_markdown(self) -> str:
+    def tubes_markdown(self, tablefmt: str | TableFormat = "pipe") -> str:
         """
+        :param tablefmt:
+            table format (see :meth:`PlateMap.to_table` for description)
         :return:
-            a Markdown string indicating which strands in test tubes to pipette, grouped by the volume
+            a Markdown (or other format according to `tablefmt`)
+            string indicating which strands in test tubes to pipette, grouped by the volume
             of each
         """
         entries = []
-        for vol, names in self.vol_to_tube_names().items():
+        for vol, names in self.vol_to_tube_names(tablefmt=tablefmt).items():
             joined_names = "\n".join(names)
             entry = f"## tubes, {vol} each\n{joined_names}"
             entries.append(entry)
@@ -2506,7 +2518,7 @@ class Mix(AbstractComponent):
 
         if validate:
             try:
-                self.validate(mixlines=mixlines)
+                self.validate(tablefmt="pipe", mixlines=mixlines)
             except ValueError as e:
                 e.args = e.args + (
                     self.plate_maps(
