@@ -323,6 +323,37 @@ class WellPos:
         return WellPos(next_row, next_col, platesize=self.platesize)
 
 
+def emphasize(text: str, tablefmt: str | TableFormat, strong: bool = False) -> str:
+    """
+    Emphasizes `text` according to `tablefmt`, e.g., for Markdown (e.g., `tablefmt` = `'pipe'`),
+    surrounds with pair of *'s; if `strong` is True, with double *'s. For `tablefmt` = `'html'`,
+    uses ``<emph>`` or ``<strong>``.
+
+    :param text:
+        text to emphasize
+    :param tablefmt:
+        format in which to add emphasis markup
+    :return:
+        emphasized version of `text`
+    """
+    # formats a title for a table produced using tabulate,
+    # in the formats tabulate understands
+    if tablefmt in ["html", "unsafehtml", html_with_borders_tablefmt]:
+        if strong:
+            emph_text = f"<strong>{text}</strong>"
+        else:
+            emph_text = f"<em>{text}</em>"
+    elif tablefmt in ["latex", "latex_raw", "latex_booktabs", "latex_longtable"]:
+        if strong:
+            emph_text = r"\textbf{" + text + r"}"
+        else:
+            emph_text = r"\emph{" + text + r"}"
+    else:  # use the emphasis for tablefmt == "pipe" (Markdown)
+        star = "**" if strong else "*"
+        emph_text = f"{star}{text}{star}"
+    return emph_text
+
+
 @attrs.define(eq=True)
 class MixLine:
     """Class for handling a line of a (processed) mix recipe.
@@ -398,9 +429,8 @@ class MixLine:
         if (not isinstance(v, list)) or any(not isinstance(x, str) for x in v):
             raise TypeError(f"MixLine.names of {v} is not a list of strings.")
 
-    @property
-    def location(self) -> str:
-        "A Markdown-formatted string for the location of the component/components."
+    def location(self, tablefmt: str | TableFormat = "pipe") -> str:
+        "A formatted string (according to `tablefmt`) for the location of the component/components."
         if len(self.wells) == 0:
             return f"{self.plate}"
         elif len(self.wells) == 1:
@@ -420,41 +450,57 @@ class MixLine:
         wells_formatted = []
         next_well_iter = iter(self.wells)
         prevpos = next(next_well_iter)
-        wells_formatted.append(f"**{prevpos}**")
+        formatted_prevpos = emphasize(f"{prevpos}", tablefmt, strong=True)
+        wells_formatted.append(formatted_prevpos)
         for well in next_well_iter:
             if sortnext(prevpos) != well:
-                wells_formatted.append(f"**{well}**")
+                formatted_well = emphasize(f"{well}", tablefmt, strong=True)
+                wells_formatted.append(formatted_well)
             else:
                 wells_formatted.append(f"{well}")
             prevpos = well
 
         return f"{self.plate}: {', '.join(wells_formatted)}"
 
-    def toline(self, incea: bool) -> Sequence[str]:
+    def toline(
+        self, incea: bool, tablefmt: str | TableFormat = "pipe"
+    ) -> Sequence[str]:
         if incea:
             return [
-                _formatter(self.names, italic=self.fake),
-                _formatter(self.source_conc, italic=self.fake),
-                _formatter(self.dest_conc, italic=self.fake),
-                _formatter(self.number, italic=self.fake) if self.number != 1 else "",
-                _formatter(self.each_tx_vol, italic=self.fake),
-                _formatter(self.total_tx_vol, italic=self.fake),
-                _formatter(self.location, italic=self.fake),
+                _formatter(self.names, italic=self.fake, tablefmt=tablefmt),
+                _formatter(self.source_conc, italic=self.fake, tablefmt=tablefmt),
+                _formatter(self.dest_conc, italic=self.fake, tablefmt=tablefmt),
+                _formatter(self.number, italic=self.fake, tablefmt=tablefmt)
+                if self.number != 1
+                else "",
+                _formatter(self.each_tx_vol, italic=self.fake, tablefmt=tablefmt),
+                _formatter(self.total_tx_vol, italic=self.fake, tablefmt=tablefmt),
+                _formatter(
+                    self.location(tablefmt=tablefmt),
+                    italic=self.fake,
+                    tablefmt=tablefmt,
+                ),
                 _formatter(self.note, italic=self.fake),
             ]
         else:
             return [
-                _formatter(self.names, italic=self.fake),
-                _formatter(self.source_conc, italic=self.fake),
-                _formatter(self.dest_conc, italic=self.fake),
-                _formatter(self.total_tx_vol, italic=self.fake),
-                _formatter(self.location, italic=self.fake),
-                _formatter(self.note, italic=self.fake),
+                _formatter(self.names, italic=self.fake, tablefmt=tablefmt),
+                _formatter(self.source_conc, italic=self.fake, tablefmt=tablefmt),
+                _formatter(self.dest_conc, italic=self.fake, tablefmt=tablefmt),
+                _formatter(self.total_tx_vol, italic=self.fake, tablefmt=tablefmt),
+                _formatter(
+                    self.location(tablefmt=tablefmt),
+                    italic=self.fake,
+                    tablefmt=tablefmt,
+                ),
+                _formatter(self.note, italic=self.fake, tablefmt=tablefmt),
             ]
 
 
 def _formatter(
-    x: int | float | str | list[str] | Quantity[Decimal] | None, italic: bool = False
+    x: int | float | str | list[str] | Quantity[Decimal] | None,
+    italic: bool = False,
+    tablefmt: str | TableFormat = "pipe",
 ) -> str:
     if isinstance(x, (int, str)):
         out = str(x)
@@ -471,7 +517,7 @@ def _formatter(
     if not out:
         return ""
     if italic:
-        return "*" + out + "*"
+        return emphasize(out, tablefmt=tablefmt, strong=False)
     return out
 
 
@@ -1926,7 +1972,7 @@ class Mix(AbstractComponent):
         include_numbers = any(ml.number != 1 for ml in mixlines)
 
         return tabulate(
-            [ml.toline(include_numbers) for ml in mixlines],
+            [ml.toline(include_numbers, tablefmt=tablefmt) for ml in mixlines],
             MIXHEAD_EA if include_numbers else MIXHEAD_NO_EA,
             tablefmt=tablefmt,
             stralign=stralign,
