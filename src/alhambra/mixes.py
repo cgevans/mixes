@@ -563,7 +563,7 @@ class AbstractComponent(ABC):
     def with_reference(self: T, reference: Reference) -> T:  # pragma: no cover
         ...
 
-    def printed_name(self) -> str:
+    def printed_name(self, tablefmt: str | TableFormat) -> str:
         return self.name
 
 
@@ -880,7 +880,9 @@ class AbstractAction(ABC):
 
     @abstractmethod
     def _mixlines(
-        self, mix_vol: Quantity[Decimal]
+        self,
+        tablefmt: str | TableFormat,
+        mix_vol: Quantity[Decimal],
     ) -> Sequence[MixLine]:  # pragma: no cover
         ...
 
@@ -1013,11 +1015,12 @@ class FixedConcentration(AbstractAction):
 
     def _mixlines(
         self,
+        tablefmt: str | TableFormat,
         mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
     ) -> list[MixLine]:
         return [
             MixLine(
-                names=[self.component.printed_name()],
+                names=[self.component.printed_name(tablefmt=tablefmt)],
                 source_conc=self.component.concentration,
                 dest_conc=self.dest_concentration(mix_vol),
                 each_tx_vol=self.tx_volume(mix_vol),
@@ -1085,13 +1088,16 @@ class FixedVolume(AbstractAction):
         return comps
 
     def _mixlines(
-        self, mix_vol: Quantity[Decimal], locations: pd.DataFrame | None = None
+        self,
+        tablefmt: str | TableFormat,
+        mix_vol: Quantity[Decimal],
+        locations: pd.DataFrame | None = None,
     ) -> Sequence[MixLine]:
         well = self.component.location[1]
 
         return [
             MixLine(
-                names=[self.component.printed_name()],
+                names=[self.component.printed_name(tablefmt=tablefmt)],
                 source_conc=self.component.concentration,
                 dest_conc=self.dest_concentration(mix_vol),
                 total_tx_vol=self.tx_volume(mix_vol),
@@ -1307,12 +1313,15 @@ class MultiFixedVolume(AbstractAction):
         return sum(self.each_volumes(mix_vol), ureg("0.0 uL"))
 
     def _mixlines(
-        self, mix_vol: Quantity[Decimal], locations: pd.DataFrame | None = None
+        self,
+        tablefmt: str | TableFormat,
+        mix_vol: Quantity[Decimal],
+        locations: pd.DataFrame | None = None,
     ) -> list[MixLine]:
         if not self.compact_display:
             ml = [
                 MixLine(
-                    [comp.printed_name()],
+                    [comp.printed_name(tablefmt=tablefmt)],
                     comp.concentration,
                     dc,
                     ev,
@@ -1326,7 +1335,7 @@ class MultiFixedVolume(AbstractAction):
                 )
             ]
         else:
-            ml = list(self._compactstrs(mix_vol))
+            ml = list(self._compactstrs(tablefmt=tablefmt, mix_vol=mix_vol))
 
         match self.equal_conc:
             case ("max_fill", str(buffername)):
@@ -1347,7 +1356,9 @@ class MultiFixedVolume(AbstractAction):
         else:
             return self.set_name
 
-    def _compactstrs(self, mix_vol: pint.Quantity) -> list[MixLine]:
+    def _compactstrs(
+        self, tablefmt: str | TableFormat, mix_vol: pint.Quantity
+    ) -> list[MixLine]:
         # locs = [(c.name,) + c.location for c in self.components]
         # names = [c.name for c in self.components]
 
@@ -1358,7 +1369,7 @@ class MultiFixedVolume(AbstractAction):
 
         locdf = pd.DataFrame(
             {
-                "names": [c.printed_name() for c in self.components],
+                "names": [c.printed_name(tablefmt=tablefmt) for c in self.components],
                 "source_concs": self.source_concentrations,
                 "dest_concs": self.dest_concentrations(mix_vol),
                 "ea_vols": self.each_volumes(mix_vol),
@@ -1576,12 +1587,15 @@ class MultiFixedConcentration(AbstractAction):
         return sum(self.each_volumes(mix_vol), Q_(Decimal("0"), "uL"))
 
     def _mixlines(
-        self, mix_vol: Quantity[Decimal], locations: pd.DataFrame | None = None
+        self,
+        tablefmt: str | TableFormat,
+        mix_vol: Quantity[Decimal],
+        locations: pd.DataFrame | None = None,
     ) -> list[MixLine]:
         if not self.compact_display:
             ml = [
                 MixLine(
-                    [comp.printed_name()],
+                    [comp.printed_name(tablefmt=tablefmt)],
                     comp.concentration,
                     dc,
                     ev,
@@ -1595,7 +1609,7 @@ class MultiFixedConcentration(AbstractAction):
                 )
             ]
         else:
-            ml = list(self._compactstrs(mix_vol))
+            ml = list(self._compactstrs(tablefmt=tablefmt, mix_vol=mix_vol))
 
         return ml
 
@@ -1610,7 +1624,9 @@ class MultiFixedConcentration(AbstractAction):
         else:
             return self.set_name
 
-    def _compactstrs(self, mix_vol: pint.Quantity) -> Sequence[MixLine]:
+    def _compactstrs(
+        self, tablefmt: str | TableFormat, mix_vol: pint.Quantity
+    ) -> Sequence[MixLine]:
         # locs = [(c.name,) + c.location for c in self.components]
         # names = [c.name for c in self.components]
 
@@ -1621,7 +1637,7 @@ class MultiFixedConcentration(AbstractAction):
 
         locdf = pd.DataFrame(
             {
-                "names": [c.printed_name() for c in self.components],
+                "names": [c.printed_name(tablefmt=tablefmt) for c in self.components],
                 "source_concs": self.source_concentrations,
                 "dest_concs": self.dest_concentrations(mix_vol),
                 "ea_vols": self.each_volumes(mix_vol),
@@ -1876,9 +1892,11 @@ class Mix(AbstractComponent):
                 f"Mix.actions must contain at least one action, but it is empty"
             )
 
-    def printed_name(self) -> str:
+    def printed_name(self, tablefmt: str | TableFormat) -> str:
         return self.name + (
-            "" if self.test_tube_name is None else f" (*{self.test_tube_name}*)"
+            ""
+            if self.test_tube_name is None
+            else f" ({emphasize(self.test_tube_name, tablefmt=tablefmt, strong=False)})"
         )
 
     @property
@@ -1956,13 +1974,13 @@ class Mix(AbstractComponent):
         buffer_name
             Name of the buffer to use. (Default="Buffer")
         """
-        mixlines = list(self.mixlines(buffer_name=buffer_name))
+        mixlines = list(self.mixlines(buffer_name=buffer_name, tablefmt=tablefmt))
 
         if validate:
             try:
                 self.validate(mixlines=mixlines)
             except ValueError as e:
-                e.args = e.args + (self.table(validate=False),)
+                e.args = e.args + (self.table(tablefmt=tablefmt, validate=False),)
                 raise e
 
         mixlines.append(
@@ -1982,11 +2000,13 @@ class Mix(AbstractComponent):
             colalign=colalign,
         )
 
-    def mixlines(self, buffer_name: str = "Buffer") -> Sequence[MixLine]:
+    def mixlines(
+        self, tablefmt: str | TableFormat, buffer_name: str = "Buffer"
+    ) -> Sequence[MixLine]:
         mixlines: list[MixLine] = []
 
         for action in self.actions:
-            mixlines += action._mixlines(self.total_volume)
+            mixlines += action._mixlines(tablefmt=tablefmt, mix_vol=self.total_volume)
 
         if self.fixed_total_volume is not None:
             mixlines.append(MixLine([buffer_name], None, None, self.buffer_volume))
@@ -2482,7 +2502,7 @@ class Mix(AbstractComponent):
             whatever else is written (strand name, or `well_marker` if it is specified),
             a volume is also given.
         """
-        mixlines = list(self.mixlines())
+        mixlines = list(self.mixlines(tablefmt="pipe"))
 
         if validate:
             try:
@@ -2947,7 +2967,9 @@ class Reference:
         return len(self.df)
 
     def plate_map(
-        self, name: str, plate_type: PlateType = PlateType.wells96
+        self,
+        name: str,
+        plate_type: PlateType = PlateType.wells96,
     ) -> PlateMap:
         """
         :param name:
