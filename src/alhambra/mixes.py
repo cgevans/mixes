@@ -2057,11 +2057,14 @@ class Mix(AbstractComponent):
             f"Mix: {self.name}",
             f"Conc: {self.concentration:,.2f~#P}",
             f"Total Vol: {self.total_volume:,.2f~#P}",
-            f"Component Count: {len(self.all_components())}",
+            #f"Component Count: {len(self.all_components())}",
         ]
         if self.test_tube_name:
             elems.append(f"Test tube name: {self.test_tube_name}")
         return ", ".join(elems)
+
+    def __repr__(self) -> str:
+        return f"Mix(\"{self.name}\", {len(self.actions)} actions)"
 
     def __str__(self) -> str:
         return f"Table: {self.infoline()}\n\n" + self.table()
