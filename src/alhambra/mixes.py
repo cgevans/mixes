@@ -2057,14 +2057,14 @@ class Mix(AbstractComponent):
             f"Mix: {self.name}",
             f"Conc: {self.concentration:,.2f~#P}",
             f"Total Vol: {self.total_volume:,.2f~#P}",
-            #f"Component Count: {len(self.all_components())}",
+            # f"Component Count: {len(self.all_components())}",
         ]
         if self.test_tube_name:
             elems.append(f"Test tube name: {self.test_tube_name}")
         return ", ".join(elems)
 
     def __repr__(self) -> str:
-        return f"Mix(\"{self.name}\", {len(self.actions)} actions)"
+        return f'Mix("{self.name}", {len(self.actions)} actions)'
 
     def __str__(self) -> str:
         return f"Table: {self.infoline()}\n\n" + self.table()
@@ -2544,8 +2544,8 @@ html_with_borders_tablefmt = TableFormat(
     lineabove=Line(
         f"""\
 <style>
-th.{cell_with_border_css_class}, td.{cell_with_border_css_class} {{ 
-    border: 1px solid black; 
+th.{cell_with_border_css_class}, td.{cell_with_border_css_class} {{
+    border: 1px solid black;
 }}
 </style>
 <table>\
@@ -2640,7 +2640,7 @@ class PlateMap:
     Wells with no strand in the PlateMap are not keys in the dictionary."""
 
     vol_each: Quantity[Decimal] | None = None
-    """Volume to pipette of each strand listed in this plate. (optional in case you simply want 
+    """Volume to pipette of each strand listed in this plate. (optional in case you simply want
     to create a plate map listing the strand names without instructions to pipette)"""
 
     def __str__(self) -> str:
