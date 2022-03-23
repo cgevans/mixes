@@ -1872,7 +1872,7 @@ class Mix(AbstractComponent):
     fixed_concentration: str | Quantity[Decimal] | None = attrs.field(
         default=None, kw_only=True, on_setattr=attrs.setters.convert
     )
-    buffer_name: str | None = None
+    buffer_name: str = "Buffer"
     reference: Reference | None = None
     min_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_optional,
@@ -2061,19 +2061,31 @@ class Mix(AbstractComponent):
             )
 
         # ensure we pipette at least self.min_volume from each source
+
         for mixline in mixlines:
             if (
                 not math.isnan(mixline.each_tx_vol.m)
                 and mixline.each_tx_vol != ZERO_VOL
                 and mixline.each_tx_vol < self.min_volume
             ):
-                # FIXME: why do these need :f?
-                msg = (
-                    f"Some items have lower transfer volume than {self.min_volume}\n"
-                    f'This is in creating mix "{self.name}", '
-                    f"attempting to pipette {mixline.each_tx_vol} of these components:\n"
-                    f"{mixline.names}"
-                )
+                if mixline.names == [self.buffer_name]:
+                    # This is the line for the buffer
+                    # TODO: tell them what is the maximum source concentration they can have
+                    msg = (
+                        f'Negative buffer volume of mix "{self.name}"; '
+                        f"this is typically caused by requesting too large a target concentration in a "
+                        f"MultiFixedConcentration or FixedConcentration action,"
+                        f"since the source concentrations are too low. "
+                        f"Try lowering the target concentration."
+                    )
+                else:
+                    # FIXME: why do these need :f?
+                    msg = (
+                        f"Some items have lower transfer volume than {self.min_volume}\n"
+                        f'This is in creating mix "{self.name}", '
+                        f"attempting to pipette {mixline.each_tx_vol} of these components:\n"
+                        f"{mixline.names}"
+                    )
                 raise VolumeError(msg)
 
         # We'll check the last tx_vol first, because it is usually buffer.
@@ -2596,6 +2608,7 @@ class Mix(AbstractComponent):
 
 cell_with_border_css_class = "cell-with-border"
 
+
 # https://bitbucket.org/astanin/python-tabulate/issues/57/html-class-options-for-tables
 def _html_row_with_attrs(
     celltag: str,
@@ -2809,8 +2822,8 @@ class PlateMap:
             tablefmt not in _SUPPORTED_TABLEFMTS_TITLE and warn_unsupported_title_format
         ):
             print(
-                f'{"*"*99}\n* WARNING: title formatting not supported for tablefmt = {tablefmt}; '
-                f'using Markdown format\n{"*"*99}'
+                f'{"*" * 99}\n* WARNING: title formatting not supported for tablefmt = {tablefmt}; '
+                f'using Markdown format\n{"*" * 99}'
             )
 
         num_rows = len(self.plate_type.rows())
@@ -2839,6 +2852,7 @@ class PlateMap:
                     well_pos = well_pos.advance()
 
         from alhambra.quantitate import normalize
+
         raw_title = f'plate "{self.plate_name}"' + (
             f", {normalize(self.vol_each)} each" if self.vol_each is not None else ""
         )
