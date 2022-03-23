@@ -2838,8 +2838,9 @@ class PlateMap:
                 if not well_pos.is_last():
                     well_pos = well_pos.advance()
 
+        from alhambra.quantitate import normalize
         raw_title = f'plate "{self.plate_name}"' + (
-            f", {self.vol_each} each" if self.vol_each is not None else ""
+            f", {normalize(self.vol_each)} each" if self.vol_each is not None else ""
         )
         title = _format_title(raw_title, title_level, tablefmt)
 
