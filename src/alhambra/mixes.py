@@ -473,7 +473,9 @@ class MixLine:
                 _formatter(self.number, italic=self.fake, tablefmt=tablefmt)
                 if self.number != 1
                 else "",
-                _formatter(self.each_tx_vol, italic=self.fake, tablefmt=tablefmt),
+                _formatter(self.each_tx_vol, italic=self.fake, tablefmt=tablefmt)
+                if not math.isnan(self.each_tx_vol.m)
+                else "",
                 _formatter(self.total_tx_vol, italic=self.fake, tablefmt=tablefmt),
                 _formatter(
                     self.location(tablefmt=tablefmt),
@@ -1945,13 +1947,6 @@ class Mix(AbstractComponent):
             )
 
     @property
-    def number_of_transfers(self) -> int:
-        """
-        Total number of individual transfers in the mix.
-        """
-        return sum(len(c.each_volumes(NAN_VOL)) for c in self.actions)
-
-    @property
     def buffer_volume(self) -> Quantity[Decimal]:
         """
         The volume of buffer to be added to the mix, in addition to the components.
@@ -2000,7 +1995,7 @@ class Mix(AbstractComponent):
                 self.concentration,
                 self.total_volume,
                 fake=True,
-                number=self.number_of_transfers,
+                number=sum(m.number for m in mixlines),
             )
         )
 
