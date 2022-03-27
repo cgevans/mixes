@@ -1945,6 +1945,13 @@ class Mix(AbstractComponent):
             )
 
     @property
+    def number_of_transfers(self) -> int:
+        """
+        Total number of individual transfers in the mix.
+        """
+        return sum(len(c.each_volumes(NAN_VOL)) for c in self.actions)
+
+    @property
     def buffer_volume(self) -> Quantity[Decimal]:
         """
         The volume of buffer to be added to the mix, in addition to the components.
@@ -1987,7 +1994,14 @@ class Mix(AbstractComponent):
                 raise e
 
         mixlines.append(
-            MixLine(["Total:"], None, self.concentration, self.total_volume, fake=True)
+            MixLine(
+                ["Total:"],
+                None,
+                self.concentration,
+                self.total_volume,
+                fake=True,
+                number=self.number_of_transfers,
+            )
         )
 
         include_numbers = any(ml.number != 1 for ml in mixlines)
