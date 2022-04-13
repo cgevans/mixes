@@ -429,12 +429,12 @@ class MixLine:
         if (not isinstance(v, list)) or any(not isinstance(x, str) for x in v):
             raise TypeError(f"MixLine.names of {v} is not a list of strings.")
 
-    def location(self, tablefmt: str | TableFormat = "pipe") -> str:
+    def location(self, tablefmt: str | TableFormat = "pipe", split: bool = True) -> str:
         "A formatted string (according to `tablefmt`) for the location of the component/components."
         if len(self.wells) == 0:
-            return f"{self.plate}"
+            return f"{self.plate}", []
         elif len(self.wells) == 1:
-            return f"{self.plate}: {self.wells[0]}"
+            return f"{self.plate}: {self.wells[0]}", []
 
         byrow = mixgaps(
             sorted(list(self.wells), key=WellPos.key_byrow),
@@ -447,27 +447,31 @@ class MixLine:
 
         sortnext = WellPos.next_bycol if bycol <= byrow else WellPos.next_byrow
 
+        splits = []
         wells_formatted = []
         next_well_iter = iter(self.wells)
         prevpos = next(next_well_iter)
-        formatted_prevpos = emphasize(f"{prevpos}", tablefmt, strong=True)
+        formatted_prevpos = emphasize(f"{self.plate}: {prevpos}", tablefmt, strong=True)
         wells_formatted.append(formatted_prevpos)
-        for well in next_well_iter:
-            if sortnext(prevpos) != well:
+        for i, well in enumerate(next_well_iter):
+            if (sortnext(prevpos) != well) or ((prevpos.col != well.col) and (prevpos.row != well.row)):
                 formatted_well = emphasize(f"{well}", tablefmt, strong=True)
                 wells_formatted.append(formatted_well)
+                if split:
+                    splits.append(i)
             else:
                 wells_formatted.append(f"{well}")
             prevpos = well
 
-        return f"{self.plate}: {', '.join(wells_formatted)}"
+        return wells_formatted, splits
 
     def toline(
         self, incea: bool, tablefmt: str | TableFormat = "pipe"
     ) -> Sequence[str]:
+        locations, splits = self.location(tablefmt=tablefmt)
         if incea:
             return [
-                _formatter(self.names, italic=self.fake, tablefmt=tablefmt),
+                _formatter(self.names, italic=self.fake, tablefmt=tablefmt, splits=splits),
                 _formatter(self.source_conc, italic=self.fake, tablefmt=tablefmt),
                 _formatter(self.dest_conc, italic=self.fake, tablefmt=tablefmt),
                 _formatter(self.number, italic=self.fake, tablefmt=tablefmt)
@@ -478,22 +482,24 @@ class MixLine:
                 else "",
                 _formatter(self.total_tx_vol, italic=self.fake, tablefmt=tablefmt),
                 _formatter(
-                    self.location(tablefmt=tablefmt),
+                    locations,
                     italic=self.fake,
                     tablefmt=tablefmt,
+                    splits=splits
                 ),
                 _formatter(self.note, italic=self.fake),
             ]
         else:
             return [
-                _formatter(self.names, italic=self.fake, tablefmt=tablefmt),
+                _formatter(self.names, italic=self.fake, tablefmt=tablefmt, splits=splits),
                 _formatter(self.source_conc, italic=self.fake, tablefmt=tablefmt),
                 _formatter(self.dest_conc, italic=self.fake, tablefmt=tablefmt),
                 _formatter(self.total_tx_vol, italic=self.fake, tablefmt=tablefmt),
                 _formatter(
-                    self.location(tablefmt=tablefmt),
+                    locations,
                     italic=self.fake,
                     tablefmt=tablefmt,
+                    splits=splits
                 ),
                 _formatter(self.note, italic=self.fake, tablefmt=tablefmt),
             ]
@@ -503,6 +509,7 @@ def _formatter(
     x: int | float | str | list[str] | Quantity[Decimal] | None,
     italic: bool = False,
     tablefmt: str | TableFormat = "pipe",
+    splits: list = []
 ) -> str:
     if isinstance(x, (int, str)):
         out = str(x)
@@ -513,7 +520,7 @@ def _formatter(
     elif isinstance(x, Quantity):
         out = f"{x:,.2f~#P}"
     elif isinstance(x, (list, np.ndarray, pd.Series)):
-        out = ", ".join(_formatter(y) for y in x)
+        out = ", ".join(("\n" if i-1 in splits else "") + _formatter(y) for i, y in enumerate(x))
     else:
         raise TypeError
     if not out:
@@ -730,9 +737,12 @@ class Component(AbstractComponent):
             ref_by_name = reference.df
         else:
             ref_by_name = reference.df.set_index("Name")
-        ref_comps = ref_by_name.loc[
-            [self.name], :
-        ]  # using this format to force a dataframe result
+        try:
+            ref_comps = ref_by_name.loc[
+                [self.name], :
+            ]  # using this format to force a dataframe result
+        except KeyError:
+            return self
 
         mismatches = []
         matches = []
@@ -788,10 +798,13 @@ class Strand(Component):
             ref_by_name = reference.df
         else:
             ref_by_name = reference.df.set_index("Name")
-        ref_comps = ref_by_name.loc[
-            [self.name], :
-        ]  # using this format to force a dataframe result
-
+        try:
+            ref_comps = ref_by_name.loc[
+                [self.name], :
+            ]  # using this format to force a dataframe result
+        except KeyError:
+            return self
+        
         mismatches = []
         matches = []
         for _, ref_comp in ref_comps.iterrows():
@@ -2020,7 +2033,7 @@ class Mix(AbstractComponent):
         for action in self.actions:
             mixlines += action._mixlines(tablefmt=tablefmt, mix_vol=self.total_volume)
 
-        if self.fixed_total_volume is not None:
+        if self.has_fixed_total_volume():
             mixlines.append(MixLine([buffer_name], None, None, self.buffer_volume))
         return mixlines
 
@@ -3131,6 +3144,8 @@ class Reference:
                         del conc_dict["default"]
                 else:
                     all_conc = _parse_conc_required(conc_info)
+            else:
+                filepath = Path(filename)
 
             if filepath.suffix in (".xls", ".xlsx"):
                 data: dict[str, pd.DataFrame] = pd.read_excel(filepath, sheet_name=None)
