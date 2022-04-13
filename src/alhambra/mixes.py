@@ -454,7 +454,9 @@ class MixLine:
         formatted_prevpos = emphasize(f"{self.plate}: {prevpos}", tablefmt, strong=True)
         wells_formatted.append(formatted_prevpos)
         for i, well in enumerate(next_well_iter):
-            if (sortnext(prevpos) != well) or ((prevpos.col != well.col) and (prevpos.row != well.row)):
+            if (sortnext(prevpos) != well) or (
+                (prevpos.col != well.col) and (prevpos.row != well.row)
+            ):
                 formatted_well = emphasize(f"{well}", tablefmt, strong=True)
                 wells_formatted.append(formatted_well)
                 if split:
@@ -471,7 +473,9 @@ class MixLine:
         locations, splits = self.location(tablefmt=tablefmt)
         if incea:
             return [
-                _formatter(self.names, italic=self.fake, tablefmt=tablefmt, splits=splits),
+                _formatter(
+                    self.names, italic=self.fake, tablefmt=tablefmt, splits=splits
+                ),
                 _formatter(self.source_conc, italic=self.fake, tablefmt=tablefmt),
                 _formatter(self.dest_conc, italic=self.fake, tablefmt=tablefmt),
                 _formatter(self.number, italic=self.fake, tablefmt=tablefmt)
@@ -482,24 +486,20 @@ class MixLine:
                 else "",
                 _formatter(self.total_tx_vol, italic=self.fake, tablefmt=tablefmt),
                 _formatter(
-                    locations,
-                    italic=self.fake,
-                    tablefmt=tablefmt,
-                    splits=splits
+                    locations, italic=self.fake, tablefmt=tablefmt, splits=splits
                 ),
                 _formatter(self.note, italic=self.fake),
             ]
         else:
             return [
-                _formatter(self.names, italic=self.fake, tablefmt=tablefmt, splits=splits),
+                _formatter(
+                    self.names, italic=self.fake, tablefmt=tablefmt, splits=splits
+                ),
                 _formatter(self.source_conc, italic=self.fake, tablefmt=tablefmt),
                 _formatter(self.dest_conc, italic=self.fake, tablefmt=tablefmt),
                 _formatter(self.total_tx_vol, italic=self.fake, tablefmt=tablefmt),
                 _formatter(
-                    locations,
-                    italic=self.fake,
-                    tablefmt=tablefmt,
-                    splits=splits
+                    locations, italic=self.fake, tablefmt=tablefmt, splits=splits
                 ),
                 _formatter(self.note, italic=self.fake, tablefmt=tablefmt),
             ]
@@ -509,7 +509,7 @@ def _formatter(
     x: int | float | str | list[str] | Quantity[Decimal] | None,
     italic: bool = False,
     tablefmt: str | TableFormat = "pipe",
-    splits: list = []
+    splits: list = [],
 ) -> str:
     if isinstance(x, (int, str)):
         out = str(x)
@@ -520,7 +520,9 @@ def _formatter(
     elif isinstance(x, Quantity):
         out = f"{x:,.2f~#P}"
     elif isinstance(x, (list, np.ndarray, pd.Series)):
-        out = ", ".join(("\n" if i-1 in splits else "") + _formatter(y) for i, y in enumerate(x))
+        out = ", ".join(
+            ("\n" if i - 1 in splits else "") + _formatter(y) for i, y in enumerate(x)
+        )
     else:
         raise TypeError
     if not out:
@@ -804,7 +806,7 @@ class Strand(Component):
             ]  # using this format to force a dataframe result
         except KeyError:
             return self
-        
+
         mismatches = []
         matches = []
         for _, ref_comp in ref_comps.iterrows():
