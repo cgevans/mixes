@@ -79,6 +79,7 @@ __all__ = (
     "_format_title",
     "ureg",
     "DNAN",
+    "VolumeError"
 )
 
 log = logging.getLogger("alhambra")

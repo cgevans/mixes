@@ -54,7 +54,7 @@ from .mixes import _parse_vol_optional as parse_vol
 
 __all__ = (
     'measure_conc_and_dilute',
-    'hydrate_and_measure_conc_and_dilute'
+    'hydrate_and_measure_conc_and_dilute',
 )
 
 # This needs to be here to make Decimal NaNs behave the way that NaNs
