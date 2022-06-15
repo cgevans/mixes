@@ -40,16 +40,11 @@ import pandas as pd
 import pint
 from tabulate import tabulate, TableFormat, Line
 
-from alhambra.seeds import Seed
-
-from .tiles import TileList
-from .tilesets import TileSet
-
 import attrs
 
 import warnings
 
-from pint.quantity import Quantity
+from pint import Quantity
 
 warnings.filterwarnings(
     "ignore",
@@ -150,17 +145,14 @@ def _ratio(
     top: pint.Quantity[T] | Sequence[pint.Quantity[T]],
     bottom: pint.Quantity[T] | Sequence[pint.Quantity[T]],
 ) -> T | Sequence[T]:
-    match (top, bottom):
-        case (t, b) if isinstance(t, Sequence) and isinstance(b, Sequence):
-            return [(x / y).m_as("") for x, y in zip(t, b, strict=True)]
-        case (t, b) if isinstance(t, Sequence):
-            return [(x / b).m_as("") for x in t]
-        case (t, b) if isinstance(b, Sequence):
-            return [(t / y).m_as("") for y in b]
-        case (t, b):
-            return (top / bottom).m_as("")  # type: ignore  # mypy can't figure this out
-    raise Exception("Unreachable")
-
+    if isinstance(top, Sequence) and isinstance(bottom, Sequence):
+        return [(x / y).m_as("") for x, y in zip(top, bottom, strict=True)]
+    elif isinstance(top, Sequence):
+        return [(x / bottom).m_as("") for x in top]
+    elif isinstance(bottom, Sequence):
+        return [(top / y).m_as("") for y in bottom]
+    return (top / bottom).m_as("")
+    
 
 @attrs.define(init=False, frozen=True, order=True, hash=True)
 class WellPos:
@@ -210,19 +202,18 @@ class WellPos:
         *,
         platesize: Literal[96, 384] = 96,
     ) -> None:
-        match (ref_or_row, col):
-            case (str(x), None):
-                row: int = ROW_ALPHABET.index(x[0]) + 1
-                col = int(x[1:])
-            case (WellPos() as x, None):
-                row = x.row
-                col = x.col
-                platesize = x.platesize
-            case (int(x), int(y)):
-                row = x
-                col = y
-            case _:
-                raise TypeError
+        if isinstance(ref_or_row, str) and (col is None):
+            row: int = ROW_ALPHABET.index(ref_or_row[0]) + 1
+            col = int(ref_or_row[1:])
+        elif isinstance(ref_or_row, WellPos) and (col is None):
+            row = ref_or_row.row
+            col = ref_or_row.col
+            platesize = ref_or_row.platesize
+        elif isinstance(ref_or_row, int) and isinstance(col, int):
+            row = ref_or_row
+            col = col
+        else:
+            raise TypeError
 
         if platesize not in (96, 384):
             raise ValueError(f"Plate size {platesize} not supported.")
@@ -241,13 +232,11 @@ class WellPos:
         return f'WellPos("{self}")'
 
     def __eq__(self, other: object) -> bool:
-        match other:
-            case WellPos(row, col, platesize):  # type: ignore
-                return (row == self.row) and (col == self.col)
-            case str(ws):
-                return self == WellPos(ws, platesize=self.platesize)
-            case _:
-                return False
+        if isinstance(other, WellPos):
+            return (other.row == self.row) and (other.col == self.col)
+        elif isinstance(other, str):
+            return self == WellPos(other, platesize=self.platesize)
+
         return False
 
     def key_byrow(self) -> tuple[int, int]:
@@ -533,7 +522,9 @@ def _formatter(
 
 
 class AbstractComponent(ABC):
-    """Abstract class for a component in a mix."""
+    """Abstract class for a component in a mix.  Custom components that don't inherit from
+    a concrete class should inherit from this class and implement the methods here.
+    """
 
     @property
     @abstractmethod
@@ -579,93 +570,104 @@ class AbstractComponent(ABC):
 
 
 def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
-    match v:
-        case str(x):
-            q = ureg(x)
-            if not q.check(nM):
-                raise ValueError(
-                    f"{x} is not a valid quantity here (should be molarity)."
-                )
-            return q
-        case pint.Quantity() as x:
-            if not x.check(nM):
-                raise ValueError(
-                    f"{x} is not a valid quantity here (should be molarity)."
-                )
-            x = Q_(Decimal(x.m), x.u)
-            return x.to_compact()
-        case None:
-            return Q_(DNAN, nM)
+    """Parses a string or Quantity as a concentration; if None, returns a NaN
+    concentration."""
+    if isinstance(v, str):
+        q = ureg(v)
+        if not q.check(nM):
+            raise ValueError(
+                f"{v} is not a valid quantity here (should be molarity)."
+            )
+        return q
+    elif isinstance(v, pint.Quantity):
+        if not v.check(nM):
+            raise ValueError(
+                f"{v} is not a valid quantity here (should be molarity)."
+            )
+        v = Q_(Decimal(v.m), v.u)
+        return v.to_compact()
+    elif v is None:
+        return Q_(DNAN, nM)
     raise ValueError
 
 
 def _parse_conc_required(v: str | pint.Quantity) -> pint.Quantity:
-    match v:
-        case str(x):
-            q = ureg(x)
-            if not q.check(nM):
-                raise ValueError(
-                    f"{x} is not a valid quantity here (should be molarity)."
-                )
-            return q
-        case pint.Quantity() as x:
-            if not x.check(nM):
-                raise ValueError(
-                    f"{x} is not a valid quantity here (should be molarity)."
-                )
-            x = Q_(Decimal(x.m), x.u)
-            return x.to_compact()
+    """Parses a string or Quantity as a concentration, requiring that
+    it result in a value."""
+    if isinstance(v, str):
+        q = ureg(v)
+        if not q.check(nM):
+            raise ValueError(
+                f"{v} is not a valid quantity here (should be molarity)."
+            )
+        return q
+    elif isinstance(v, pint.Quantity):
+        if not v.check(nM):
+            raise ValueError(
+                f"{v} is not a valid quantity here (should be molarity)."
+            )
+        v = Q_(Decimal(v.m), v.u)
+        return v.to_compact()
     raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
 
 
 def _parse_vol_optional(v: str | pint.Quantity) -> pint.Quantity:
-    match v:
-        case str(x):
-            q = ureg(x)
-            if not q.check(uL):
-                raise ValueError(
-                    f"{x} is not a valid quantity here (should be volume)."
-                )
-            return q
-        case pint.Quantity() as x:
-            if not x.check(uL):
-                raise ValueError(
-                    f"{x} is not a valid quantity here (should be volume)."
-                )
-            x = Q_(Decimal(x.m), x.u)
-            return x.to_compact()
-        case None:
-            return Q_(DNAN, uL)
+    """Parses a string or quantity as a volume, returning a NaN volume
+    if the value is None.
+    """
+    #if isinstance(v, (float, int)):  # FIXME: was in quantitate.py, but potentially unsafe
+    #    v = f"{v} µL"
+    if isinstance(v, str):
+        q = ureg(v)
+        if not q.check(uL):
+            raise ValueError(
+                f"{v} is not a valid quantity here (should be volume)."
+            )
+        return q
+    elif isinstance(v, pint.Quantity):
+        if not v.check(uL):
+            raise ValueError(
+                f"{v} is not a valid quantity here (should be volume)."
+            )
+        v = Q_(Decimal(v.m), v.u)
+        return v.to_compact()
+    elif v is None:
+        return Q_(DNAN, uL)
     raise ValueError
 
 
 def _parse_vol_required(v: str | pint.Quantity) -> pint.Quantity:
-    match v:
-        case str(x):
-            q = ureg(x)
-            if not q.check(uL):
-                raise ValueError(
-                    f"{x} is not a valid quantity here (should be volume)."
-                )
-            return q
-        case pint.Quantity() as x:
-            if not x.check(uL):
-                raise ValueError(
-                    f"{x} is not a valid quantity here (should be volume)."
-                )
-            x = Q_(Decimal(x.m), x.u)
-            return x.to_compact()
+    """Parses a string or quantity as a volume, requiring that it result in a
+    value.
+    """
+    #if isinstance(v, (float, int)):
+    #    v = f"{v} µL"
+    if isinstance(v, str):
+        q = ureg(v)
+        if not q.check(uL):
+            raise ValueError(
+                f"{v} is not a valid quantity here (should be volume)."
+            )
+        return q
+    elif isinstance(v, pint.Quantity):
+        if not v.check(uL):
+            raise ValueError(
+                f"{v} is not a valid quantity here (should be volume)."
+            )
+        v = Q_(Decimal(v.m), v.u)
+        return v.to_compact()
     raise ValueError(f"{v} is not a valid quantity here (should be volume).")
 
 
 def _parse_wellpos_optional(v: str | WellPos | None) -> WellPos | None:
-    match v:
-        case str(x):
-            return WellPos(x)
-        case WellPos() as x:
-            return x
-        case None:
-            return None
+    """Parse a string (eg, "C7"), WellPos, or None as potentially a
+    well position, returning either a WellPos or None."""
+    if isinstance(v, str):
+        return WellPos(v)
+    elif isinstance(v, WellPos):
+        return v
+    elif v is None:
+        return None
     try:
         if v.isnan():  # type: ignore
             return None
@@ -685,7 +687,11 @@ def _none_as_empty_string(v: str | None) -> str:
 
 @attrs.define()
 class Component(AbstractComponent):
-    """A single named component, potentially with a concentration and location."""
+    """A single named component, potentially with a concentration and location.
+
+    Location is stored as a `plate` and `well` property. `plate` is 
+
+    """
 
     name: str
     concentration: Quantity[Decimal] = attrs.field(
@@ -711,13 +717,12 @@ class Component(AbstractComponent):
             return False
         if self.name != other.name:
             return False
-        match (self.concentration, other.concentration):
-            case (Quantity() as x, Quantity() as y):
-                if math.isnan(x.m) and math.isnan(y.m):
-                    return True
-                return x == y
-            case x, y:
-                return bool(x == y)
+        if isinstance(self.concentration, Quantity) and isinstance(other.concentration, Quantity):
+            if math.isnan(self.concentration.m) and math.isnan(other.concentration.m):
+                return True
+            return self.concentration == other.concentration
+        elif hasattr(self, 'concentration') and hasattr(other, 'concentration'):
+            return bool(self.concentration == other.concentration)
         return False
 
     @property
@@ -827,13 +832,13 @@ class Strand(Component):
                 mismatches.append(("Well", ref_well))
                 continue
 
-            match (self.sequence, ref_comp["Sequence"]):
-                case (str(x), str(y)):
-                    x = x.replace(" ", "").replace("-", "")
-                    y = y.replace(" ", "").replace("-", "")
-                    if x != y:
-                        mismatches.append(("Sequence", ref_comp["Sequence"]))
-                        continue
+            if isinstance(self.sequence, str) and isinstance(ref_comp["Sequence"], str):
+                y = ref_comp["Sequence"]
+                self.sequence = self.sequence.replace(" ", "").replace("-", "")
+                y = y.replace(" ", "").replace("-", "")
+                if self.sequence != y:
+                    mismatches.append(("Sequence", ref_comp["Sequence"]))
+                    continue
 
             matches.append(ref_comp)
 
@@ -854,13 +859,15 @@ class Strand(Component):
         ref_conc = ureg.Quantity(m["Concentration (nM)"], nM)
         ref_plate = m["Plate"]
         ref_well = _parse_wellpos_optional(m["Well"])
-        match (self.sequence, m["Sequence"]):
-            case (None, None):
-                seq = None
-            case (str(x), None) | (str(x), "") | (None, str(x)) | (str(_), str(x)):
-                seq = x
-            case _:
-                raise RuntimeError("should be unreachable")
+        ss, ms = self.sequence, m["Sequence"]
+        if (ss is None) and (ms is None):
+            seq = None
+        elif (isinstance(ss, str) and ((ms is None) or (ms == ""))):
+            seq = ss
+        elif (isinstance(ms, str) and ((ss is None) or isinstance(ss, str))):
+            seq = ms
+        else:
+            raise RuntimeError("should be unreachable")
 
         return attrs.evolve(
             self,
@@ -950,15 +957,16 @@ class AbstractAction(ABC):
 
 
 def findloc(locations: pd.DataFrame | None, name: str) -> str | None:
-    match findloc_tuples(locations, name):
-        case (_, plate, well):
-            if well:
-                return f"{plate}: {well}"
-            else:
-                return f"{plate}"
-        case None:
-            return None
-    return None
+    loc = findloc_tuples(locations, name)
+
+    if loc is None:
+        return None
+
+    _, plate, well = loc
+    if well:
+        return f"{plate}: {well}"
+    else:
+        return f"{plate}"
 
 
 def findloc_tuples(
@@ -1304,29 +1312,28 @@ class MultiFixedVolume(AbstractAction):
     def each_volumes(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
     ) -> list[Quantity[Decimal]]:
-        match self.equal_conc:
-            case str("min_volume"):
-                sc = self.source_concentrations
-                scmax = max(sc)
-                return [self.fixed_volume * x for x in _ratio(scmax, sc)]
-            case str("max_volume") | ("max_fill", _):
-                sc = self.source_concentrations
-                scmin = min(sc)
-                return [self.fixed_volume * x for x in _ratio(scmin, sc)]
-            case bool(True):
-                sc = self.source_concentrations
-                if any(x != sc[0] for x in sc):
-                    raise ValueError("Concentrations")
-                return [self.fixed_volume.to(uL)] * len(self.components)
-            case bool(False):
-                return [self.fixed_volume.to(uL)] * len(self.components)
+        #match self.equal_conc:
+        if self.equal_conc == "min_volume":
+            sc = self.source_concentrations
+            scmax = max(sc)
+            return [self.fixed_volume * x for x in _ratio(scmax, sc)]
+        elif (self.equal_conc == "max_volume") | (isinstance(self.equal_conc, Sequence) and self.equal_conc[0] == "max_fill"):
+            sc = self.source_concentrations
+            scmin = min(sc)
+            return [self.fixed_volume * x for x in _ratio(scmin, sc)]
+        elif self.equal_conc is True:
+            sc = self.source_concentrations
+            if any(x != sc[0] for x in sc):
+                raise ValueError("Concentrations")
+            return [self.fixed_volume.to(uL)] * len(self.components)
+        elif self.equal_conc is False:
+            return [self.fixed_volume.to(uL)] * len(self.components)
 
         raise ValueError(f"equal_conc={repr(self.equal_conc)} not understood")
 
     def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
-        match self.equal_conc:
-            case ("max_fill", str(buffername)):
-                return self.fixed_volume * len(self.components)
+        if isinstance(self.equal_conc, Sequence) and (self.equal_conc[0] == "max_fill"):
+            return self.fixed_volume * len(self.components)
         return sum(self.each_volumes(mix_vol), ureg("0.0 uL"))
 
     def _mixlines(
@@ -1354,11 +1361,10 @@ class MultiFixedVolume(AbstractAction):
         else:
             ml = list(self._compactstrs(tablefmt=tablefmt, mix_vol=mix_vol))
 
-        match self.equal_conc:
-            case ("max_fill", str(buffername)):
-                fv = self.fixed_volume * len(self.components) - sum(self.each_volumes())
-                if not fv == Q_(Decimal("0.0"), uL):
-                    ml.append(MixLine([buffername], None, None, fv))
+        if isinstance(self.equal_conc, Sequence) and (self.equal_conc[0] == "max_fill"):
+            fv = self.fixed_volume * len(self.components) - sum(self.each_volumes())
+            if not fv == Q_(Decimal("0.0"), uL):
+                ml.append(MixLine([self.equal_conc[1]], None, None, fv))
 
         return ml
 
@@ -1746,55 +1752,55 @@ class MultiFixedConcentration(AbstractAction):
         ]
 
 
-@attrs.define()
-class FixedRatio(AbstractAction):
-    """A mix action adding a component at some fixed concentration ratio, regardless of concentration.
-    Useful, for, eg, concentrated buffers."""
+# @attrs.define()
+# class FixedRatio(AbstractAction):
+#     """A mix action adding a component at some fixed concentration ratio, regardless of concentration.
+#     Useful, for, eg, concentrated buffers."""
 
-    component: AbstractComponent
-    source_value: float
-    dest_value: float
+#     component: AbstractComponent
+#     source_value: float
+#     dest_value: float
 
-    @property
-    def name(self) -> str:
-        return self.component.name
+#     @property
+#     def name(self) -> str:
+#         return self.component.name
 
-    @property
-    def components(self) -> list[AbstractComponent]:
-        return [self.component]
+#     @property
+#     def components(self) -> list[AbstractComponent]:
+#         return [self.component]
 
-    def each_volumes(self, total_volume: Quantity[Decimal]) -> list[Quantity[Decimal]]:
-        return [self.tx_volume(total_volume)]
+#     def each_volumes(self, total_volume: Quantity[Decimal]) -> list[Quantity[Decimal]]:
+#         return [self.tx_volume(total_volume)]
 
-    def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
-        return mix_vol * self.dest_value / self.source_value
+#     def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
+#         return mix_vol * self.dest_value / self.source_value
 
-    def all_components(self, mix_vol: Quantity[Decimal]) -> pd.DataFrame:
-        v = self.component.all_components()
-        v.loc[:, "concentration_nM"] *= self.dest_value / self.source_value
-        return v
+#     def all_components(self, mix_vol: Quantity[Decimal]) -> pd.DataFrame:
+#         v = self.component.all_components()
+#         v.loc[:, "concentration_nM"] *= self.dest_value / self.source_value
+#         return v
 
-    def _mixlines(
-        self,
-        tablefmt: str | TableFormat,
-        mix_vol: Quantity[Decimal],
-        locations: pd.DataFrame | None = None,
-    ) -> list[MixLine]:
-        return [
-            MixLine(
-                [self.name],
-                str(self.source_value) + "x",
-                str(self.dest_value) + "x",
-                self.tx_volume(mix_vol),
-                plate=self.component.plate,
-                wells=self.component._well_list,
-            )
-        ]
+#     def _mixlines(
+#         self,
+#         tablefmt: str | TableFormat,
+#         mix_vol: Quantity[Decimal],
+#         locations: pd.DataFrame | None = None,
+#     ) -> list[MixLine]:
+#         return [
+#             MixLine(
+#                 [self.name],
+#                 str(self.source_value) + "x",
+#                 str(self.dest_value) + "x",
+#                 self.tx_volume(mix_vol),
+#                 plate=self.component.plate,
+#                 wells=self.component._well_list,
+#             )
+#         ]
 
-    def with_reference(self, reference: Reference) -> FixedRatio:
-        return FixedRatio(
-            self.component.with_reference(reference), self.source_value, self.dest_value
-        )
+#     def with_reference(self, reference: Reference) -> FixedRatio:
+#         return FixedRatio(
+#             self.component.with_reference(reference), self.source_value, self.dest_value
+#         )
 
 
 _96WELL_PLATE_ROWS: list[str] = ["A", "B", "C", "D", "E", "F", "G", "H"]
@@ -2175,64 +2181,6 @@ class Mix(AbstractComponent):
 
     def __str__(self) -> str:
         return f"Table: {self.infoline()}\n\n" + self.table()
-
-    def to_tileset(
-        self,
-        tilesets_or_lists: TileSet | TileList | Iterable[TileSet | TileList],
-        *,
-        seed: bool | Seed = False,
-        base_conc: pint.Quantity | str = Q_(100.0, nM),
-    ) -> TileSet:
-        """
-        Given some :any:`TileSet`\ s, or lists of :any:`Tile`\ s from which to
-        take tiles, generate an TileSet from the mix.
-        """
-        from .flatish import BaseSSTile
-
-        base_conc = _parse_conc_required(base_conc)
-
-        newts = TileSet()
-
-        if isinstance(tilesets_or_lists, (TileList, TileSet)):
-            tilesets_or_lists = [tilesets_or_lists]
-
-        for name, row in self.all_components().iterrows():
-            new_tile = None
-            for tl_or_ts in tilesets_or_lists:
-                try:
-                    if isinstance(tl_or_ts, TileSet):
-                        tile = tl_or_ts.tiles[name]
-                    else:
-                        tile = tl_or_ts[name]
-                    new_tile = tile.copy()
-                    if isinstance(new_tile, BaseSSTile) and (
-                        (seq := getattr(row["component"], "sequence", None)) is not None
-                    ):
-                        new_tile.sequence |= seq
-                    new_tile.stoic = float(
-                        _ratio(Q_(row["concentration_nM"], nM), base_conc)
-                    )
-                    newts.tiles.add(new_tile)
-                    break
-                except KeyError:
-                    pass
-            if new_tile is None:
-                log.warn(f"Component {name} not found in tile lists.")
-
-        match seed:
-            case True:
-                firstts = next(iter(tilesets_or_lists))
-                assert isinstance(firstts, TileSet)
-                newts.seeds["default"] = firstts.seeds["default"]
-            case False:
-                pass
-            case Seed() as x:
-                newts.seeds["default"] = x
-
-        if len(newts.tiles) == 0:
-            raise ValueError("No mix components match tiles.")
-
-        return newts
 
     def with_reference(self: Mix, reference: Reference) -> Mix:
         new = attrs.evolve(
@@ -2968,13 +2916,13 @@ def _format_title(
 
 
 def _format_location(loc: tuple[str | None, WellPos | None]) -> str:
-    match loc:
-        case str(p), WellPos() as w:
-            return f"{p}: {w}"
-        case str(p), None:
-            return p
-        case None, None:
-            return ""
+    p, w = loc
+    if isinstance(p, str) and isinstance(w, WellPos):
+        return f"{p}: {w}"
+    elif isinstance(p, str) and (w is None):
+        return p
+    elif (p is None) and (w is None):
+        return ""
     raise ValueError
 
 

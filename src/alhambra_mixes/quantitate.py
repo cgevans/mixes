@@ -49,7 +49,13 @@ from decimal import Decimal as D
 import decimal
 
 from pint import Quantity
-from alhambra.mixes import Q_, ureg, DNAN, uL, uM, nM
+from .mixes import Q_, ureg, DNAN, uL, uM, nM, _parse_conc_optional
+from .mixes import _parse_vol_optional as parse_vol
+
+__all__ = (
+    'measure_conc_and_dilute',
+    'hydrate_and_measure_conc_and_dilute'
+)
 
 # This needs to be here to make Decimal NaNs behave the way that NaNs
 # *everywhere else in the standard library* behave.
@@ -94,59 +100,29 @@ def normalize(quantity: Quantity[D]) -> Quantity[D]:
     return quantity
 
 
-# TODO: these reproduce _parse_vol_optional and _parse_vol_required in alhambra.mixes
-#  not sure of the difference between _parse_vol_optional and _parse_vol_required
-def parse_vol(vol: float | int | str | Quantity[D]) -> Quantity[D]:
-    """
-    Default units for v being a float/int is µL (microliters).
-    """
-    if isinstance(vol, (float, int)):
-        vol = f"{vol} uL"
-
-    match vol:
-        case str(x):
-            q = ureg(x)
-            if not q.check(uL):
-                raise ValueError(
-                    f"{x} is not a valid quantity here (should be volume)."
-                )
-            return q
-        case Quantity() as x:
-            if not x.check(uL):
-                raise ValueError(
-                    f"{x} is not a valid quantity here (should be volume)."
-                )
-            x = Q_(D(x.m), x.u)
-            return normalize(x)
-        case None:
-            return Q_(DNAN, uL)
-    raise ValueError
-
-
 def parse_conc(conc: float | int | str | Quantity[D]) -> Quantity[D]:
     """
     Default units for conc being a float/int is µM (micromolar).
     """
     if isinstance(conc, (float, int)):
-        conc = f"{conc} uM"
+        conc = f"{conc} µM"
 
-    match conc:
-        case str(x):
-            q = ureg(x)
-            if not q.check(uM):
-                raise ValueError(
-                    f"{x} is not a valid quantity here (should be concentration)."
-                )
-            return q
-        case Quantity() as x:
-            if not x.check(uM):
-                raise ValueError(
-                    f"{x} is not a valid quantity here (should be concentration)."
-                )
-            x = Q_(D(x.m), x.u)
-            return normalize(x)
-        case None:
-            return Q_(DNAN, uL)
+    if isinstance(conc, str):
+        q = ureg(conc)
+        if not q.check(uM):
+            raise ValueError(
+                f"{conc} is not a valid quantity here (should be concentration)."
+            )
+        return q
+    elif isinstance(conc, Quantity):
+        if not conc.check(uM):
+            raise ValueError(
+                f"{conc} is not a valid quantity here (should be concentration)."
+            )
+        conc = Q_(D(conc.m), conc.u)
+        return normalize(conc)
+    elif conc is None:
+        return Q_(DNAN, uL)
     raise ValueError
 
 
@@ -157,19 +133,18 @@ def parse_nmol(nmoles: float | int | str | Quantity[D]) -> Quantity[D]:
     if isinstance(nmoles, (float, int)):
         nmoles = f"{nmoles} nmol"
 
-    match nmoles:
-        case str(x):
-            q = ureg(x)
-            if not q.check(ureg.nmol):
-                raise ValueError(f"{x} is not a valid quantity here (should be nmol).")
-            return q
-        case Quantity() as x:
-            if not x.check(ureg.nmol):
-                raise ValueError(f"{x} is not a valid quantity here (should be nmol).")
-            x = Q_(D(x.m), x.u)
-            return normalize(x)
-        case None:
-            return Q_(DNAN, ureg.nmol)
+    if isinstance(nmoles, str):
+        q = ureg(nmoles)
+        if not q.check(ureg.nmol):
+            raise ValueError(f"{nmoles} is not a valid quantity here (should be nmol).")
+        return q
+    elif isinstance(nmoles, Quantity):
+        if not nmoles.check(ureg.nmol):
+            raise ValueError(f"{nmoles} is not a valid quantity here (should be nmol).")
+        nmoles = Q_(D(nmoles.m), nmoles.u)
+        return normalize(nmoles)
+    elif nmoles is None:
+        return Q_(DNAN, ureg.nmol)
     raise ValueError
 
 
