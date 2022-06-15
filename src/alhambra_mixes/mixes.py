@@ -330,7 +330,7 @@ def emphasize(text: str, tablefmt: str | TableFormat, strong: bool = False) -> s
     """
     # formats a title for a table produced using tabulate,
     # in the formats tabulate understands
-    if tablefmt in ["html", "unsafehtml", html_with_borders_tablefmt]: # type: ignore
+    if tablefmt in ["html", "unsafehtml", html_with_borders_tablefmt]:  # type: ignore
         if strong:
             emph_text = f"<strong>{text}</strong>"
         else:

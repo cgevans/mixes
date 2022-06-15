@@ -41,7 +41,7 @@ as nicely-formatted Markdown.
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Sequence, Type, cast
+from typing import Any, Iterable, Sequence, Type, Union, cast
 import pint
 import warnings
 import pandas
@@ -49,8 +49,15 @@ from decimal import Decimal as D
 import decimal
 
 from pint import Quantity
-from .mixes import Q_, ureg, DNAN, uL, uM, nM, _parse_conc_optional
-from .mixes import _parse_vol_optional as parse_vol
+from .mixes import Q_, ureg, DNAN, uL, uM, nM
+from .mixes import _parse_vol_optional
+
+
+def parse_vol(vol: Union[float, int, str, Quantity[D]]) -> Quantity[D]:
+    if isinstance(vol, (float, int)):
+        vol = Quantity(D(vol), "µL")
+    return _parse_vol_optional(vol)
+
 
 __all__ = (
     "measure_conc_and_dilute",
