@@ -1,0 +1,12 @@
+
+- Find a better name.
+- Make `Reference` keep track of plate size.
+- Allow mix actions to accept string, converting to bare `Component`?
+- Allow `Component` to be converted to `Strand` by `.with_reference`?
+- Improve display format for more general use.
+- Allow single-action mix specification without []
+- Better mix effective concentration handling
+- Display functions for:
+    - Reference
+    - Strand
+    - Component
