@@ -44,7 +44,7 @@ extensions = [
 extensions.append("autoapi.extension")
 
 autoapi_type = "python"
-autoapi_dirs = [os.path.abspath("../../src/mixes")]
+autoapi_dirs = [os.path.abspath("../../src/alhambra_mixes")]
 
 autosummary_generate = True
 
