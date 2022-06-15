@@ -24,6 +24,6 @@ __all__ = (
     "DNAN",
     "VolumeError",
     "D",
-    'measure_conc_and_dilute',
-    'hydrate_and_measure_conc_and_dilute'
+    "measure_conc_and_dilute",
+    "hydrate_and_measure_conc_and_dilute",
 )

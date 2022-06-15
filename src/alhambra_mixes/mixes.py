@@ -26,12 +26,14 @@ from typing import (
     Literal,
     Mapping,
     Sequence,
-    TypeAlias,
     TypeVar,
     cast,
     overload,
     Callable,
     Tuple,
+)
+from typing_extensions import (
+    TypeAlias,
 )
 from pathlib import Path
 
@@ -79,7 +81,7 @@ __all__ = (
     "_format_title",
     "ureg",
     "DNAN",
-    "VolumeError"
+    "VolumeError",
 )
 
 log = logging.getLogger("alhambra")
@@ -153,7 +155,7 @@ def _ratio(
     elif isinstance(bottom, Sequence):
         return [(top / y).m_as("") for y in bottom]
     return (top / bottom).m_as("")
-    
+
 
 @attrs.define(init=False, frozen=True, order=True, hash=True)
 class WellPos:
@@ -576,15 +578,11 @@ def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
     if isinstance(v, str):
         q = ureg(v)
         if not q.check(nM):
-            raise ValueError(
-                f"{v} is not a valid quantity here (should be molarity)."
-            )
+            raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
         return q
     elif isinstance(v, pint.Quantity):
         if not v.check(nM):
-            raise ValueError(
-                f"{v} is not a valid quantity here (should be molarity)."
-            )
+            raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
         v = Q_(Decimal(v.m), v.u)
         return v.to_compact()
     elif v is None:
@@ -598,15 +596,11 @@ def _parse_conc_required(v: str | pint.Quantity) -> pint.Quantity:
     if isinstance(v, str):
         q = ureg(v)
         if not q.check(nM):
-            raise ValueError(
-                f"{v} is not a valid quantity here (should be molarity)."
-            )
+            raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
         return q
     elif isinstance(v, pint.Quantity):
         if not v.check(nM):
-            raise ValueError(
-                f"{v} is not a valid quantity here (should be molarity)."
-            )
+            raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
         v = Q_(Decimal(v.m), v.u)
         return v.to_compact()
     raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
@@ -616,20 +610,16 @@ def _parse_vol_optional(v: str | pint.Quantity) -> pint.Quantity:
     """Parses a string or quantity as a volume, returning a NaN volume
     if the value is None.
     """
-    #if isinstance(v, (float, int)):  # FIXME: was in quantitate.py, but potentially unsafe
+    # if isinstance(v, (float, int)):  # FIXME: was in quantitate.py, but potentially unsafe
     #    v = f"{v} µL"
     if isinstance(v, str):
         q = ureg(v)
         if not q.check(uL):
-            raise ValueError(
-                f"{v} is not a valid quantity here (should be volume)."
-            )
+            raise ValueError(f"{v} is not a valid quantity here (should be volume).")
         return q
     elif isinstance(v, pint.Quantity):
         if not v.check(uL):
-            raise ValueError(
-                f"{v} is not a valid quantity here (should be volume)."
-            )
+            raise ValueError(f"{v} is not a valid quantity here (should be volume).")
         v = Q_(Decimal(v.m), v.u)
         return v.to_compact()
     elif v is None:
@@ -641,20 +631,16 @@ def _parse_vol_required(v: str | pint.Quantity) -> pint.Quantity:
     """Parses a string or quantity as a volume, requiring that it result in a
     value.
     """
-    #if isinstance(v, (float, int)):
+    # if isinstance(v, (float, int)):
     #    v = f"{v} µL"
     if isinstance(v, str):
         q = ureg(v)
         if not q.check(uL):
-            raise ValueError(
-                f"{v} is not a valid quantity here (should be volume)."
-            )
+            raise ValueError(f"{v} is not a valid quantity here (should be volume).")
         return q
     elif isinstance(v, pint.Quantity):
         if not v.check(uL):
-            raise ValueError(
-                f"{v} is not a valid quantity here (should be volume)."
-            )
+            raise ValueError(f"{v} is not a valid quantity here (should be volume).")
         v = Q_(Decimal(v.m), v.u)
         return v.to_compact()
     raise ValueError(f"{v} is not a valid quantity here (should be volume).")
@@ -690,7 +676,7 @@ def _none_as_empty_string(v: str | None) -> str:
 class Component(AbstractComponent):
     """A single named component, potentially with a concentration and location.
 
-    Location is stored as a `plate` and `well` property. `plate` is 
+    Location is stored as a `plate` and `well` property. `plate` is
 
     """
 
@@ -718,11 +704,13 @@ class Component(AbstractComponent):
             return False
         if self.name != other.name:
             return False
-        if isinstance(self.concentration, Quantity) and isinstance(other.concentration, Quantity):
+        if isinstance(self.concentration, Quantity) and isinstance(
+            other.concentration, Quantity
+        ):
             if math.isnan(self.concentration.m) and math.isnan(other.concentration.m):
                 return True
             return self.concentration == other.concentration
-        elif hasattr(self, 'concentration') and hasattr(other, 'concentration'):
+        elif hasattr(self, "concentration") and hasattr(other, "concentration"):
             return bool(self.concentration == other.concentration)
         return False
 
@@ -863,9 +851,9 @@ class Strand(Component):
         ss, ms = self.sequence, m["Sequence"]
         if (ss is None) and (ms is None):
             seq = None
-        elif (isinstance(ss, str) and ((ms is None) or (ms == ""))):
+        elif isinstance(ss, str) and ((ms is None) or (ms == "")):
             seq = ss
-        elif (isinstance(ms, str) and ((ss is None) or isinstance(ss, str))):
+        elif isinstance(ms, str) and ((ss is None) or isinstance(ss, str)):
             seq = ms
         else:
             raise RuntimeError("should be unreachable")
@@ -1313,12 +1301,14 @@ class MultiFixedVolume(AbstractAction):
     def each_volumes(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
     ) -> list[Quantity[Decimal]]:
-        #match self.equal_conc:
+        # match self.equal_conc:
         if self.equal_conc == "min_volume":
             sc = self.source_concentrations
             scmax = max(sc)
             return [self.fixed_volume * x for x in _ratio(scmax, sc)]
-        elif (self.equal_conc == "max_volume") | (isinstance(self.equal_conc, Sequence) and self.equal_conc[0] == "max_fill"):
+        elif (self.equal_conc == "max_volume") | (
+            isinstance(self.equal_conc, Sequence) and self.equal_conc[0] == "max_fill"
+        ):
             sc = self.source_concentrations
             scmin = min(sc)
             return [self.fixed_volume * x for x in _ratio(scmin, sc)]
