@@ -3064,10 +3064,12 @@ class Reference:
             and isinstance(files[1], str)
             and not Path(files[1]).exists()
         ):
-            files = [cast(RefFile, files)]
+            files_list: Sequence[RefFile] = [cast(RefFile, files)]
+        else:
+            files_list = cast(Sequence[RefFile], files)
 
         # FIXME: how to deal with repeats?
-        for filename in files:
+        for filename in files_list:
             filetype = None
             all_conc = None
             conc_dict: dict[str, pint.Quantity] = {}
