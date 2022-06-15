@@ -149,7 +149,7 @@ def _ratio(
     bottom: pint.Quantity[T] | Sequence[pint.Quantity[T]],
 ) -> T | Sequence[T]:
     if isinstance(top, Sequence) and isinstance(bottom, Sequence):
-        return [(x / y).m_as("") for x, y in zip(top, bottom, strict=True)]
+        return [(x / y).m_as("") for x, y in zip(top, bottom)]
     elif isinstance(top, Sequence):
         return [(x / bottom).m_as("") for x in top]
     elif isinstance(bottom, Sequence):
@@ -1585,7 +1585,7 @@ class MultiFixedConcentration(AbstractAction):
         ]
         if not math.isnan(self.min_volume.m):
             below_min = []
-            for comp, vol in zip(self.components, ea_vols, strict=True):
+            for comp, vol in zip(self.components, ea_vols):
                 if vol < self.min_volume:
                     below_min.append((comp.name, vol))
             if below_min:
