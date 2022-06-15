@@ -661,7 +661,7 @@ def display_hydrate_and_measure_conc_and_dilute_from_specs(
         for name, (conc, vol_to_add) in names_to_concs_and_vols_to_add.items()
     ]
     table = tabulate(table_list, headers=headers, tablefmt="pipe", floatfmt=".2f")
-    from alhambra.mixes import _format_title
+    from alhambra_mixes.mixes import _format_title
 
     raw_title = "Initial measured concentrations and subsequent dilution volumes"
     title = _format_title(raw_title, level=2, tablefmt="pipe")
@@ -698,7 +698,7 @@ def display_hydrate_from_specs(
     for name, vol in names_to_vols.items():
         table_list.append((name, round(vol, 2)))  # type: ignore
     table = tabulate(table_list, headers=headers, tablefmt="pipe", floatfmt=".2f")
-    from alhambra.mixes import _format_title
+    from alhambra_mixes.mixes import _format_title
 
     raw_title = "Initial hydration volumes"
     title = _format_title(raw_title, level=2, tablefmt="pipe")
