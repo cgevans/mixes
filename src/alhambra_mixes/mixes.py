@@ -421,7 +421,9 @@ class MixLine:
         if (not isinstance(v, list)) or any(not isinstance(x, str) for x in v):
             raise TypeError(f"MixLine.names of {v} is not a list of strings.")
 
-    def location(self, tablefmt: str | TableFormat = "pipe", split: bool = True) -> str:
+    def location(
+        self, tablefmt: str | TableFormat = "pipe", split: bool = True
+    ) -> tuple[list[str], list[int]]:
         "A formatted string (according to `tablefmt`) for the location of the component/components."
         if len(self.wells) == 0:
             return f"{self.plate}", []
@@ -1469,7 +1471,6 @@ class MultiFixedVolume(AbstractAction):
                 tot_vols,
                 plates,
                 wells_list,
-                strict=True,
             )
         ]
 
@@ -1738,7 +1739,6 @@ class MultiFixedConcentration(AbstractAction):
                 tot_vols,
                 plates,
                 wells_list,
-                strict=True,
             )
         ]
 
