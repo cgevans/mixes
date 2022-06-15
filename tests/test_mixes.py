@@ -82,14 +82,18 @@ def test_invalid_wellrefs():
     with pytest.raises(ValueError):
         WellPos("i123nvalid string")
 
+def _itertools_pairwise(iterable): # FIXME: in 3.10
+    a, b = itertools.tee(iterable)
+    next(b, None)
+    return zip(a, b)
 
 def test_all_wellref_96():
     allbyrow96 = [f"{r}{c}" for r in "ABCDEFGH" for c in range(1, 13)]
-    for x, y in itertools.pairwise(allbyrow96):
+    for x, y in _itertools_pairwise(allbyrow96):
         assert WellPos(x).next_byrow() == y
 
     allbyrow96 = [f"{r}{c}" for c in range(1, 13) for r in "ABCDEFGH"]
-    for x, y in itertools.pairwise(allbyrow96):
+    for x, y in _itertools_pairwise(allbyrow96):
         assert WellPos(x).next_bycol() == y
 
 

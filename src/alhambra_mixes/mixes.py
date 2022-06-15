@@ -330,7 +330,7 @@ def emphasize(text: str, tablefmt: str | TableFormat, strong: bool = False) -> s
     """
     # formats a title for a table produced using tabulate,
     # in the formats tabulate understands
-    if tablefmt in ["html", "unsafehtml", html_with_borders_tablefmt]:
+    if tablefmt in ["html", "unsafehtml", html_with_borders_tablefmt]: # type: ignore
         if strong:
             emph_text = f"<strong>{text}</strong>"
         else:
@@ -423,7 +423,7 @@ class MixLine:
 
     def location(
         self, tablefmt: str | TableFormat = "pipe", split: bool = True
-    ) -> tuple[list[str], list[int]]:
+    ) -> tuple[str | list[str], list[int]]:
         "A formatted string (according to `tablefmt`) for the location of the component/components."
         if len(self.wells) == 0:
             return f"{self.plate}", []
