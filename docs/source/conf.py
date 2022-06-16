@@ -18,12 +18,19 @@ sys.path.insert(0, os.path.abspath("../../src"))
 
 # -- Project information -----------------------------------------------------
 
-project = "Alhambra"
+project = "alhambra-mixes"
 copyright = "2022, Constantine Evans"
 author = "Constantine Evans"
 
+try:
+    from alhambra_mixes._version import version
+except ImportError:
+    pass
+else:
+    release = version
+
 # The full version, including alpha/beta/rc tags
-release = "v2.0.0pre"
+
 
 
 # -- General configuration ---------------------------------------------------
