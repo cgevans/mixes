@@ -15,10 +15,10 @@ information from files such as DNA synthesis order details, the library
 generates recipes for straightforward pipetting, even in mixes with many
 components at different concentrations spread across several plates.
 
-For documentation, at the moment, see [alhambra's mixes reference][mixref],
-or [our tutorial notebook][tutorial].
+For documentation, at the moment, see [our API reference][mixref],
+or [our tutorial notebook][tutorial] (WIP).
 
 
 [alhambra]: https://github.com/DNA-and-Natural-Algorithms-Group/alhambra
-[mixref]: https://alhambra.readthedocs.io/en/v2/autoapi/alhambra/mixes/index.html
+[mixref]: https://alhambra-mixes.readthedocs.io/
 [tutorial]: https://github.com/cgevans/mixes/blob/main/tutorial.ipynb
