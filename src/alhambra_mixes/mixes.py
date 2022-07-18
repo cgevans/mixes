@@ -1108,7 +1108,7 @@ class FixedVolume(AbstractAction):
 
     def with_reference(self, reference: Reference) -> FixedVolume:
         return FixedVolume(
-            [c.with_reference(reference) for c in self.components], # type: ignore
+            [c.with_reference(reference) for c in self.components],  # type: ignore
             self.fixed_volume,
             self.set_name,
             self.compact_display,
@@ -1897,10 +1897,7 @@ class Mix(AbstractComponent):
         return mixlines
 
     def has_fixed_concentration_action(self) -> bool:
-        return any(
-            isinstance(action, FixedConcentration)
-            for action in self.actions
-        )
+        return any(isinstance(action, FixedConcentration) for action in self.actions)
 
     def has_fixed_total_volume(self) -> bool:
         return not math.isnan(self.fixed_total_volume.m)
