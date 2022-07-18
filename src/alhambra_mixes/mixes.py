@@ -1017,7 +1017,7 @@ def _empty_components() -> pd.DataFrame:
 class FixedVolume(AbstractAction):
     """An action adding one or multiple components, with a set destination volume (potentially keeping equal concentration).
 
-    MultiFixedVolume adds a selection of components, with a specified transfer volume.  Depending on the setting of
+    FixedVolume adds a selection of components, with a specified transfer volume.  Depending on the setting of
     `equal_conc`, it may require that the destination concentrations all be equal, may not care, and just transfer
     a fixed volume of each strand, or may treat the fixed transfer volume as the volume as the minimum or maximum
     volume to transfer, adjusting volumes of each strand to make this work and have them at equal destination
@@ -1062,7 +1062,7 @@ class FixedVolume(AbstractAction):
     ...     Component("c3", "200 nM"),
     ... ]
 
-    >>> print(Mix([MultiFixedVolume(components, "5 uL")], name="example"))
+    >>> print(Mix([FixedVolume(components, "5 uL")], name="example"))
     Table: Mix: example, Conc: 66.67 nM, Total Vol: 15.00 µl
     <BLANKLINE>
     | Comp       | Src []    | Dest []   |   # | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
@@ -1076,7 +1076,7 @@ class FixedVolume(AbstractAction):
     ...     Component("c4", "100 nM")
     ... ]
 
-    >>> print(Mix([MultiFixedVolume(components, "5 uL", equal_conc="min_volume")], name="example"))
+    >>> print(Mix([FixedVolume(components, "5 uL", equal_conc="min_volume")], name="example"))
     Table: Mix: example, Conc: 40.00 nM, Total Vol: 25.00 µl
     <BLANKLINE>
     | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
@@ -1084,7 +1084,7 @@ class FixedVolume(AbstractAction):
     | c1, c2, c3 | 200.00 nM | 40.00 nM  | 3   | 5.00 µl     | 15.00 µl     |       |        |
     | c4         | 100.00 nM | 40.00 nM  | 1   | 10.00 µl    | 10.00 µl     |       |        |
 
-    >>> print(Mix([MultiFixedVolume(components, "5 uL", equal_conc="max_volume")], name="example"))
+    >>> print(Mix([FixedVolume(components, "5 uL", equal_conc="max_volume")], name="example"))
     Table: Mix: example, Conc: 40.00 nM, Total Vol: 12.50 µl
     <BLANKLINE>
     | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
@@ -1106,9 +1106,9 @@ class FixedVolume(AbstractAction):
         Literal["max_fill"], str
     ] = True
 
-    def with_reference(self, reference: Reference) -> MultiFixedVolume:
-        return MultiFixedVolume(
-            [c.with_reference(reference) for c in self.components],
+    def with_reference(self, reference: Reference) -> FixedVolume:
+        return FixedVolume(
+            [c.with_reference(reference) for c in self.components], # type: ignore
             self.fixed_volume,
             self.set_name,
             self.compact_display,
@@ -1332,7 +1332,7 @@ class FixedVolume(AbstractAction):
 class FixedConcentration(AbstractAction):
     """An action adding one or multiple components, with a set destination concentration per component (adjusting volumes).
 
-    MultiFixedConcentration adds a selection of components, with a specified destination concentration.
+    FixedConcentration adds a selection of components, with a specified destination concentration.
 
     Parameters
     ----------
@@ -1371,7 +1371,7 @@ class FixedConcentration(AbstractAction):
     ...     Component("c4", "100 nM")
     ... ]
 
-    >>> print(Mix([MultiFixedConcentration(components, "20 nM")], name="example", fixed_total_volume="25 uL"))
+    >>> print(Mix([FixedConcentration(components, "20 nM")], name="example", fixed_total_volume="25 uL"))
     Table: Mix: example, Conc: 40.00 nM, Total Vol: 25.00 µl
     <BLANKLINE>
     | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
@@ -1396,7 +1396,7 @@ class FixedConcentration(AbstractAction):
         on_setattr=attrs.setters.convert,
     )
 
-    def with_reference(self, reference: Reference) -> MultiFixedConcentration:
+    def with_reference(self, reference: Reference) -> FixedConcentration:
         return attrs.evolve(
             self, components=[c.with_reference(reference) for c in self.components]
         )
@@ -1898,7 +1898,7 @@ class Mix(AbstractComponent):
 
     def has_fixed_concentration_action(self) -> bool:
         return any(
-            isinstance(action, (FixedConcentration, MultiFixedConcentration))
+            isinstance(action, FixedConcentration)
             for action in self.actions
         )
 
@@ -1914,11 +1914,11 @@ class Mix(AbstractComponent):
             (m.names, m.total_tx_vol) for m in mixlines if m.total_tx_vol is not None
         ]
 
-        # special case check for FixedConcentration/MultiFixedConcentration action(s) used
+        # special case check for FixedConcentration action(s) used
         # without corresponding Mix.fixed_total_volume
         if not self.has_fixed_total_volume() and self.has_fixed_concentration_action():
             raise VolumeError(
-                "If a FixedConcentration action or MultiFixedConcentration action is used, "
+                "If a FixedConcentration action is used, "
                 "then Mix.fixed_total_volume must be specified."
             )
 
@@ -1955,7 +1955,7 @@ class Mix(AbstractComponent):
                     msg = (
                         f'Negative buffer volume of mix "{self.name}"; '
                         f"this is typically caused by requesting too large a target concentration in a "
-                        f"MultiFixedConcentration or FixedConcentration action,"
+                        f"FixedConcentration action,"
                         f"since the source concentrations are too low. "
                         f"Try lowering the target concentration."
                     )
