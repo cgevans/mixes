@@ -9,8 +9,6 @@
    :maxdepth: 2
    :caption: Contents:
 
-   mixes
-
 User's guide
 ============
 
@@ -22,8 +20,7 @@ Alhambra-mixes is a small library to make it easier to organize complicated, hie
 Alhambra-mixes organizes the mixing process into several concepts:
 
 - A *Component* is something that goes into a mix, and has a source concentration.  It may be a generic component, a strand with a sequence, or a mix.  It may also contain information about 
-- An *Action* describes how a component or set of components is to be added to a mix.  It may specify that each component be added to get a target concentration in the mix, for example, or that a fixed volume of each component be added.  For example, the `FixedConcentration` action adds a single component to a mix at a desired concentration, while
-`MultiFixedVolume` adds several components, at a fixed volume.
+- An *Action* describes how a component or set of components is to be added to a mix.  It may specify that each component be added to get a target concentration in the mix, for example, or that a fixed volume of each component be added.  For example, the `FixedConcentration` action adds a component (or several components) to a mix at a fixed desired concentration, while `FixedVolume` adds components at fixed volumes.
 - A *Mix* is a collection of Actions, each covering some Components.  It may have a fixed volume, or that may be determined by the components.  It may also have a fixed effective concentration (for use as a component), or that may be determined by a particular component.
 - A *Reference* is an object that has information about component concentrations, sequences, and locations.
 
@@ -104,15 +101,35 @@ There are two main actions.  `FixedConcentration` is useful when you'd like to a
 
   FixedConcentration
   FixedVolume
-  MultiFixedConcentration
-  MultiFixedVolume
+
+.. note::
+   Previous versions of alhambra_mixes only supported single components for `FixedVolume` and `FixedConcentration`, and included separate `MultiFixedVolume` and `MultiFixedConcentration`  classes for multiple components.  The two `Multi` class names are currently kept for compatibility reasons, as aliases of `FixedVolume` and `FixedConcentration`.
+
+   Actions implement the :any:`AbstractAction` class.
 
 Mixes
 -----
 
-.. autosummary::
+The `Mix` class represents a mix, which is defined as a set of actions, a name, and potentially some other information, like fixed total volume, a minimum desired transfer volume, or a way to define the mix's concentration.
 
+.. autosummary::
    Mix
+
+.. autosummary::
+   Mix.with_reference
+
+The easiest way to display a mix is through the ???.
+
+.. autosummary::
+   Mix.display_instructions
+   Mix.instructions
+   Mix.plate_maps
+   Mix.tubes_markdown
+
+Mixes can also provide information on the individual components they contain, calculated recursively if there are multiple levels of mixes involved:
+
+.. autosummary::
+   Mix.all_components
 
 References
 ----------
@@ -120,7 +137,6 @@ References
 While alhambra-mixes can be used while specifying all component information directly, it is often more useful to collect that information from other sources.
 
 .. autosummary::
-
    Reference
    Reference.compile
    Reference.update
@@ -130,7 +146,6 @@ While alhambra-mixes can be used while specifying all component information dire
 With this reference, components, actions, and mixes can be updated with the information in them:
 
 .. autosummary::
-
    Mix.with_reference
    AbstractAction.with_reference
    Component.with_reference

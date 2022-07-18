@@ -42,6 +42,9 @@ import pandas as pd
 import pint
 from tabulate import tabulate, TableFormat, Line
 
+if TYPE_CHECKING:
+    from pandas.core.indexing import _LocIndexer
+
 import attrs
 
 import warnings
@@ -81,7 +84,7 @@ __all__ = (
     "_format_title",
     "ureg",
     "DNAN",
-#    "D",
+    #    "D",
     "VolumeError",
 )
 
@@ -94,12 +97,15 @@ uL = ureg.uL
 uM = ureg.uM
 nM = ureg.nM
 
-Q_ = ureg.Quantity
-"Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`"
+
+def Q_(qty: int | str | Decimal | float, unit: str | pint.Unit) -> pint.Quantity:
+    "Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`.  Ensures that the quantity is a Decimal."
+    return ureg.Quantity(Decimal(qty), unit)
+
 
 DNAN = Decimal("nan")
-ZERO_VOL = Q_(Decimal("0.0"), "µL")
-NAN_VOL = Q_(DNAN, "µL")
+ZERO_VOL = Q_("0.0", "µL")
+NAN_VOL = Q_("nan", "µL")
 
 ROW_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWX"
 
@@ -121,6 +127,12 @@ class VolumeError(ValueError):
 
 
 T = TypeVar("T")
+
+
+def _maybesequence(object_or_sequence: Sequence[T] | T) -> list[T]:
+    if isinstance(object_or_sequence, Sequence):
+        return list(object_or_sequence)
+    return [object_or_sequence]
 
 
 @overload
@@ -586,7 +598,7 @@ def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
     elif isinstance(v, pint.Quantity):
         if not v.check(nM):
             raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
-        v = Q_(Decimal(v.m), v.u)
+        v = Q_(v.m, v.u)
         return v.to_compact()
     elif v is None:
         return Q_(DNAN, nM)
@@ -604,7 +616,7 @@ def _parse_conc_required(v: str | pint.Quantity) -> pint.Quantity:
     elif isinstance(v, pint.Quantity):
         if not v.check(nM):
             raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
-        v = Q_(Decimal(v.m), v.u)
+        v = Q_(v.m, v.u)
         return v.to_compact()
     raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
 
@@ -623,7 +635,7 @@ def _parse_vol_optional(v: str | pint.Quantity) -> pint.Quantity:
     elif isinstance(v, pint.Quantity):
         if not v.check(uL):
             raise ValueError(f"{v} is not a valid quantity here (should be volume).")
-        v = Q_(Decimal(v.m), v.u)
+        v = Q_(v.m, v.u)
         return v.to_compact()
     elif v is None:
         return Q_(DNAN, uL)
@@ -644,7 +656,7 @@ def _parse_vol_required(v: str | pint.Quantity) -> pint.Quantity:
     elif isinstance(v, pint.Quantity):
         if not v.check(uL):
             raise ValueError(f"{v} is not a valid quantity here (should be volume).")
-        v = Q_(Decimal(v.m), v.u)
+        v = Q_(v.m, v.u)
         return v.to_compact()
     raise ValueError(f"{v} is not a valid quantity here (should be volume).")
 
@@ -983,162 +995,6 @@ def findloc_tuples(
     return (loc["Name"], loc["Plate"], well)
 
 
-@attrs.define()
-class FixedConcentration(AbstractAction):
-    """A mix action adding one component, at a fixed destination concentration.
-
-    Parameters
-    ----------
-
-    component
-        The component to add.
-
-    fixed_concentration
-        The concentration of the component that should be added to the mix, as a string (eg, "50.0 nM")
-        or a pint Quantity).  Note that this increases the concentration of the component by this amount;
-        if the component is also added to the mix by another action, the final, total concentration of the
-        component in the mix may be higher.
-    """
-
-    component: AbstractComponent
-    fixed_concentration: Quantity[Decimal] = attrs.field(
-        converter=_parse_conc_required, on_setattr=attrs.setters.convert
-    )
-
-    def dest_concentration(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
-    ) -> Quantity[Decimal]:
-        return self.fixed_concentration
-
-    def dest_concentrations(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
-    ) -> Sequence[Quantity[Decimal]]:
-        return [self.dest_concentration(mix_vol)]
-
-    def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
-        retval: Quantity[Decimal] = mix_vol * _ratio(
-            self.fixed_concentration, self.component.concentration
-        )
-        retval.check("L")
-        return retval
-
-    def all_components(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> pd.DataFrame:
-        comps = self.component.all_components()
-        comps.concentration_nM *= _ratio(
-            self.fixed_concentration, self.component.concentration
-        )
-
-        return comps
-
-    def _mixlines(
-        self,
-        tablefmt: str | TableFormat,
-        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
-    ) -> list[MixLine]:
-        return [
-            MixLine(
-                names=[self.component.printed_name(tablefmt=tablefmt)],
-                source_conc=self.component.concentration,
-                dest_conc=self.dest_concentration(mix_vol),
-                each_tx_vol=self.tx_volume(mix_vol),
-                total_tx_vol=self.tx_volume(mix_vol),
-                plate=self.component.plate,
-                wells=self.component._well_list,
-            )
-        ]
-
-    def with_reference(self, reference: Reference) -> FixedConcentration:
-        return FixedConcentration(
-            self.component.with_reference(reference), self.fixed_concentration
-        )
-
-    @property
-    def name(self) -> str:
-        return self.component.name
-
-    def each_volumes(self, total_volume: Quantity[Decimal]) -> list[Quantity[Decimal]]:
-        return [self.tx_volume(total_volume)]
-
-    @property
-    def components(self) -> list[AbstractComponent]:
-        return [self.component]
-
-
-@attrs.define()
-class FixedVolume(AbstractAction):
-    """A mix action adding one component, at a fixed destination volume.
-
-    Parameters
-    ----------
-
-    component
-        The component to add.
-
-    fixed_volume
-        The volume of the component to add, as a string (eg, "5 µL") or a pint Quantity)
-    """
-
-    component: AbstractComponent
-    fixed_volume: Quantity[Decimal] = attrs.field(
-        converter=_parse_vol_required, on_setattr=attrs.setters.convert
-    )
-
-    def dest_concentration(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
-    ) -> Quantity[Decimal]:
-        return self.component.concentration * _ratio(self.fixed_volume, mix_vol)
-
-    def dest_concentrations(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
-    ) -> Sequence[Quantity[Decimal]]:
-        return [self.dest_concentration(mix_vol)]
-
-    def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
-        return self.fixed_volume
-
-    def all_components(self, mix_vol: Quantity[Decimal]) -> pd.DataFrame:
-        comps = self.component.all_components()
-        comps.concentration_nM *= _ratio(
-            self.dest_concentration(mix_vol), self.component.concentration
-        )
-
-        return comps
-
-    def _mixlines(
-        self,
-        tablefmt: str | TableFormat,
-        mix_vol: Quantity[Decimal],
-        locations: pd.DataFrame | None = None,
-    ) -> Sequence[MixLine]:
-        well = self.component.location[1]
-
-        return [
-            MixLine(
-                names=[self.component.printed_name(tablefmt=tablefmt)],
-                source_conc=self.component.concentration,
-                dest_conc=self.dest_concentration(mix_vol),
-                total_tx_vol=self.tx_volume(mix_vol),
-                each_tx_vol=self.tx_volume(mix_vol),
-                plate=self.component.location[0],
-                wells=([well] if well else []),
-            )
-        ]
-
-    def with_reference(self, reference: Reference) -> FixedVolume:
-        return FixedVolume(self.component.with_reference(reference), self.fixed_volume)
-
-    @property
-    def name(self) -> str:
-        return self.component.name
-
-    def each_volumes(self, total_volume: Quantity[Decimal]) -> list[Quantity[Decimal]]:
-        return [self.tx_volume(total_volume)]
-
-    @property
-    def components(self) -> list[AbstractComponent]:
-        return [self.component]
-
-
 def mixgaps(wl: Iterable[WellPos], by: Literal["row", "col"]) -> int:
     score = 0
 
@@ -1164,10 +1020,10 @@ def _empty_components() -> pd.DataFrame:
 
 
 @attrs.define()
-class MultiFixedVolume(AbstractAction):
-    """An action adding multiple components, with a set destination volume (potentially keeping equal concentration).
+class FixedVolume(AbstractAction):
+    """An action adding one or multiple components, with a set destination volume (potentially keeping equal concentration).
 
-    MultiFixedVolume adds a selection of components, with a specified transfer volume.  Depending on the setting of
+    FixedVolume adds a selection of components, with a specified transfer volume.  Depending on the setting of
     `equal_conc`, it may require that the destination concentrations all be equal, may not care, and just transfer
     a fixed volume of each strand, or may treat the fixed transfer volume as the volume as the minimum or maximum
     volume to transfer, adjusting volumes of each strand to make this work and have them at equal destination
@@ -1212,7 +1068,7 @@ class MultiFixedVolume(AbstractAction):
     ...     Component("c3", "200 nM"),
     ... ]
 
-    >>> print(Mix([MultiFixedVolume(components, "5 uL")], name="example"))
+    >>> print(Mix([FixedVolume(components, "5 uL")], name="example"))
     Table: Mix: example, Conc: 66.67 nM, Total Vol: 15.00 µl
     <BLANKLINE>
     | Comp       | Src []    | Dest []   |   # | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
@@ -1226,7 +1082,7 @@ class MultiFixedVolume(AbstractAction):
     ...     Component("c4", "100 nM")
     ... ]
 
-    >>> print(Mix([MultiFixedVolume(components, "5 uL", equal_conc="min_volume")], name="example"))
+    >>> print(Mix([FixedVolume(components, "5 uL", equal_conc="min_volume")], name="example"))
     Table: Mix: example, Conc: 40.00 nM, Total Vol: 25.00 µl
     <BLANKLINE>
     | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
@@ -1234,7 +1090,7 @@ class MultiFixedVolume(AbstractAction):
     | c1, c2, c3 | 200.00 nM | 40.00 nM  | 3   | 5.00 µl     | 15.00 µl     |       |        |
     | c4         | 100.00 nM | 40.00 nM  | 1   | 10.00 µl    | 10.00 µl     |       |        |
 
-    >>> print(Mix([MultiFixedVolume(components, "5 uL", equal_conc="max_volume")], name="example"))
+    >>> print(Mix([FixedVolume(components, "5 uL", equal_conc="max_volume")], name="example"))
     Table: Mix: example, Conc: 40.00 nM, Total Vol: 12.50 µl
     <BLANKLINE>
     | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
@@ -1244,7 +1100,9 @@ class MultiFixedVolume(AbstractAction):
 
     """
 
-    components: list[AbstractComponent]
+    components: list[AbstractComponent] = attrs.field(
+        converter=_maybesequence, on_setattr=attrs.setters.convert
+    )
     fixed_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_required, on_setattr=attrs.setters.convert
     )
@@ -1254,9 +1112,9 @@ class MultiFixedVolume(AbstractAction):
         Literal["max_fill"], str
     ] = True
 
-    def with_reference(self, reference: Reference) -> MultiFixedVolume:
-        return MultiFixedVolume(
-            [c.with_reference(reference) for c in self.components],
+    def with_reference(self, reference: Reference) -> FixedVolume:
+        return FixedVolume(
+            [c.with_reference(reference) for c in self.components],  # type: ignore
             self.fixed_volume,
             self.set_name,
             self.compact_display,
@@ -1477,10 +1335,10 @@ class MultiFixedVolume(AbstractAction):
 
 
 @attrs.define()
-class MultiFixedConcentration(AbstractAction):
-    """An action adding multiple components, with a set destination concentration per component (adjusting volumes).
+class FixedConcentration(AbstractAction):
+    """An action adding one or multiple components, with a set destination concentration per component (adjusting volumes).
 
-    MultiFixedConcentration adds a selection of components, with a specified destination concentration.
+    FixedConcentration adds a selection of components, with a specified destination concentration.
 
     Parameters
     ----------
@@ -1519,7 +1377,7 @@ class MultiFixedConcentration(AbstractAction):
     ...     Component("c4", "100 nM")
     ... ]
 
-    >>> print(Mix([MultiFixedConcentration(components, "20 nM")], name="example", fixed_total_volume="25 uL"))
+    >>> print(Mix([FixedConcentration(components, "20 nM")], name="example", fixed_total_volume="25 uL"))
     Table: Mix: example, Conc: 40.00 nM, Total Vol: 25.00 µl
     <BLANKLINE>
     | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
@@ -1530,7 +1388,9 @@ class MultiFixedConcentration(AbstractAction):
     | *Total:*   |           | 40.00 nM  |     |             | 25.00 µl     |       |        |
     """
 
-    components: list[AbstractComponent]
+    components: list[AbstractComponent] = attrs.field(
+        converter=_maybesequence, on_setattr=attrs.setters.convert
+    )
     fixed_concentration: Quantity[Decimal] = attrs.field(
         converter=_parse_conc_required, on_setattr=attrs.setters.convert
     )
@@ -1542,7 +1402,7 @@ class MultiFixedConcentration(AbstractAction):
         on_setattr=attrs.setters.convert,
     )
 
-    def with_reference(self, reference: Reference) -> MultiFixedConcentration:
+    def with_reference(self, reference: Reference) -> FixedConcentration:
         return attrs.evolve(
             self, components=[c.with_reference(reference) for c in self.components]
         )
@@ -1744,56 +1604,8 @@ class MultiFixedConcentration(AbstractAction):
         ]
 
 
-# @attrs.define()
-# class FixedRatio(AbstractAction):
-#     """A mix action adding a component at some fixed concentration ratio, regardless of concentration.
-#     Useful, for, eg, concentrated buffers."""
-
-#     component: AbstractComponent
-#     source_value: float
-#     dest_value: float
-
-#     @property
-#     def name(self) -> str:
-#         return self.component.name
-
-#     @property
-#     def components(self) -> list[AbstractComponent]:
-#         return [self.component]
-
-#     def each_volumes(self, total_volume: Quantity[Decimal]) -> list[Quantity[Decimal]]:
-#         return [self.tx_volume(total_volume)]
-
-#     def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
-#         return mix_vol * self.dest_value / self.source_value
-
-#     def all_components(self, mix_vol: Quantity[Decimal]) -> pd.DataFrame:
-#         v = self.component.all_components()
-#         v.loc[:, "concentration_nM"] *= self.dest_value / self.source_value
-#         return v
-
-#     def _mixlines(
-#         self,
-#         tablefmt: str | TableFormat,
-#         mix_vol: Quantity[Decimal],
-#         locations: pd.DataFrame | None = None,
-#     ) -> list[MixLine]:
-#         return [
-#             MixLine(
-#                 [self.name],
-#                 str(self.source_value) + "x",
-#                 str(self.dest_value) + "x",
-#                 self.tx_volume(mix_vol),
-#                 plate=self.component.plate,
-#                 wells=self.component._well_list,
-#             )
-#         ]
-
-#     def with_reference(self, reference: Reference) -> FixedRatio:
-#         return FixedRatio(
-#             self.component.with_reference(reference), self.source_value, self.dest_value
-#         )
-
+MultiFixedConcentration = FixedConcentration
+MultiFixedVolume = FixedVolume
 
 _96WELL_PLATE_ROWS: list[str] = ["A", "B", "C", "D", "E", "F", "G", "H"]
 _96WELL_PLATE_COLS: list[int] = list(range(1, 13))
@@ -1874,7 +1686,9 @@ class Mix(AbstractComponent):
     some volume or concentration.
     """
 
-    actions: Sequence[AbstractAction]
+    actions: Sequence[AbstractAction] = attrs.field(
+        converter=_maybesequence, on_setattr=attrs.setters.convert
+    )
     name: str
     test_tube_name: str | None = attrs.field(kw_only=True, default=None)
     "A short name, eg, for labelling a test tube."
@@ -2038,10 +1852,7 @@ class Mix(AbstractComponent):
         return mixlines
 
     def has_fixed_concentration_action(self) -> bool:
-        return any(
-            isinstance(action, (FixedConcentration, MultiFixedConcentration))
-            for action in self.actions
-        )
+        return any(isinstance(action, FixedConcentration) for action in self.actions)
 
     def has_fixed_total_volume(self) -> bool:
         return not math.isnan(self.fixed_total_volume.m)
@@ -2055,11 +1866,11 @@ class Mix(AbstractComponent):
             (m.names, m.total_tx_vol) for m in mixlines if m.total_tx_vol is not None
         ]
 
-        # special case check for FixedConcentration/MultiFixedConcentration action(s) used
+        # special case check for FixedConcentration action(s) used
         # without corresponding Mix.fixed_total_volume
         if not self.has_fixed_total_volume() and self.has_fixed_concentration_action():
             raise VolumeError(
-                "If a FixedConcentration action or MultiFixedConcentration action is used, "
+                "If a FixedConcentration action is used, "
                 "then Mix.fixed_total_volume must be specified."
             )
 
@@ -2096,7 +1907,7 @@ class Mix(AbstractComponent):
                     msg = (
                         f'Negative buffer volume of mix "{self.name}"; '
                         f"this is typically caused by requesting too large a target concentration in a "
-                        f"MultiFixedConcentration or FixedConcentration action,"
+                        f"FixedConcentration action,"
                         f"since the source concentrations are too low. "
                         f"Try lowering the target concentration."
                     )
@@ -2930,10 +2741,6 @@ def _new_ref_df() -> pd.DataFrame:
     return df
 
 
-if TYPE_CHECKING:
-    from pandas.core.indexing import _LocIndexer
-
-
 @attrs.define()
 class Reference:
     df: pd.DataFrame = attrs.field(factory=_new_ref_df)
@@ -3152,7 +2959,9 @@ class Reference:
                         .drop(columns=["level_1"])
                     )
                     all_seqs.rename(
-                        {"Well Position": "Well", "Well position": "Well"}, axis="columns", inplace=True
+                        {"Well Position": "Well", "Well position": "Well"},
+                        axis="columns",
+                        inplace=True,
                     )
 
                     self.df = pd.concat((self.df, all_seqs), ignore_index=True)

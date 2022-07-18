@@ -15,8 +15,7 @@ information from files such as DNA synthesis order details, the library
 generates recipes for straightforward pipetting, even in mixes with many
 components at different concentrations spread across several plates.
 
-For documentation, at the moment, see [our API reference][mixref],
-or [our tutorial notebook][tutorial] (WIP).
+Our [our documentation][mixref] is in the process of being written; we also have [a tutorial notebook][tutorial] (WIP).
 
 
 [alhambra]: https://github.com/DNA-and-Natural-Algorithms-Group/alhambra
