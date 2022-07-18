@@ -97,9 +97,11 @@ uL = ureg.uL
 uM = ureg.uM
 nM = ureg.nM
 
+
 def Q_(qty: int | str | Decimal | float, unit: str | pint.Unit) -> pint.Quantity:
     "Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`.  Ensures that the quantity is a Decimal."
     return ureg.Quantity(Decimal(qty), unit)
+
 
 DNAN = Decimal("nan")
 ZERO_VOL = Q_("0.0", "µL")
@@ -125,6 +127,7 @@ class VolumeError(ValueError):
 
 
 T = TypeVar("T")
+
 
 def _maybesequence(object_or_sequence: Sequence[T] | T) -> list[T]:
     if isinstance(object_or_sequence, Sequence):
@@ -2736,6 +2739,7 @@ def _new_ref_df() -> pd.DataFrame:
     df = pd.DataFrame(columns=_REF_COLUMNS)
     df["Concentration (nM)"] = df["Concentration (nM)"].astype("float")
     return df
+
 
 @attrs.define()
 class Reference:
