@@ -81,7 +81,7 @@ __all__ = (
     "_format_title",
     "ureg",
     "DNAN",
-#    "D",
+    #    "D",
     "VolumeError",
 )
 
@@ -122,10 +122,12 @@ class VolumeError(ValueError):
 
 T = TypeVar("T")
 
+
 def _maybesequence(object_or_sequence: Sequence[T] | T) -> list[T]:
     if isinstance(object_or_sequence, Sequence):
         return list(object_or_sequence)
     return [object_or_sequence]
+
 
 @overload
 def _ratio(
@@ -986,6 +988,7 @@ def findloc_tuples(
 
     return (loc["Name"], loc["Plate"], well)
 
+
 def mixgaps(wl: Iterable[WellPos], by: Literal["row", "col"]) -> int:
     score = 0
 
@@ -1091,7 +1094,9 @@ class FixedVolume(AbstractAction):
 
     """
 
-    components: list[AbstractComponent] = attrs.field(converter=_maybesequence, on_setattr=attrs.setters.convert)
+    components: list[AbstractComponent] = attrs.field(
+        converter=_maybesequence, on_setattr=attrs.setters.convert
+    )
     fixed_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_required, on_setattr=attrs.setters.convert
     )
@@ -1377,7 +1382,9 @@ class FixedConcentration(AbstractAction):
     | *Total:*   |           | 40.00 nM  |     |             | 25.00 µl     |       |        |
     """
 
-    components: list[AbstractComponent] = attrs.field(converter=_maybesequence, on_setattr=attrs.setters.convert)
+    components: list[AbstractComponent] = attrs.field(
+        converter=_maybesequence, on_setattr=attrs.setters.convert
+    )
     fixed_concentration: Quantity[Decimal] = attrs.field(
         converter=_parse_conc_required, on_setattr=attrs.setters.convert
     )
@@ -1590,6 +1597,7 @@ class FixedConcentration(AbstractAction):
             )
         ]
 
+
 MultiFixedConcentration = FixedConcentration
 MultiFixedVolume = FixedVolume
 
@@ -1723,7 +1731,9 @@ class Mix(AbstractComponent):
     some volume or concentration.
     """
 
-    actions: Sequence[AbstractAction] = attrs.field(converter=_maybesequence, on_setattr=attrs.setters.convert)
+    actions: Sequence[AbstractAction] = attrs.field(
+        converter=_maybesequence, on_setattr=attrs.setters.convert
+    )
     name: str
     test_tube_name: str | None = attrs.field(kw_only=True, default=None)
     "A short name, eg, for labelling a test tube."
@@ -3001,7 +3011,9 @@ class Reference:
                         .drop(columns=["level_1"])
                     )
                     all_seqs.rename(
-                        {"Well Position": "Well", "Well position": "Well"}, axis="columns", inplace=True
+                        {"Well Position": "Well", "Well position": "Well"},
+                        axis="columns",
+                        inplace=True,
                     )
 
                     self.df = pd.concat((self.df, all_seqs), ignore_index=True)
