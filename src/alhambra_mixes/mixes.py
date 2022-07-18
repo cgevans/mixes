@@ -122,6 +122,10 @@ class VolumeError(ValueError):
 
 T = TypeVar("T")
 
+def _maybesequence(object_or_sequence: Sequence[T] | T) -> list[T]:
+    if isinstance(object_or_sequence, Sequence):
+        return list(object_or_sequence)
+    return [object_or_sequence]
 
 @overload
 def _ratio(
@@ -982,163 +986,6 @@ def findloc_tuples(
 
     return (loc["Name"], loc["Plate"], well)
 
-
-@attrs.define()
-class FixedConcentration(AbstractAction):
-    """A mix action adding one component, at a fixed destination concentration.
-
-    Parameters
-    ----------
-
-    component
-        The component to add.
-
-    fixed_concentration
-        The concentration of the component that should be added to the mix, as a string (eg, "50.0 nM")
-        or a pint Quantity).  Note that this increases the concentration of the component by this amount;
-        if the component is also added to the mix by another action, the final, total concentration of the
-        component in the mix may be higher.
-    """
-
-    component: AbstractComponent
-    fixed_concentration: Quantity[Decimal] = attrs.field(
-        converter=_parse_conc_required, on_setattr=attrs.setters.convert
-    )
-
-    def dest_concentration(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
-    ) -> Quantity[Decimal]:
-        return self.fixed_concentration
-
-    def dest_concentrations(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
-    ) -> Sequence[Quantity[Decimal]]:
-        return [self.dest_concentration(mix_vol)]
-
-    def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
-        retval: Quantity[Decimal] = mix_vol * _ratio(
-            self.fixed_concentration, self.component.concentration
-        )
-        retval.check("L")
-        return retval
-
-    def all_components(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> pd.DataFrame:
-        comps = self.component.all_components()
-        comps.concentration_nM *= _ratio(
-            self.fixed_concentration, self.component.concentration
-        )
-
-        return comps
-
-    def _mixlines(
-        self,
-        tablefmt: str | TableFormat,
-        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
-    ) -> list[MixLine]:
-        return [
-            MixLine(
-                names=[self.component.printed_name(tablefmt=tablefmt)],
-                source_conc=self.component.concentration,
-                dest_conc=self.dest_concentration(mix_vol),
-                each_tx_vol=self.tx_volume(mix_vol),
-                total_tx_vol=self.tx_volume(mix_vol),
-                plate=self.component.plate,
-                wells=self.component._well_list,
-            )
-        ]
-
-    def with_reference(self, reference: Reference) -> FixedConcentration:
-        return FixedConcentration(
-            self.component.with_reference(reference), self.fixed_concentration
-        )
-
-    @property
-    def name(self) -> str:
-        return self.component.name
-
-    def each_volumes(self, total_volume: Quantity[Decimal]) -> list[Quantity[Decimal]]:
-        return [self.tx_volume(total_volume)]
-
-    @property
-    def components(self) -> list[AbstractComponent]:
-        return [self.component]
-
-
-@attrs.define()
-class FixedVolume(AbstractAction):
-    """A mix action adding one component, at a fixed destination volume.
-
-    Parameters
-    ----------
-
-    component
-        The component to add.
-
-    fixed_volume
-        The volume of the component to add, as a string (eg, "5 µL") or a pint Quantity)
-    """
-
-    component: AbstractComponent
-    fixed_volume: Quantity[Decimal] = attrs.field(
-        converter=_parse_vol_required, on_setattr=attrs.setters.convert
-    )
-
-    def dest_concentration(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
-    ) -> Quantity[Decimal]:
-        return self.component.concentration * _ratio(self.fixed_volume, mix_vol)
-
-    def dest_concentrations(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
-    ) -> Sequence[Quantity[Decimal]]:
-        return [self.dest_concentration(mix_vol)]
-
-    def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
-        return self.fixed_volume
-
-    def all_components(self, mix_vol: Quantity[Decimal]) -> pd.DataFrame:
-        comps = self.component.all_components()
-        comps.concentration_nM *= _ratio(
-            self.dest_concentration(mix_vol), self.component.concentration
-        )
-
-        return comps
-
-    def _mixlines(
-        self,
-        tablefmt: str | TableFormat,
-        mix_vol: Quantity[Decimal],
-        locations: pd.DataFrame | None = None,
-    ) -> Sequence[MixLine]:
-        well = self.component.location[1]
-
-        return [
-            MixLine(
-                names=[self.component.printed_name(tablefmt=tablefmt)],
-                source_conc=self.component.concentration,
-                dest_conc=self.dest_concentration(mix_vol),
-                total_tx_vol=self.tx_volume(mix_vol),
-                each_tx_vol=self.tx_volume(mix_vol),
-                plate=self.component.location[0],
-                wells=([well] if well else []),
-            )
-        ]
-
-    def with_reference(self, reference: Reference) -> FixedVolume:
-        return FixedVolume(self.component.with_reference(reference), self.fixed_volume)
-
-    @property
-    def name(self) -> str:
-        return self.component.name
-
-    def each_volumes(self, total_volume: Quantity[Decimal]) -> list[Quantity[Decimal]]:
-        return [self.tx_volume(total_volume)]
-
-    @property
-    def components(self) -> list[AbstractComponent]:
-        return [self.component]
-
-
 def mixgaps(wl: Iterable[WellPos], by: Literal["row", "col"]) -> int:
     score = 0
 
@@ -1164,8 +1011,8 @@ def _empty_components() -> pd.DataFrame:
 
 
 @attrs.define()
-class MultiFixedVolume(AbstractAction):
-    """An action adding multiple components, with a set destination volume (potentially keeping equal concentration).
+class FixedVolume(AbstractAction):
+    """An action adding one or multiple components, with a set destination volume (potentially keeping equal concentration).
 
     MultiFixedVolume adds a selection of components, with a specified transfer volume.  Depending on the setting of
     `equal_conc`, it may require that the destination concentrations all be equal, may not care, and just transfer
@@ -1244,7 +1091,7 @@ class MultiFixedVolume(AbstractAction):
 
     """
 
-    components: list[AbstractComponent]
+    components: list[AbstractComponent] = attrs.field(converter=_maybesequence, on_setattr=attrs.setters.convert)
     fixed_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_required, on_setattr=attrs.setters.convert
     )
@@ -1477,8 +1324,8 @@ class MultiFixedVolume(AbstractAction):
 
 
 @attrs.define()
-class MultiFixedConcentration(AbstractAction):
-    """An action adding multiple components, with a set destination concentration per component (adjusting volumes).
+class FixedConcentration(AbstractAction):
+    """An action adding one or multiple components, with a set destination concentration per component (adjusting volumes).
 
     MultiFixedConcentration adds a selection of components, with a specified destination concentration.
 
@@ -1530,7 +1377,7 @@ class MultiFixedConcentration(AbstractAction):
     | *Total:*   |           | 40.00 nM  |     |             | 25.00 µl     |       |        |
     """
 
-    components: list[AbstractComponent]
+    components: list[AbstractComponent] = attrs.field(converter=_maybesequence, on_setattr=attrs.setters.convert)
     fixed_concentration: Quantity[Decimal] = attrs.field(
         converter=_parse_conc_required, on_setattr=attrs.setters.convert
     )
@@ -1743,6 +1590,8 @@ class MultiFixedConcentration(AbstractAction):
             )
         ]
 
+MultiFixedConcentration = FixedConcentration
+MultiFixedVolume = FixedVolume
 
 # @attrs.define()
 # class FixedRatio(AbstractAction):
@@ -1874,7 +1723,7 @@ class Mix(AbstractComponent):
     some volume or concentration.
     """
 
-    actions: Sequence[AbstractAction]
+    actions: Sequence[AbstractAction] = attrs.field(converter=_maybesequence, on_setattr=attrs.setters.convert)
     name: str
     test_tube_name: str | None = attrs.field(kw_only=True, default=None)
     "A short name, eg, for labelling a test tube."
