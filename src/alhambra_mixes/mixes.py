@@ -42,6 +42,9 @@ import pandas as pd
 import pint
 from tabulate import tabulate, TableFormat, Line
 
+if TYPE_CHECKING:
+    from pandas.core.indexing import _LocIndexer
+
 import attrs
 
 import warnings
@@ -94,12 +97,13 @@ uL = ureg.uL
 uM = ureg.uM
 nM = ureg.nM
 
-Q_ = ureg.Quantity
-"Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`"
+def Q_(qty: int | str | Decimal | float, unit: str | pint.Unit) -> pint.Quantity:
+    "Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`.  Ensures that the quantity is a Decimal."
+    return ureg.Quantity(Decimal(qty), unit)
 
 DNAN = Decimal("nan")
-ZERO_VOL = Q_(Decimal("0.0"), "µL")
-NAN_VOL = Q_(DNAN, "µL")
+ZERO_VOL = Q_("0.0", "µL")
+NAN_VOL = Q_("nan", "µL")
 
 ROW_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWX"
 
@@ -121,7 +125,6 @@ class VolumeError(ValueError):
 
 
 T = TypeVar("T")
-
 
 def _maybesequence(object_or_sequence: Sequence[T] | T) -> list[T]:
     if isinstance(object_or_sequence, Sequence):
@@ -592,7 +595,7 @@ def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
     elif isinstance(v, pint.Quantity):
         if not v.check(nM):
             raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
-        v = Q_(Decimal(v.m), v.u)
+        v = Q_(v.m, v.u)
         return v.to_compact()
     elif v is None:
         return Q_(DNAN, nM)
@@ -610,7 +613,7 @@ def _parse_conc_required(v: str | pint.Quantity) -> pint.Quantity:
     elif isinstance(v, pint.Quantity):
         if not v.check(nM):
             raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
-        v = Q_(Decimal(v.m), v.u)
+        v = Q_(v.m, v.u)
         return v.to_compact()
     raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
 
@@ -629,7 +632,7 @@ def _parse_vol_optional(v: str | pint.Quantity) -> pint.Quantity:
     elif isinstance(v, pint.Quantity):
         if not v.check(uL):
             raise ValueError(f"{v} is not a valid quantity here (should be volume).")
-        v = Q_(Decimal(v.m), v.u)
+        v = Q_(v.m, v.u)
         return v.to_compact()
     elif v is None:
         return Q_(DNAN, uL)
@@ -650,7 +653,7 @@ def _parse_vol_required(v: str | pint.Quantity) -> pint.Quantity:
     elif isinstance(v, pint.Quantity):
         if not v.check(uL):
             raise ValueError(f"{v} is not a valid quantity here (should be volume).")
-        v = Q_(Decimal(v.m), v.u)
+        v = Q_(v.m, v.u)
         return v.to_compact()
     raise ValueError(f"{v} is not a valid quantity here (should be volume).")
 
@@ -1600,57 +1603,6 @@ class FixedConcentration(AbstractAction):
 
 MultiFixedConcentration = FixedConcentration
 MultiFixedVolume = FixedVolume
-
-# @attrs.define()
-# class FixedRatio(AbstractAction):
-#     """A mix action adding a component at some fixed concentration ratio, regardless of concentration.
-#     Useful, for, eg, concentrated buffers."""
-
-#     component: AbstractComponent
-#     source_value: float
-#     dest_value: float
-
-#     @property
-#     def name(self) -> str:
-#         return self.component.name
-
-#     @property
-#     def components(self) -> list[AbstractComponent]:
-#         return [self.component]
-
-#     def each_volumes(self, total_volume: Quantity[Decimal]) -> list[Quantity[Decimal]]:
-#         return [self.tx_volume(total_volume)]
-
-#     def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
-#         return mix_vol * self.dest_value / self.source_value
-
-#     def all_components(self, mix_vol: Quantity[Decimal]) -> pd.DataFrame:
-#         v = self.component.all_components()
-#         v.loc[:, "concentration_nM"] *= self.dest_value / self.source_value
-#         return v
-
-#     def _mixlines(
-#         self,
-#         tablefmt: str | TableFormat,
-#         mix_vol: Quantity[Decimal],
-#         locations: pd.DataFrame | None = None,
-#     ) -> list[MixLine]:
-#         return [
-#             MixLine(
-#                 [self.name],
-#                 str(self.source_value) + "x",
-#                 str(self.dest_value) + "x",
-#                 self.tx_volume(mix_vol),
-#                 plate=self.component.plate,
-#                 wells=self.component._well_list,
-#             )
-#         ]
-
-#     def with_reference(self, reference: Reference) -> FixedRatio:
-#         return FixedRatio(
-#             self.component.with_reference(reference), self.source_value, self.dest_value
-#         )
-
 
 _96WELL_PLATE_ROWS: list[str] = ["A", "B", "C", "D", "E", "F", "G", "H"]
 _96WELL_PLATE_COLS: list[int] = list(range(1, 13))
@@ -2784,11 +2736,6 @@ def _new_ref_df() -> pd.DataFrame:
     df = pd.DataFrame(columns=_REF_COLUMNS)
     df["Concentration (nM)"] = df["Concentration (nM)"].astype("float")
     return df
-
-
-if TYPE_CHECKING:
-    from pandas.core.indexing import _LocIndexer
-
 
 @attrs.define()
 class Reference:
