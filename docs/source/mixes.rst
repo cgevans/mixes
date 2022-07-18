@@ -12,7 +12,7 @@ Introductory notes
 Component classes
 -----------------
 
-.. currentmodule:: alhambra.mixes
+.. currentmodule:: alhambra_mixes
 
 .. autosummary::cd
 

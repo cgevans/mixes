@@ -81,6 +81,7 @@ __all__ = (
     "_format_title",
     "ureg",
     "DNAN",
+#    "D",
     "VolumeError",
 )
 
@@ -3106,11 +3107,12 @@ class Reference:
                     sheet.loc[:, "Sequence"] = [
                         x.replace(" ", "") for x in sheet.loc[:, "Sequence"]
                     ]
+                    sheet.rename(lambda x: x.lower(), inplace=True, axis="columns")
                     sheet.rename(
                         {
-                            "Plate Name": "Plate",
-                            "Well Position": "Well",
-                            "Sequence Name": "Name",
+                            "plate name": "Plate",
+                            "well position": "Well",
+                            "sequence name": "Name",
                         },
                         axis="columns",
                         inplace=True,
@@ -3150,7 +3152,7 @@ class Reference:
                         .drop(columns=["level_1"])
                     )
                     all_seqs.rename(
-                        {"Well Position": "Well"}, axis="columns", inplace=True
+                        {"Well Position": "Well", "Well position": "Well"}, axis="columns", inplace=True
                     )
 
                     self.df = pd.concat((self.df, all_seqs), ignore_index=True)

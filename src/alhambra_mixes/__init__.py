@@ -23,7 +23,7 @@ __all__ = (
     "ureg",
     "DNAN",
     "VolumeError",
-    "D",
+#    "D",
     "measure_conc_and_dilute",
     "hydrate_and_measure_conc_and_dilute",
 )
