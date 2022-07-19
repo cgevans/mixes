@@ -260,7 +260,7 @@ def test_multifixedconc_min_volume(reference: Reference):
     )
 
     with pytest.raises(VolumeError):
-        m.table()
+        m.table(raise_failed_validation=True)
 
     m.fixed_total_volume = "200 uL"  # type: ignore  # Mypy doesn't understand on_setattr
 
@@ -280,7 +280,7 @@ def test_mix_min_volume(reference: Reference):
     )
 
     with pytest.raises(VolumeError):
-        m.table()
+        m.table(raise_failed_validation=True)
 
     # should need 20 uL in 200 uL total volume to dilute from 100 nM to 10 nM,
     # so should work with min_volume=20 uL
@@ -342,7 +342,7 @@ def test_intermediate_mix_sufficient_volume():
     )
 
     with pytest.raises(VolumeError):
-        final_mix.table()
+        final_mix.table(raise_failed_validation=True)
 
 
 def test_combine_plate_actions():

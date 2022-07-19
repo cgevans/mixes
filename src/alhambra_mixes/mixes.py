@@ -2001,6 +2001,9 @@ class Mix(AbstractComponent):
             cps.loc[mcomp.index, "component"] = mcomp.component
         return cps
 
+    def _repr_markdown_(self) -> str:
+        return f"Table: {self.infoline()}\n" + self.table(tablefmt="pipe")
+
     def _repr_html_(self) -> str:
         return f"<p>Table: {self.infoline()}</p>\n" + self.table(tablefmt="unsafehtml")
 
