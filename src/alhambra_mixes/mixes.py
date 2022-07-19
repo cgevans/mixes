@@ -512,6 +512,13 @@ class MixLine:
             ]
 
 
+def _format_error_span(out, tablefmt):
+    if tablefmt in ["html", "unsafehtml", html_with_borders_tablefmt]:
+        return f"<span style='color:red'>{out}</span>"
+    else:
+        return f"**{out}**"
+
+
 def _formatter(
     x: int | float | str | list[str] | Quantity[Decimal] | None,
     italic: bool = False,
@@ -524,8 +531,12 @@ def _formatter(
         out = ""
     elif isinstance(x, float):
         out = f"{x:,.2f}"
+        if math.isnan(x):
+            out = _format_error_span(out, tablefmt)
     elif isinstance(x, Quantity):
         out = f"{x:,.2f~#P}"
+        if math.isnan(x.m):
+            out = _format_error_span(out, tablefmt)
     elif isinstance(x, (list, np.ndarray, pd.Series)):
         out = ", ".join(
             ("\n" if i - 1 in splits else "") + _formatter(y) for i, y in enumerate(x)
@@ -1784,7 +1795,7 @@ class Mix(AbstractComponent):
     def table(
         self,
         tablefmt: TableFormat | str = "pipe",
-        validate: bool = True,
+        raise_failed_validation: bool = False,
         buffer_name: str = "Buffer",
         stralign="default",
         missingval="",
@@ -1808,12 +1819,12 @@ class Mix(AbstractComponent):
         """
         mixlines = list(self.mixlines(buffer_name=buffer_name, tablefmt=tablefmt))
 
-        if validate:
-            try:
-                self.validate(tablefmt=tablefmt, mixlines=mixlines)
-            except ValueError as e:
-                e.args = e.args + (self.table(tablefmt=tablefmt, validate=False),)
-                raise e
+        validation_errors = self.validate(mixlines=mixlines)
+
+        # If we're validating and generating an error, we need the tablefmt to be
+        # a text one, so we'll call ourselves again:
+        if validation_errors and raise_failed_validation:
+            raise VolumeError(self.table("pipe"))
 
         mixlines.append(
             MixLine(
@@ -1828,15 +1839,19 @@ class Mix(AbstractComponent):
 
         include_numbers = any(ml.number != 1 for ml in mixlines)
 
-        return tabulate(
-            [ml.toline(include_numbers, tablefmt=tablefmt) for ml in mixlines],
-            MIXHEAD_EA if include_numbers else MIXHEAD_NO_EA,
-            tablefmt=tablefmt,
-            stralign=stralign,
-            missingval=missingval,
-            showindex=showindex,
-            disable_numparse=disable_numparse,
-            colalign=colalign,
+        return (
+            _format_errors(validation_errors, tablefmt)
+            + "\n"
+            + tabulate(
+                [ml.toline(include_numbers, tablefmt=tablefmt) for ml in mixlines],
+                MIXHEAD_EA if include_numbers else MIXHEAD_NO_EA,
+                tablefmt=tablefmt,
+                stralign=stralign,
+                missingval=missingval,
+                showindex=showindex,
+                disable_numparse=disable_numparse,
+                colalign=colalign,
+            )
         )
 
     def mixlines(
@@ -1858,39 +1873,52 @@ class Mix(AbstractComponent):
         return not math.isnan(self.fixed_total_volume.m)
 
     def validate(
-        self, tablefmt: str | TableFormat, mixlines: Sequence[MixLine] | None = None
-    ) -> None:
+        self,
+        tablefmt: str | TableFormat | None = None,
+        mixlines: Sequence[MixLine] | None = None,
+        raise_errors: bool = False,
+    ) -> list[VolumeError]:
         if mixlines is None:
+            if tablefmt is None:
+                raise ValueError("If mixlines is None, tablefmt must be specified.")
             mixlines = self.mixlines(tablefmt=tablefmt)
         ntx = [
             (m.names, m.total_tx_vol) for m in mixlines if m.total_tx_vol is not None
         ]
 
+        error_list: list[VolumeError] = []
+
         # special case check for FixedConcentration action(s) used
         # without corresponding Mix.fixed_total_volume
         if not self.has_fixed_total_volume() and self.has_fixed_concentration_action():
-            raise VolumeError(
-                "If a FixedConcentration action is used, "
-                "then Mix.fixed_total_volume must be specified."
+            error_list.append(
+                VolumeError(
+                    "If a FixedConcentration action is used, "
+                    "then Mix.fixed_total_volume must be specified."
+                )
             )
 
         nan_vols = [", ".join(n) for n, x in ntx if math.isnan(x.m)]
         if nan_vols:
-            raise VolumeError(
-                "Some volumes aren't defined (mix probably isn't fully specified): "
-                + "; ".join(x or "" for x in nan_vols)
-                + "."
+            error_list.append(
+                VolumeError(
+                    "Some volumes aren't defined (mix probably isn't fully specified): "
+                    + "; ".join(x or "" for x in nan_vols)
+                    + "."
+                )
             )
 
         tot_vol = self.total_volume
         high_vols = [(n, x) for n, x in ntx if x > tot_vol]
         if high_vols:
-            raise VolumeError(
-                "Some items have higher transfer volume than total mix volume of "
-                f"{tot_vol} "
-                "(target concentration probably too high for source): "
-                + "; ".join(f"{', '.join(n)} at {x}" for n, x in high_vols)
-                + "."
+            error_list.append(
+                VolumeError(
+                    "Some items have higher transfer volume than total mix volume of "
+                    f"{tot_vol} "
+                    "(target concentration probably too high for source): "
+                    + "; ".join(f"{', '.join(n)} at {x}" for n, x in high_vols)
+                    + "."
+                )
             )
 
         # ensure we pipette at least self.min_volume from each source
@@ -1919,21 +1947,25 @@ class Mix(AbstractComponent):
                         f"attempting to pipette {mixline.each_tx_vol} of these components:\n"
                         f"{mixline.names}"
                     )
-                raise VolumeError(msg)
+                error_list.append(VolumeError(msg))
 
         # We'll check the last tx_vol first, because it is usually buffer.
         if ntx[-1][1] < ZERO_VOL:
-            raise VolumeError(
-                f"Last mix component ({ntx[-1][0]}) has volume {ntx[-1][1]} < 0 µL. "
-                "Component target concentrations probably too high."
+            error_list.append(
+                VolumeError(
+                    f"Last mix component ({ntx[-1][0]}) has volume {ntx[-1][1]} < 0 µL. "
+                    "Component target concentrations probably too high."
+                )
             )
 
         neg_vols = [(n, x) for n, x in ntx if x < ZERO_VOL]
         if neg_vols:
-            raise VolumeError(
-                "Some volumes are negative: "
-                + "; ".join(f"{', '.join(n)} at {x}" for n, x in neg_vols)
-                + "."
+            error_list.append(
+                VolumeError(
+                    "Some volumes are negative: "
+                    + "; ".join(f"{', '.join(n)} at {x}" for n, x in neg_vols)
+                    + "."
+                )
             )
 
         # check for sufficient volume in intermediate mixes
@@ -1944,12 +1976,16 @@ class Mix(AbstractComponent):
             ):
                 if isinstance(component, Mix):
                     if component.fixed_total_volume < volume:
-                        raise VolumeError(
-                            f'intermediate Mix "{component.name}" needs {volume} to create '
-                            f'Mix "{self.name}", but Mix "{component.name}" contains only '
-                            f"{component.fixed_total_volume}."
+                        error_list.append(
+                            VolumeError(
+                                f'intermediate Mix "{component.name}" needs {volume} to create '
+                                f'Mix "{self.name}", but Mix "{component.name}" contains only '
+                                f"{component.fixed_total_volume}."
+                            )
                         )
             # for each_vol, component in zip(mixline.each_tx_vol, action.all_components()):
+
+        return error_list
 
     def all_components(self) -> pd.DataFrame:
         """
@@ -1966,7 +2002,10 @@ class Mix(AbstractComponent):
         return cps
 
     def _repr_markdown_(self) -> str:
-        return str(self)
+        return f"Table: {self.infoline()}\n" + self.table(tablefmt="pipe")
+
+    def _repr_html_(self) -> str:
+        return f"<p>Table: {self.infoline()}</p>\n" + self.table(tablefmt="unsafehtml")
 
     def infoline(self) -> str:
         elems = [
@@ -2053,13 +2092,13 @@ class Mix(AbstractComponent):
     def display_instructions(
         self,
         plate_type: PlateType = PlateType.wells96,
-        validate: bool = True,
+        raise_failed_validation: bool = False,
         combine_plate_actions: bool = True,
         well_marker: None | str | Callable[[str], str] = None,
         title_level: Literal[1, 2, 3, 4, 5, 6] = 3,
         warn_unsupported_title_format: bool = True,
         buffer_name: str = "Buffer",
-        tablefmt: str | TableFormat = "pipe",
+        tablefmt: str | TableFormat = "unsafehtml",
         include_plate_maps: bool = True,
     ) -> None:
         """
@@ -2067,8 +2106,8 @@ class Mix(AbstractComponent):
 
         :param plate_type:
             96-well or 384-well plate; default is 96-well.
-        :param validate:
-            Ensure volumes make sense.
+        :param raise_failed_validation:
+            If validation fails (volumes don't make sense), raise an exception.
         :param combine_plate_actions:
             If True, then if multiple actions in the Mix take the same volume from the same plate,
             they will be combined into a single :class:`PlateMap`.
@@ -2102,11 +2141,11 @@ class Mix(AbstractComponent):
             pipetting instructions in the form of strings combining results of :meth:`Mix.table` and
             :meth:`Mix.plate_maps`
         """
-        from IPython.display import display, Markdown
+        from IPython.display import display, HTML
 
         ins_str = self.instructions(
             plate_type=plate_type,
-            validate=validate,
+            raise_failed_validation=raise_failed_validation,
             combine_plate_actions=combine_plate_actions,
             well_marker=well_marker,
             title_level=title_level,
@@ -2115,12 +2154,12 @@ class Mix(AbstractComponent):
             tablefmt=tablefmt,
             include_plate_maps=include_plate_maps,
         )
-        display(Markdown(ins_str))
+        display(HTML(ins_str))
 
     def instructions(
         self,
         plate_type: PlateType = PlateType.wells96,
-        validate: bool = True,
+        raise_failed_validation: bool = False,
         combine_plate_actions: bool = True,
         well_marker: None | str | Callable[[str], str] = None,
         title_level: Literal[1, 2, 3, 4, 5, 6] = 3,
@@ -2135,8 +2174,8 @@ class Mix(AbstractComponent):
 
         :param plate_type:
             96-well or 384-well plate; default is 96-well.
-        :param validate:
-            Ensure volumes make sense.
+        :param raise_failed_validation:
+            If validation fails (volumes don't make sense), raise an exception.
         :param combine_plate_actions:
             If True, then if multiple actions in the Mix take the same volume from the same plate,
             they will be combined into a single :class:`PlateMap`.
@@ -2171,7 +2210,7 @@ class Mix(AbstractComponent):
             :meth:`Mix.plate_maps`
         """
         table_str = self.table(
-            validate=validate,
+            raise_failed_validation=raise_failed_validation,
             buffer_name=buffer_name,
             tablefmt=tablefmt,
         )
@@ -2180,7 +2219,7 @@ class Mix(AbstractComponent):
         if include_plate_maps:
             plate_maps = self.plate_maps(
                 plate_type=plate_type,
-                validate=validate,
+                # validate=validate, # FIXME
                 combine_plate_actions=combine_plate_actions,
             )
             for plate_map in plate_maps:
@@ -2512,8 +2551,8 @@ class PlateMap:
     def __str__(self) -> str:
         return self.to_table()
 
-    def _repr_markdown_(self) -> str:
-        return self.to_table(tablefmt="pipe")
+    def _repr_html_(self) -> str:
+        return self.to_table(tablefmt="unsafehtml")
 
     def to_table(
         self,
@@ -2716,6 +2755,20 @@ def _format_title(
         hashes = "#" * level
         title = f"{hashes} {raw_title}"
     return title
+
+
+def _format_errors(errors: list[VolumeError], tablefmt: TableFormat | str) -> str:
+    if tablefmt in ["latex"]:
+        raise NotImplementedError
+    elif tablefmt in ["html", "unsafehtml", html_with_borders_tablefmt]:
+        if not errors:
+            return ""
+        s = "<div style='color: red'><ul>\n"
+        s += "\n".join(f"<li>{e.args[0]}</li>" for e in errors)
+        s += "</ul></div>\n"
+        return s
+    else:
+        return "".join(f"- {e.args[0]}\n" for e in errors)
 
 
 def _format_location(loc: tuple[str | None, WellPos | None]) -> str:
