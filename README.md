@@ -1,6 +1,13 @@
+[![Documentation Status](https://readthedocs.org/projects/alhambra-mixes/badge/?version=latest)](https://alhambra-mixes.readthedocs.io/en/latest/?badge=latest)
+![Codecov](https://img.shields.io/codecov/c/github/cgevans/mixes)
+![GitHub Workflow
+Status](https://img.shields.io/github/workflow/status/cgevans/mixes/Python%20tests)
+![PyPI](https://img.shields.io/pypi/v/alhambra-mixes)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/alhambra-mixes)](https://pypi.org/project/alhambra-mixes/)
+
 This package, alhambra_mixes, is a separate package containing the `alhambra.mixes`
 library from
-[alhambra][alhambra] 
+[alhambra][alhambra]
 modified to be more compatible with Python < 3.10.  Continued development on
 mixes will take place here, and alhambra will be made to depend on this.  **The
 name may change soon to something more unique.**
