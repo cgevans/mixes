@@ -2757,7 +2757,7 @@ def _format_title(
     return title
 
 
-def _format_errors(errors: list[VolumeError], tablefmt: TableFormat) -> str:
+def _format_errors(errors: list[VolumeError], tablefmt: TableFormat | str) -> str:
     if tablefmt in ["latex"]:
         raise NotImplementedError
     elif tablefmt in ["html", "unsafehtml", html_with_borders_tablefmt]:
