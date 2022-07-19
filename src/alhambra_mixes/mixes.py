@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from decimal import Decimal
 
 import decimal
+import json
 
 # This needs to be here to make Decimal NaNs behave the way that NaNs
 # *everywhere else in the standard library* behave.
@@ -20,6 +21,7 @@ import logging
 import math
 from os import PathLike
 from typing import (
+    IO,
     TYPE_CHECKING,
     Any,
     Iterable,
@@ -86,6 +88,8 @@ __all__ = (
     "DNAN",
     #    "D",
     "VolumeError",
+    "save_mixes",
+    "load_mixes",
 )
 
 log = logging.getLogger("alhambra")
@@ -3062,3 +3066,76 @@ class Reference:
 
 def load_reference(filename_or_file: str | io.TextIOBase) -> Reference:
     return Reference.from_csv(filename_or_file)
+
+
+_MIXES_CLASSES = {
+    c.__name__: c for c in [FixedVolume, FixedConcentration, Mix, Strand, Component]
+}
+
+
+def _unstructure(x):
+    if isinstance(x, ureg.Quantity):
+        return str(x)
+    elif isinstance(x, list):
+        return [_unstructure(y) for y in x]
+    elif isinstance(x, WellPos):
+        return str(x)
+    elif hasattr(x, "__attrs_attrs__"):
+        d = {}
+        d["class"] = x.__class__.__name__
+        for att in x.__attrs_attrs__:
+            if att.name in ["reference"]:
+                continue
+            val = getattr(x, att.name)
+            if val is att.default:
+                continue
+            d[att.name] = _unstructure(val)
+        return d
+    else:
+        return x
+
+
+def _structure(x):
+    if isinstance(x, dict) and ("class" in x):
+        c = _MIXES_CLASSES[x["class"]]
+        del x["class"]
+        for k in x.keys():
+            x[k] = _structure(x[k])
+        return c(**x)
+    elif isinstance(x, list):
+        return [_structure(y) for y in x]
+    else:
+        return x
+
+
+def load_mixes(file_or_stream: str | PathLike | IO):
+    if isinstance(file_or_stream, (str, PathLike)):
+        p = Path(file_or_stream)
+        if not p.suffix:
+            p = p.with_suffix(".json")
+        s = open(file_or_stream, "r")
+    else:
+        s = file_or_stream
+
+    d = json.load(s)
+
+    return {k: _structure(v) for k, v in d.items()}
+
+
+def save_mixes(mixes: Sequence | Mapping | Mix, file_or_stream: str | PathLike | IO):
+    if isinstance(file_or_stream, (str, PathLike)):
+        p = Path(file_or_stream)
+        if not p.suffix:
+            p = p.with_suffix(".json")
+        s = open(p, "w")
+    else:
+        s = file_or_stream
+
+    if isinstance(mixes, Mix):
+        d = {mixes.name: _unstructure(mixes)}
+    elif isinstance(mixes, Sequence):
+        d = {x.name: _unstructure(x) for x in mixes}
+    elif isinstance(mixes, Mapping):
+        d = {x.name: _unstructure(x) for x in mixes.values()}  # FIXME: check mapping
+
+    json.dump(d, s)
