@@ -523,6 +523,13 @@ def _format_error_span(out, tablefmt):
         return f"**{out}**"
 
 
+_NL = {
+    "pipe": "\n",
+    "html": "<br/>",
+    "unsafehtml": "<br/>",
+}
+
+
 def _formatter(
     x: int | float | str | list[str] | Quantity[Decimal] | None,
     italic: bool = False,
@@ -541,9 +548,12 @@ def _formatter(
         out = f"{x:,.2f~#P}"
         if math.isnan(x.m):
             out = _format_error_span(out, tablefmt)
+        if x.m < 0:
+            out = _format_error_span(out, tablefmt)
     elif isinstance(x, (list, np.ndarray, pd.Series)):
         out = ", ".join(
-            ("\n" if i - 1 in splits else "") + _formatter(y) for i, y in enumerate(x)
+            (_NL[tablefmt] if i - 1 in splits else "") + _formatter(y)
+            for i, y in enumerate(x)
         )
     else:
         raise TypeError
@@ -1843,19 +1853,20 @@ class Mix(AbstractComponent):
 
         include_numbers = any(ml.number != 1 for ml in mixlines)
 
-        return (
-            _format_errors(validation_errors, tablefmt)
-            + "\n"
-            + tabulate(
-                [ml.toline(include_numbers, tablefmt=tablefmt) for ml in mixlines],
-                MIXHEAD_EA if include_numbers else MIXHEAD_NO_EA,
-                tablefmt=tablefmt,
-                stralign=stralign,
-                missingval=missingval,
-                showindex=showindex,
-                disable_numparse=disable_numparse,
-                colalign=colalign,
-            )
+        if validation_errors:
+            errline = _format_errors(validation_errors, tablefmt) + "\n"
+        else:
+            errline = ""
+
+        return errline + tabulate(
+            [ml.toline(include_numbers, tablefmt=tablefmt) for ml in mixlines],
+            MIXHEAD_EA if include_numbers else MIXHEAD_NO_EA,
+            tablefmt=tablefmt,
+            stralign=stralign,
+            missingval=missingval,
+            showindex=showindex,
+            disable_numparse=disable_numparse,
+            colalign=colalign,
         )
 
     def mixlines(
