@@ -4,7 +4,6 @@ A module for handling mixes.
 
 from __future__ import annotations
 
-import io
 from abc import ABC, abstractmethod
 from decimal import Decimal
 
@@ -28,7 +27,9 @@ from typing import (
     Literal,
     Mapping,
     Sequence,
+    TextIO,
     TypeVar,
+    Union,
     cast,
     overload,
     Callable,
@@ -577,7 +578,7 @@ be an HTML table with borders around each cell.
 """
 
 
-_NL = {
+_NL: dict[Union[str, TableFormat], str] = {
     "pipe": "\n",
     "html": "<br/>",
     "unsafehtml": "<br/>",
@@ -2910,9 +2911,7 @@ class Reference:
         raise ValueError("Did not find any matching components.")
 
     @classmethod
-    def from_csv(
-        cls, filename_or_file: str | io.TextIOBase | PathLike[str]
-    ) -> Reference:
+    def from_csv(cls, filename_or_file: str | TextIO | PathLike[str]) -> Reference:
         """
         Load reference information from a CSV file.
 
@@ -3078,7 +3077,7 @@ class Reference:
         return cls().update(files, round=round)
 
 
-def load_reference(filename_or_file: str | io.TextIOBase) -> Reference:
+def load_reference(filename_or_file: str | TextIO) -> Reference:
     return Reference.from_csv(filename_or_file)
 
 
@@ -3122,12 +3121,12 @@ def _structure(x):
         return x
 
 
-def load_mixes(file_or_stream: str | PathLike | IO):
+def load_mixes(file_or_stream: str | PathLike | TextIO):
     if isinstance(file_or_stream, (str, PathLike)):
         p = Path(file_or_stream)
         if not p.suffix:
             p = p.with_suffix(".json")
-        s = open(file_or_stream, "r")
+        s: TextIO = open(file_or_stream, "r")
     else:
         s = file_or_stream
 
@@ -3136,12 +3135,14 @@ def load_mixes(file_or_stream: str | PathLike | IO):
     return {k: _structure(v) for k, v in d.items()}
 
 
-def save_mixes(mixes: Sequence | Mapping | Mix, file_or_stream: str | PathLike | IO):
+def save_mixes(
+    mixes: Sequence | Mapping | Mix, file_or_stream: str | PathLike | TextIO
+):
     if isinstance(file_or_stream, (str, PathLike)):
         p = Path(file_or_stream)
         if not p.suffix:
             p = p.with_suffix(".json")
-        s = open(p, "w")
+        s: TextIO = open(p, "w")
     else:
         s = file_or_stream
 
