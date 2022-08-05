@@ -320,6 +320,16 @@ def measure_conc_and_dilute_from_specs(
     extinction coefficients, and given absorbances measured by a Nanodrop machine. Returns concentrations
     as well as additional volume to be added to diluate each strand to a particular target concentration.
 
+    Example usage:
+
+    >>> from alhambra_mixes.quantitate import measure_conc_and_dilute_from_specs
+    >>> specs_file = 'coa-stub.csv'
+    >>> target_conc = '150 uM'
+    >>> absorbances = {'mon0': [38.88, 39.3], 'adp0': [77.96, 78.72]}
+    >>> measure_conc_and_dilute_from_specs(specs_file, target_conc, absorbances)
+    {'mon0': (<Quantity(186.765409, 'micromolar')>, <Quantity(28.186813, 'microliter')>),
+     'adp0': (<Quantity(190.933463, 'micromolar')>, <Quantity(30.563653, 'microliter')>)}
+
     :param filename:
         IDT specs file (e.g., coa.csv)
     :param target_conc:
