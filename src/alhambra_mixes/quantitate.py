@@ -5,7 +5,7 @@ and diluting and hydrating to reach a desired concentration.
 The main "easy" functions to use are :func:`hydrate_from_specs` and
 :func:`hydrate_and_measure_conc_and_dilute_from_specs`.
 
->>> from alhambra.quantitate import hydrate_from_specs, hydrate_and_measure_conc_and_dilute_from_specs
+>>> from alhambra_mixes.quantitate import hydrate_from_specs, hydrate_and_measure_conc_and_dilute_from_specs
 >>> specs_file = 'path/to/coa.csv'
 >>> target_conc_high = '200 uM'
 >>> target_conc_low = '100 uM'
@@ -197,6 +197,10 @@ def dilute(
     """
     target_conc = parse_conc(target_conc)
     start_conc = parse_conc(start_conc)
+    if start_conc < target_conc:
+        raise ValueError(
+            f"start_conc = {start_conc} is below target_conc = {target_conc}; must be above"
+        )
     vol = parse_vol(vol)
     added_vol = (vol * start_conc / target_conc) - vol
     added_vol = normalize(added_vol)
@@ -305,6 +309,95 @@ def measure_conc_and_dilute(
     return start_conc, vol_to_add
 
 
+def measure_conc_and_dilute_from_specs(
+    filename: str,
+    target_conc: float | int | str | Quantity[D],
+    absorbances: dict[str, float | int | Sequence[float | int]],
+    vols_removed: dict[str, None | float | int | str | Quantity[D]] | None = None,
+) -> dict[str, tuple[Quantity[D], Quantity[D]]]:
+    """
+    Measures concentrations of DNA samples given an IDT spec file to look up existing volumes and
+    extinction coefficients, and given absorbances measured by a Nanodrop machine. Returns concentrations
+    as well as additional volume to be added to diluate each strand to a particular target concentration.
+
+    :param filename:
+        IDT specs file (e.g., coa.csv)
+    :param target_conc:
+        target concentration to dilute to from measured concentration
+    :param absorbances:
+        measured absorbance of each strand. Should be a dict mapping each strand name (as it appears in
+        the "Sequence name" column of `filename`) to an absorbance or nonempty list of absorbances, meaning
+        UV absorbance at 260 nm. If a list then an average is taken.
+    :param vols_removed:
+        dict mapping each strand name to the volume that was removed to take absorbance measurements.
+        For any strand name not appearing as a key in the dict, it is assumed that 1 microliter was taken
+        for each absorbance measurement made.
+    :return:
+        dict mapping each strand name to a pair `(conc, vol)`, where `conc` is its measured concentration
+        and `vol` is the volume that should be subsequently added to reach concentration `target_conc`
+    """
+    if vols_removed is None:
+        vols_removed = {}
+
+    name_key = "Sequence Name"
+    vol_key = "Volume"
+    dataframe = _read_dataframe_from_excel_or_csv(filename)
+    vols_of_strands = key_to_prop_from_dataframe(dataframe, name_key, vol_key)
+
+    ext_coef_key = find_extinction_coefficient_key(dataframe)
+    ext_coef_of_strand = key_to_prop_from_dataframe(dataframe, name_key, ext_coef_key)
+
+    concs_and_vols_to_add = {}
+    for name, vol in vols_of_strands.items():
+        vol_removed = vols_removed.get(name)  # None if name not a key in vol_removed
+        ext_coef_str = ext_coef_of_strand[name]
+        ext_coef = float(ext_coef_str)
+        absorbance = absorbances[name]
+        conc_and_vol_to_add = measure_conc_and_dilute(
+            absorbance=absorbance,
+            ext_coef=ext_coef,
+            target_conc=target_conc,
+            vol=vol,
+            vol_removed=vol_removed,
+        )
+        concs_and_vols_to_add[name] = conc_and_vol_to_add
+
+    return concs_and_vols_to_add
+
+
+def display_measure_conc_and_dilute_from_specs(
+    filename: str,
+    target_conc: float | int | str | Quantity[D],
+    absorbances: dict[str, float | int | Sequence[float | int]],
+    vols_removed: dict[str, None | float | int | str | Quantity[D]] | None = None,
+) -> None:
+    """
+    Like :meth:`measure_conc_and_dilute_from_specs`, but displays the value in a Jupyter
+    notebook instead of returning it.
+    """
+    from tabulate import tabulate
+    from IPython.display import display, Markdown
+
+    names_to_concs_and_vols_to_add = measure_conc_and_dilute_from_specs(
+        filename=filename,
+        target_conc=target_conc,
+        absorbances=absorbances,
+        vols_removed=vols_removed,
+    )
+
+    headers = ["name", "measured conc", "volume to add"]
+    table_list = [
+        (name, round(conc, 2), round(vol_to_add, 2))  # type: ignore
+        for name, (conc, vol_to_add) in names_to_concs_and_vols_to_add.items()
+    ]
+    table = tabulate(table_list, headers=headers, tablefmt="pipe", floatfmt=".2f")
+    from alhambra_mixes.mixes import _format_title
+
+    raw_title = "Initial measured concentrations and subsequent dilution volumes"
+    title = _format_title(raw_title, level=2, tablefmt="pipe")
+    display(Markdown(title + "\n\n" + table))
+
+
 def hydrate_and_measure_conc_and_dilute(
     nmol: float | int | str | Quantity[D],
     target_conc_high: float | int | str | Quantity[D],
@@ -389,7 +482,7 @@ def hydrate_and_measure_conc_and_dilute_from_specs(
     The intended usage of this method is to be used in conjunction with the function
     :func:`hydrate_from_specs` as follows.
 
-    >>> from alhambra.quantitate import hydrate_from_specs, hydrate_and_measure_conc_and_dilute_from_specs
+    >>> from alhambra_mixes.quantitate import hydrate_from_specs, hydrate_and_measure_conc_and_dilute_from_specs
     >>> specs_file = 'path/to/coa.csv'
     >>> target_conc_high = '200 uM'
     >>> target_conc_low = '100 uM'
@@ -462,22 +555,22 @@ def hydrate_and_measure_conc_and_dilute_from_specs(
         vols_removed = {}
 
     strands = list(absorbances.keys())
-    vol_of_strand = hydrate_from_specs(
+    vols_of_strands = hydrate_from_specs(
         filename=filename, target_conc=target_conc_high, strands=strands
     )
 
     name_key = "Sequence Name"
     nmol_key = "nmoles"
     dataframe = _read_dataframe_from_excel_or_csv(filename)
-    nmol_of_strand = key_to_prop_from_dataframe(dataframe, name_key, nmol_key)
+    nmols_of_strands = key_to_prop_from_dataframe(dataframe, name_key, nmol_key)
 
     ext_coef_key = find_extinction_coefficient_key(dataframe)
     ext_coef_of_strand = key_to_prop_from_dataframe(dataframe, name_key, ext_coef_key)
 
     concs_and_vols_to_add = {}
-    for name, vol in vol_of_strand.items():
+    for name, vol in vols_of_strands.items():
         vol_removed = vols_removed.get(name)  # None if name not a key in vol_removed
-        nmol = nmol_of_strand[name]
+        nmol = nmols_of_strands[name]
         ext_coef_str = ext_coef_of_strand[name]
         ext_coef = float(ext_coef_str)
         absorbance = absorbances[name]
@@ -577,7 +670,32 @@ def hydrate_from_specs(
     return dict(zip(names_list, vols))
 
 
-def _read_dataframe_from_excel_or_csv(filename: str) -> pandas.DataFrame:
+def _is_utf8(filename: str) -> bool:
+    """Tests if `content` is UTF-8."""
+    import codecs
+
+    try:
+        f = codecs.open(filename, encoding="utf-8", errors="strict")
+        for _ in f:
+            pass
+        return True
+    except UnicodeDecodeError:
+        return False
+
+
+def _read_dataframe_from_excel_or_csv(
+    filename: str, enforce_utf8: bool = True
+) -> pandas.DataFrame:
+    if enforce_utf8 and not _is_utf8(filename):
+        raise ValueError(
+            f"""{filename}
+is not a valid UTF-8 file. To avoid accidentally skipping Unicode 
+characters such as µ (which would silently convert µL to L, for instance), 
+first convert the file to UTF-8 format. Alternately, if you are certain that 
+the file contains no important Unicode characters, set the parameter 
+enforce_utf8 to False to avoid getting this error."""
+        )
+
     if filename.lower().endswith(".xls") or filename.lower().endswith(".xlsx"):
         dataframe = pandas.read_excel(filename, 0)
     elif filename.lower().endswith(".csv"):
@@ -588,6 +706,9 @@ def _read_dataframe_from_excel_or_csv(filename: str) -> pandas.DataFrame:
             f"unrecognized file extension in filename {filename}; "
             f"must be .xls, .xlsx, or .csv"
         )
+    # removing rows from a CSV with Excel can actually leave them there with all values as NaN,
+    # so let's remove those rows in case it was edited in that way
+    dataframe.dropna(how="all", inplace=True)
     return dataframe
 
 
@@ -606,8 +727,8 @@ def measure_conc_from_specs(
     absorbances: dict[str, float | int | Sequence[float] | Sequence[int]],
 ) -> dict[str, Quantity[D]]:
     """
-    Indicates how much volume to add to a dry DNA sample to reach a particular concentration,
-    given data in an Excel file in the IDT format.
+    Indicates the concentrations of DNA samples, given data in an Excel file in the IDT format and
+    measured absorbances from a Nanodrop machine.
 
     :param filename:
         path to IDT Excel/CSV spreadsheet with specs of strands (e.g., coa.csv)
@@ -651,6 +772,10 @@ def display_hydrate_and_measure_conc_and_dilute_from_specs(
     absorbances: dict[str, float | int | Sequence[float | int]],
     vols_removed: dict[str, None | float | int | str | Quantity[D]] | None = None,
 ) -> None:
+    """
+    Like :meth:`hydrate_and_measure_conc_and_dilute_from_specs`, but displays the value in a Jupyter
+    notebook instead of returning it.
+    """
     from tabulate import tabulate
     from IPython.display import display, Markdown
 
