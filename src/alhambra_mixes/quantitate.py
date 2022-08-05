@@ -696,19 +696,18 @@ def _is_utf8(filename: str) -> bool:
 def _read_dataframe_from_excel_or_csv(
     filename: str, enforce_utf8: bool = True
 ) -> pandas.DataFrame:
-    if enforce_utf8 and not _is_utf8(filename):
-        raise ValueError(
-            f"""{filename}
+    if filename.lower().endswith(".xls") or filename.lower().endswith(".xlsx"):
+        dataframe = pandas.read_excel(filename, 0)
+    elif filename.lower().endswith(".csv"):
+        if enforce_utf8 and not _is_utf8(filename):
+            raise ValueError(
+                f"""{filename}
 is not a valid UTF-8 file. To avoid accidentally skipping Unicode 
 characters such as µ (which would silently convert µL to L, for instance), 
 first convert the file to UTF-8 format. Alternately, if you are certain that 
 the file contains no important Unicode characters, set the parameter 
 enforce_utf8 to False to avoid getting this error."""
-        )
-
-    if filename.lower().endswith(".xls") or filename.lower().endswith(".xlsx"):
-        dataframe = pandas.read_excel(filename, 0)
-    elif filename.lower().endswith(".csv"):
+            )
         # encoding_errors='ignore' prevents problems with, e.g., µ Unicode symbol
         dataframe = pandas.read_csv(filename, encoding_errors="ignore")
     else:
