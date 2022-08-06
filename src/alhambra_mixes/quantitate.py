@@ -314,6 +314,7 @@ def measure_conc_and_dilute_from_specs(
     target_conc: float | int | str | Quantity[D],
     absorbances: dict[str, float | int | Sequence[float | int]],
     vols_removed: dict[str, None | float | int | str | Quantity[D]] | None = None,
+    enforce_utf8: bool = True,
 ) -> dict[str, tuple[Quantity[D], Quantity[D]]]:
     """
     Measures concentrations of DNA samples given an IDT spec file to look up existing volumes and
@@ -342,6 +343,12 @@ def measure_conc_and_dilute_from_specs(
         dict mapping each strand name to the volume that was removed to take absorbance measurements.
         For any strand name not appearing as a key in the dict, it is assumed that 1 microliter was taken
         for each absorbance measurement made.
+    :param enforce_utf8:
+        If `filename` is a text CSV file and this paramter is True, it enforces that `filename` is valid
+        UTF-8, raising an exception if not. This helps to avoid accidentally dropping Unicode characters
+        such as µ, which would silently convert a volume from µL to L.
+        If do not want to convert the specs file to UTF-8 and you are certain that no important Unicode
+        characters would be dropped, then you can set this parameter to false.
     :return:
         dict mapping each strand name to a pair `(conc, vol)`, where `conc` is its measured concentration
         and `vol` is the volume that should be subsequently added to reach concentration `target_conc`
@@ -351,7 +358,7 @@ def measure_conc_and_dilute_from_specs(
 
     name_key = "Sequence Name"
     vol_key = "Volume"
-    dataframe = _read_dataframe_from_excel_or_csv(filename)
+    dataframe = _read_dataframe_from_excel_or_csv(filename, enforce_utf8)
     vols_of_strands = key_to_prop_from_dataframe(dataframe, name_key, vol_key)
 
     ext_coef_key = find_extinction_coefficient_key(dataframe)
@@ -380,10 +387,30 @@ def display_measure_conc_and_dilute_from_specs(
     target_conc: float | int | str | Quantity[D],
     absorbances: dict[str, float | int | Sequence[float | int]],
     vols_removed: dict[str, None | float | int | str | Quantity[D]] | None = None,
+    enforce_utf8: bool = True,
 ) -> None:
     """
     Like :meth:`measure_conc_and_dilute_from_specs`, but displays the value in a Jupyter
     notebook instead of returning it.
+
+    :param filename:
+        IDT specs file (e.g., coa.csv)
+    :param target_conc:
+        target concentration to dilute to from measured concentration
+    :param absorbances:
+        measured absorbance of each strand. Should be a dict mapping each strand name (as it appears in
+        the "Sequence name" column of `filename`) to an absorbance or nonempty list of absorbances, meaning
+        UV absorbance at 260 nm. If a list then an average is taken.
+    :param vols_removed:
+        dict mapping each strand name to the volume that was removed to take absorbance measurements.
+        For any strand name not appearing as a key in the dict, it is assumed that 1 microliter was taken
+        for each absorbance measurement made.
+    :param enforce_utf8:
+        If `filename` is a text CSV file and this paramter is True, it enforces that `filename` is valid
+        UTF-8, raising an exception if not. This helps to avoid accidentally dropping Unicode characters
+        such as µ, which would silently convert a volume from µL to L.
+        If do not want to convert the specs file to UTF-8 and you are certain that no important Unicode
+        characters would be dropped, then you can set this parameter to false.
     """
     from tabulate import tabulate
     from IPython.display import display, Markdown
@@ -393,6 +420,7 @@ def display_measure_conc_and_dilute_from_specs(
         target_conc=target_conc,
         absorbances=absorbances,
         vols_removed=vols_removed,
+        enforce_utf8=enforce_utf8,
     )
 
     headers = ["name", "measured conc", "volume to add"]
@@ -484,6 +512,7 @@ def hydrate_and_measure_conc_and_dilute_from_specs(
     target_conc_low: float | int | str | Quantity[D],
     absorbances: dict[str, float | int | Sequence[float | int]],
     vols_removed: dict[str, None | float | int | str | Quantity[D]] | None = None,
+    enforce_utf8: bool = True,
 ) -> dict[str, tuple[Quantity[D], Quantity[D]]]:
     """
     Like :func:`hydrate_and_measure_conc_and_dilute`, but works with multiple strands,
@@ -556,6 +585,12 @@ def hydrate_and_measure_conc_and_dilute_from_specs(
         then it is assumed the number of samples is 1 (i.e., `vol_removed` = 1 µL),
         otherwise if `absorbance` is a list, then the length of the list is assumed to be the
         number of samples taken, each at 1 µL.
+    :param enforce_utf8:
+        If `filename` is a text CSV file and this paramter is True, it enforces that `filename` is valid
+        UTF-8, raising an exception if not. This helps to avoid accidentally dropping Unicode characters
+        such as µ, which would silently convert a volume from µL to L.
+        If do not want to convert the specs file to UTF-8 and you are certain that no important Unicode
+        characters would be dropped, then you can set this parameter to false.
     :return:
         dict mapping each strand name in keys of `absorbances` to a pair (`conc`, `vol_to_add`),
         where `conc` is the measured concentration according to the absorbance value(s) of that strandm
@@ -566,12 +601,15 @@ def hydrate_and_measure_conc_and_dilute_from_specs(
 
     strands = list(absorbances.keys())
     vols_of_strands = hydrate_from_specs(
-        filename=filename, target_conc=target_conc_high, strands=strands
+        filename=filename,
+        target_conc=target_conc_high,
+        strands=strands,
+        enforce_utf8=enforce_utf8,
     )
 
     name_key = "Sequence Name"
     nmol_key = "nmoles"
-    dataframe = _read_dataframe_from_excel_or_csv(filename)
+    dataframe = _read_dataframe_from_excel_or_csv(filename, enforce_utf8)
     nmols_of_strands = key_to_prop_from_dataframe(dataframe, name_key, nmol_key)
 
     ext_coef_key = find_extinction_coefficient_key(dataframe)
@@ -606,6 +644,7 @@ def hydrate_from_specs(
     filename: str,
     target_conc: float | int | str | Quantity[D],
     strands: Sequence[str] | Sequence[int] | None = None,
+    enforce_utf8: bool = True,
 ) -> dict[str, Quantity[D]]:
     """
     Indicates how much volume to add to a dry DNA sample to reach a particular concentration,
@@ -618,6 +657,12 @@ def hydrate_from_specs(
     :param strands:
         strands to hydrate. Can be list of strand names (strings), or list of of ints indicating
         which rows in the Excel spreadsheet to hydrate
+    :param enforce_utf8:
+        If `filename` is a text CSV file and this paramter is True, it enforces that `filename` is valid
+        UTF-8, raising an exception if not. This helps to avoid accidentally dropping Unicode characters
+        such as µ, which would silently convert a volume from µL to L.
+        If do not want to convert the specs file to UTF-8 and you are certain that no important Unicode
+        characters would be dropped, then you can set this parameter to false.
     :return:
         dict mapping each strand name to an amount of µL (microliters) of water/buffer
         to pipette to reach `target_conc` concentration for that strand
@@ -628,7 +673,7 @@ def hydrate_from_specs(
     name_key = "Sequence Name"
     nmol_key = "nmoles"
 
-    dataframe = _read_dataframe_from_excel_or_csv(filename)
+    dataframe = _read_dataframe_from_excel_or_csv(filename, enforce_utf8)
     num_rows, num_cols = dataframe.shape
 
     names_series = dataframe[name_key]
@@ -694,7 +739,7 @@ def _is_utf8(filename: str) -> bool:
 
 
 def _read_dataframe_from_excel_or_csv(
-    filename: str, enforce_utf8: bool = True
+    filename: str, enforce_utf8: bool
 ) -> pandas.DataFrame:
     if filename.lower().endswith(".xls") or filename.lower().endswith(".xlsx"):
         dataframe = pandas.read_excel(filename, 0)
@@ -734,6 +779,7 @@ def find_extinction_coefficient_key(dataframe: pandas.DataFrame) -> str:
 def measure_conc_from_specs(
     filename: str,
     absorbances: dict[str, float | int | Sequence[float] | Sequence[int]],
+    enforce_utf8: bool = True,
 ) -> dict[str, Quantity[D]]:
     """
     Indicates the concentrations of DNA samples, given data in an Excel file in the IDT format and
@@ -746,12 +792,18 @@ def measure_conc_from_specs(
         Each absorbance value represents UV absorbance at 260 nm.
         Each can either be a single float/int or a nonempty sequence of floats/ints
         representing repeated measurements; if the latter then an average is taken.
+    :param enforce_utf8:
+        If `filename` is a text CSV file and this paramter is True, it enforces that `filename` is valid
+        UTF-8, raising an exception if not. This helps to avoid accidentally dropping Unicode characters
+        such as µ, which would silently convert a volume from µL to L.
+        If do not want to convert the specs file to UTF-8 and you are certain that no important Unicode
+        characters would be dropped, then you can set this parameter to false.
     :return:
         dict mapping each strand name to a concentration for that strand
     """
     name_key = "Sequence Name"
 
-    dataframe = _read_dataframe_from_excel_or_csv(filename)
+    dataframe = _read_dataframe_from_excel_or_csv(filename, enforce_utf8)
 
     ext_coef_key = find_extinction_coefficient_key(dataframe)
 
