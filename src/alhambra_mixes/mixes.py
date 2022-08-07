@@ -964,6 +964,16 @@ class Strand(Component):
         )
 
 
+def _maybesequence_comps(
+    object_or_sequence: Sequence[AbstractComponent | str] | AbstractComponent | str,
+) -> list[AbstractComponent]:
+    if isinstance(object_or_sequence, str):
+        return [Component(object_or_sequence)]
+    elif isinstance(object_or_sequence, Sequence):
+        return [Component(x) if isinstance(x, str) else x for x in object_or_sequence]
+    return [object_or_sequence]
+
+
 class AbstractAction(ABC):
     """
     Abstract class defining an action in a mix recipe.
@@ -1182,7 +1192,7 @@ class FixedVolume(AbstractAction):
     """
 
     components: list[AbstractComponent] = attrs.field(
-        converter=_maybesequence, on_setattr=attrs.setters.convert
+        converter=_maybesequence_comps, on_setattr=attrs.setters.convert
     )
     fixed_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_required, on_setattr=attrs.setters.convert
@@ -1470,7 +1480,7 @@ class FixedConcentration(AbstractAction):
     """
 
     components: list[AbstractComponent] = attrs.field(
-        converter=_maybesequence, on_setattr=attrs.setters.convert
+        converter=_maybesequence_comps, on_setattr=attrs.setters.convert
     )
     fixed_concentration: Quantity[Decimal] = attrs.field(
         converter=_parse_conc_required, on_setattr=attrs.setters.convert
