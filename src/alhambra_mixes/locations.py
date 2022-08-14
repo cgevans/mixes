@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import enum
 from typing import Iterable, Literal, cast, overload
+from math import isnan
 
 import attrs
 
@@ -272,7 +273,7 @@ def _parse_wellpos_optional(v: str | WellPos | None) -> WellPos | None:
     except:
         pass
     try:
-        if np.isnan(v):  # type: ignore
+        if isnan(v):  # type: ignore
             return None
     except:
         pass
