@@ -10,6 +10,7 @@ import pytest
 from alhambra_mixes import (
     Q_,
     Component,
+    EqualConcentration,
     FixedConcentration,
     FixedVolume,
     Mix,
@@ -300,7 +301,7 @@ def test_non_plates():
     s4 = Strand("s4", "400 nM", plate="a different tube")
 
     m = Mix(
-        [MultiFixedVolume([s1, s2, s3, s4], "1 uL", equal_conc="min_volume")],
+        [EqualConcentration([s1, s2, s3, s4], "1 uL", method="min_volume")],
         "test",
         min_volume="0 uL",
     )

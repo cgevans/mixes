@@ -100,13 +100,7 @@ class AbstractAction(ABC):
 
 @attrs.define()
 class FixedVolume(AbstractAction):
-    """An action adding one or multiple components, with a set destination volume (potentially keeping equal concentration).
-
-    FixedVolume adds a selection of components, with a specified transfer volume.  Depending on the setting of
-    `equal_conc`, it may require that the destination concentrations all be equal, may not care, and just transfer
-    a fixed volume of each strand, or may treat the fixed transfer volume as the volume as the minimum or maximum
-    volume to transfer, adjusting volumes of each strand to make this work and have them at equal destination
-    concentrations.
+    """An action adding one or multiple components, with a set transfer volume.
 
     Parameters
     ----------
@@ -125,18 +119,6 @@ class FixedVolume(AbstractAction):
         If True (default), the action tries to display compactly in mix recipes.  If False, it displays
         each component as a separate line.
 
-    equal_conc
-        If `False`, the action transfers the same `fixed_volume` volume of each component, regardless of
-        concentration.  If `True`, the action still transfers the same volume of each component, but will
-        raise a `ValueError` if this will not result in every component having the same destination concentration
-        (ie, if they have different source concentrations).  If `"min_volume"`, the action will transfer *at least*
-        `fixed_volume` of each component, but will transfer more for components with lower source concentration,
-        so that the destination concentrations are all equal (but not fixed to a specific value).  If `"max_volume"`,
-        the action instead transfers *at most* `fixed_volume` of each component, tranferring less for higher
-        source concentration components.  If ('max_fill', buffer_name), the fixed volume is the maximum, while for
-        every component that is added at a lower volume, a corresponding volume of buffer is added to bring the total
-        volume of the two up to the fixed volume.
-
     Examples
     --------
 
@@ -153,30 +135,6 @@ class FixedVolume(AbstractAction):
     | Comp       | Src []    | Dest []   |   # | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
     |:-----------|:----------|:----------|----:|:------------|:-------------|:------|:-------|
     | c1, c2, c3 | 200.00 nM | 66.67 nM  |   3 | 5.00 µl     | 15.00 µl     |       |        |
-
-    >>> components = [
-    ...     Component("c1", "200 nM"),
-    ...     Component("c2", "200 nM"),
-    ...     Component("c3", "200 nM"),
-    ...     Component("c4", "100 nM")
-    ... ]
-
-    >>> print(Mix([FixedVolume(components, "5 uL", equal_conc="min_volume")], name="example"))
-    Table: Mix: example, Conc: 40.00 nM, Total Vol: 25.00 µl
-    <BLANKLINE>
-    | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
-    |:-----------|:----------|:----------|:----|:------------|:-------------|:------|:-------|
-    | c1, c2, c3 | 200.00 nM | 40.00 nM  | 3   | 5.00 µl     | 15.00 µl     |       |        |
-    | c4         | 100.00 nM | 40.00 nM  | 1   | 10.00 µl    | 10.00 µl     |       |        |
-
-    >>> print(Mix([FixedVolume(components, "5 uL", equal_conc="max_volume")], name="example"))
-    Table: Mix: example, Conc: 40.00 nM, Total Vol: 12.50 µl
-    <BLANKLINE>
-    | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
-    |:-----------|:----------|:----------|:----|:------------|:-------------|:------|:-------|
-    | c1, c2, c3 | 200.00 nM | 40.00 nM  | 3   | 2.50 µl     | 7.50 µl      |       |        |
-    | c4         | 100.00 nM | 40.00 nM  | 1   | 5.00 µl     | 5.00 µl      |       |        |
-
     """
 
     components: list[AbstractComponent] = attrs.field(
@@ -187,25 +145,15 @@ class FixedVolume(AbstractAction):
     )
     set_name: str | None = None
     compact_display: bool = True
-    equal_conc: bool | Literal["max_volume", "min_volume"] | tuple[
-        Literal["max_fill"], str
-    ] = True
 
     def with_reference(self, reference: Reference) -> FixedVolume:
-        return FixedVolume(
-            [c.with_reference(reference) for c in self.components],  # type: ignore
-            self.fixed_volume,
-            self.set_name,
-            self.compact_display,
-            self.equal_conc,
+        return attrs.evolve(
+            self, components=[c.with_reference(reference) for c in self.components]
         )
 
     @property
     def source_concentrations(self) -> Sequence[Quantity[Decimal]]:
-        concs = [c.concentration.to(nM) for c in self.components]
-        if any(x != concs[0] for x in concs) and not self.equal_conc:
-            raise ValueError("Not all components have equal concentration.")
-        return concs
+        return [c.concentration.to(nM) for c in self.components]
 
     def all_components(self, mix_vol: Quantity[Decimal]) -> pd.DataFrame:
         newdf = _empty_components()
@@ -241,30 +189,9 @@ class FixedVolume(AbstractAction):
     def each_volumes(
         self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
     ) -> list[Quantity[Decimal]]:
-        # match self.equal_conc:
-        if self.equal_conc == "min_volume":
-            sc = self.source_concentrations
-            scmax = max(sc)
-            return [self.fixed_volume * x for x in _ratio(scmax, sc)]
-        elif (self.equal_conc == "max_volume") | (
-            isinstance(self.equal_conc, Sequence) and self.equal_conc[0] == "max_fill"
-        ):
-            sc = self.source_concentrations
-            scmin = min(sc)
-            return [self.fixed_volume * x for x in _ratio(scmin, sc)]
-        elif self.equal_conc is True:
-            sc = self.source_concentrations
-            if any(x != sc[0] for x in sc):
-                raise ValueError("Concentrations")
-            return [self.fixed_volume.to(uL)] * len(self.components)
-        elif self.equal_conc is False:
-            return [self.fixed_volume.to(uL)] * len(self.components)
-
-        raise ValueError(f"equal_conc={repr(self.equal_conc)} not understood")
+        return [self.fixed_volume.to(uL)] * len(self.components)
 
     def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
-        if isinstance(self.equal_conc, Sequence) and (self.equal_conc[0] == "max_fill"):
-            return self.fixed_volume * len(self.components)
         return sum(self.each_volumes(mix_vol), ureg("0.0 uL"))
 
     def _mixlines(
@@ -291,11 +218,6 @@ class FixedVolume(AbstractAction):
             ]
         else:
             ml = list(self._compactstrs(tablefmt=tablefmt, mix_vol=mix_vol))
-
-        if isinstance(self.equal_conc, Sequence) and (self.equal_conc[0] == "max_fill"):
-            fv = self.fixed_volume * len(self.components) - sum(self.each_volumes())
-            if not fv == Q_(Decimal("0.0"), uL):
-                ml.append(MixLine([self.equal_conc[1]], None, None, fv))
 
         return ml
 
@@ -411,6 +333,118 @@ class FixedVolume(AbstractAction):
                 wells_list,
             )
         ]
+
+
+@attrs.define()
+class EqualConcentration(FixedVolume):
+    """An action adding an equal concentration of each component, without setting that concentration.
+
+    Depending on the setting of
+    `equal_conc`, it may require that the concentrations all be equal to begin with, or may treat the fixed
+    transfer volume as the volume as the minimum or maximum volume to transfer, adjusting volumes of each
+    strand to make this work and have them at equal destination concentrations.
+
+    Parameters
+    ----------
+
+    components
+        A list of :ref:`Components`.
+
+    fixed_volume
+        A fixed volume for the action.  Input can be a string (eg, "5 µL") or a pint Quantity.  The interpretation
+        of this depends on equal_conc.
+
+    set_name
+        The name of the mix.  If not set, name is based on components.
+
+    compact_display
+        If True (default), the action tries to display compactly in mix recipes.  If False, it displays
+        each component as a separate line.
+
+    method
+        If `"check"`, the action still transfers the same volume of each component, but will
+        raise a `ValueError` if this will not result in every component having the same concentration added
+        (ie, if they have different source concentrations).  If `"min_volume"`, the action will transfer *at least*
+        `fixed_volume` of each component, but will transfer more for components with lower source concentration,
+        so that the destination concentrations are all equal (but not fixed to a specific value).  If `"max_volume"`,
+        the action instead transfers *at most* `fixed_volume` of each component, tranferring less for higher
+        source concentration components.  If ('max_fill', buffer_name), the fixed volume is the maximum, while for
+        every component that is added at a lower volume, a corresponding volume of buffer is added to bring the total
+        volume of the two up to the fixed volume.
+
+    >>> components = [
+    ...     Component("c1", "200 nM"),
+    ...     Component("c2", "200 nM"),
+    ...     Component("c3", "200 nM"),
+    ...     Component("c4", "100 nM")
+    ... ]
+
+    >>> print(Mix([EqualConcentration(components, "5 uL", method="min_volume")], name="example"))
+    Table: Mix: example, Conc: 40.00 nM, Total Vol: 25.00 µl
+    <BLANKLINE>
+    | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
+    |:-----------|:----------|:----------|:----|:------------|:-------------|:------|:-------|
+    | c1, c2, c3 | 200.00 nM | 40.00 nM  | 3   | 5.00 µl     | 15.00 µl     |       |        |
+    | c4         | 100.00 nM | 40.00 nM  | 1   | 10.00 µl    | 10.00 µl     |       |        |
+
+    >>> print(Mix([EqualConcentration(components, "5 uL", method="max_volume")], name="example"))
+    Table: Mix: example, Conc: 40.00 nM, Total Vol: 12.50 µl
+    <BLANKLINE>
+    | Comp       | Src []    | Dest []   | #   | Ea Tx Vol   | Tot Tx Vol   | Loc   | Note   |
+    |:-----------|:----------|:----------|:----|:------------|:-------------|:------|:-------|
+    | c1, c2, c3 | 200.00 nM | 40.00 nM  | 3   | 2.50 µl     | 7.50 µl      |       |        |
+    | c4         | 100.00 nM | 40.00 nM  | 1   | 5.00 µl     | 5.00 µl      |       |        |
+    """
+
+    method: Literal["max_volume", "min_volume", "check"] | tuple[
+        Literal["max_fill"], str
+    ] = "min_volume"
+
+    @property
+    def source_concentrations(self) -> Sequence[Quantity[Decimal]]:
+        concs = super().source_concentrations
+        if any(x != concs[0] for x in concs) and (self.method == "check"):
+            raise ValueError("Not all components have equal concentration.")
+        return concs
+
+    def each_volumes(
+        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
+    ) -> list[Quantity[Decimal]]:
+        # match self.equal_conc:
+        if self.method == "min_volume":
+            sc = self.source_concentrations
+            scmax = max(sc)
+            return [self.fixed_volume * x for x in _ratio(scmax, sc)]
+        elif (self.method == "max_volume") | (
+            isinstance(self.method, Sequence) and self.method[0] == "max_fill"
+        ):
+            sc = self.source_concentrations
+            scmin = min(sc)
+            return [self.fixed_volume * x for x in _ratio(scmin, sc)]
+        elif self.method is "check":
+            sc = self.source_concentrations
+            if any(x != sc[0] for x in sc):
+                raise ValueError("Concentrations")
+            return [self.fixed_volume.to(uL)] * len(self.components)
+        raise ValueError(f"equal_conc={repr(self.method)} not understood")
+
+    def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
+        if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
+            return self.fixed_volume * len(self.components)
+        return sum(self.each_volumes(mix_vol), ureg("0.0 uL"))
+
+    def _mixlines(
+        self,
+        tablefmt: str | TableFormat,
+        mix_vol: Quantity[Decimal],
+        locations: pd.DataFrame | None = None,
+    ) -> list[MixLine]:
+        ml = super()._mixlines(tablefmt, mix_vol, locations)
+        if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
+            fv = self.fixed_volume * len(self.components) - sum(self.each_volumes())
+            if not fv == Q_(Decimal("0.0"), uL):
+                ml.append(MixLine([self.method[1]], None, None, fv))
+        return ml
 
 
 @attrs.define()

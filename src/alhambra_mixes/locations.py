@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+from math import isnan
 from typing import Iterable, Literal, cast, overload
 from math import isnan
 

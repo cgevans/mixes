@@ -8,10 +8,10 @@ import decimal
 import enum
 import json
 import logging
-import math
 import warnings
 from abc import ABC, abstractmethod
 from decimal import Decimal
+from math import isnan
 from os import PathLike
 from pathlib import Path
 from typing import (
@@ -210,7 +210,7 @@ class Mix(AbstractComponent):
         otherwise, the sum of the transfer volumes of each component.
         """
         if self.fixed_total_volume is not None and not (
-            math.isnan(self.fixed_total_volume.m)
+            isnan(self.fixed_total_volume.m)
         ):
             return self.fixed_total_volume
         else:
@@ -309,7 +309,7 @@ class Mix(AbstractComponent):
         return any(isinstance(action, FixedConcentration) for action in self.actions)
 
     def has_fixed_total_volume(self) -> bool:
-        return not math.isnan(self.fixed_total_volume.m)
+        return not isnan(self.fixed_total_volume.m)
 
     def validate(
         self,
@@ -337,7 +337,7 @@ class Mix(AbstractComponent):
                 )
             )
 
-        nan_vols = [", ".join(n) for n, x in ntx if math.isnan(x.m)]
+        nan_vols = [", ".join(n) for n, x in ntx if isnan(x.m)]
         if nan_vols:
             error_list.append(
                 VolumeError(
@@ -364,7 +364,7 @@ class Mix(AbstractComponent):
 
         for mixline in mixlines:
             if (
-                not math.isnan(mixline.each_tx_vol.m)
+                not isnan(mixline.each_tx_vol.m)
                 and mixline.each_tx_vol != ZERO_VOL
                 and mixline.each_tx_vol < self.min_volume
             ):
