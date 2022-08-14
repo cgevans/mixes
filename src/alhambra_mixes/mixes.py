@@ -2547,6 +2547,7 @@ _SUPPORTED_TABLEFMTS_TITLE = [
     "unsafehtml",
     "rst",
     "latex",
+    "orgtbl",
     "latex_raw",
     "latex_booktabs",
     "latex_longtable",
@@ -2780,6 +2781,9 @@ def _format_title(
         newline = r"\\"
         noindent = r"\noindent"
         title = f"{noindent} {{ {size} {raw_title} }} {newline}"
+    elif tablefmt == "orgtbl":  # use the title for tablefmt == "pipe"
+        hashes = "*" * level
+        title = f"{hashes} {raw_title}"
     else:  # use the title for tablefmt == "pipe"
         hashes = "#" * level
         title = f"{hashes} {raw_title}"
