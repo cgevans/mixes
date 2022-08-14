@@ -1,8 +1,11 @@
+import itertools
+import re
 from decimal import Decimal
 from typing import cast
-import pytest
-import re
+
 import numpy as np
+import pandas as pd
+import pytest
 
 from alhambra_mixes import (
     Q_,
@@ -12,17 +15,15 @@ from alhambra_mixes import (
     Mix,
     MultiFixedConcentration,
     MultiFixedVolume,
+    Reference,
     Strand,
     VolumeError,
     WellPos,
-    Reference,
     load_reference,
     nM,
     uM,
     ureg,
 )
-import itertools
-import pandas as pd
 
 
 def test_wellpos_movement():
@@ -346,7 +347,7 @@ def test_intermediate_mix_sufficient_volume():
 
 
 def test_combine_plate_actions():
-    from alhambra_mixes import Strand, Mix, MultiFixedConcentration
+    from alhambra_mixes import Mix, MultiFixedConcentration, Strand
 
     s1 = Strand("s1", "40 uM", plate="plate1", well="A1")
     s2 = Strand("s2", "40 uM", plate="plate1", well="A2")
@@ -380,7 +381,7 @@ def test_combine_plate_actions():
 
 def test_combine_plate_actions_false():
     # this is sort of a "control" for the previous test; make sure we can reproduce old behavior
-    from alhambra_mixes import Strand, Mix, MultiFixedConcentration
+    from alhambra_mixes import Mix, MultiFixedConcentration, Strand
 
     s1 = Strand("s1", "40 uM", plate="plate1", well="A1")
     s2 = Strand("s2", "40 uM", plate="plate1", well="A2")
