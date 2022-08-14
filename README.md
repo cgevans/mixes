@@ -6,7 +6,6 @@ Status](https://img.shields.io/github/workflow/status/cgevans/mixes/Python%20tes
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/alhambra-mixes)](https://pypi.org/project/alhambra-mixes/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6861213.svg)](https://doi.org/10.5281/zenodo.6861213)
 
-
 For DNA 28, our [poster as a Jupyter notebook is available here](https://costi.eu/poster-notebook.zip).
 
 This package, alhambra_mixes, is a separate package containing the `alhambra.mixes`
