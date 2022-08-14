@@ -16,7 +16,6 @@ __all__ = [
     "uL",
     "nM",
     "uM",
-    "µL",
     "Q_",
     "DNAN",
     "ZERO_VOL",
@@ -29,7 +28,6 @@ ureg = pint.UnitRegistry(non_int_type=Decimal)
 ureg.default_format = "~P"
 
 uL = ureg.uL
-µL = ureg.uL
 uM = ureg.uM
 nM = ureg.nM
 
