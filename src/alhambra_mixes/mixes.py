@@ -49,6 +49,8 @@ from .printing import (
     _ALL_TABLEFMTS_NAMES,
     _SUPPORTED_TABLEFMTS_TITLE,
     MixLine,
+    _format_errors,
+    _format_title,
     emphasize,
     html_with_borders_tablefmt,
 )
@@ -1018,103 +1020,6 @@ class PlateMap:
         )
         table_with_title = f"{title}\n{out_table}"
         return table_with_title
-
-
-def _format_title(
-    raw_title: str,
-    level: int,
-    tablefmt: str | TableFormat,
-) -> str:
-    # formats a title for a table produced using tabulate,
-    # in the formats tabulate understands
-    if tablefmt in ["html", "unsafehtml", html_with_borders_tablefmt]:
-        title = f"<h{level}>{raw_title}</h{level}>"
-    elif tablefmt == "rst":
-        # https://draft-edx-style-guide.readthedocs.io/en/latest/ExampleRSTFile.html#heading-levels
-        # #############
-        # Heading 1
-        # #############
-        #
-        # *************
-        # Heading 2
-        # *************
-        #
-        # ===========
-        # Heading 3
-        # ===========
-        #
-        # Heading 4
-        # ************
-        #
-        # Heading 5
-        # ===========
-        #
-        # Heading 6
-        # ~~~~~~~~~~~
-        raw_title_width = len(raw_title)
-        if level == 1:
-            line = "#" * raw_title_width
-        elif level in [2, 4]:
-            line = "*" * raw_title_width
-        elif level in [3, 5]:
-            line = "=" * raw_title_width
-        else:
-            line = "~" * raw_title_width
-
-        if level in [1, 2, 3]:
-            title = f"{line}\n{raw_title}\n{line}"
-        else:
-            title = f"{raw_title}\n{line}"
-    elif tablefmt in ["latex", "latex_raw", "latex_booktabs", "latex_longtable"]:
-        if level == 1:
-            size = r"\Huge"
-        elif level == 2:
-            size = r"\huge"
-        elif level == 3:
-            size = r"\LARGE"
-        elif level == 4:
-            size = r"\Large"
-        elif level == 5:
-            size = r"\large"
-        elif level == 6:
-            size = r"\normalsize"
-        else:
-            assert False
-        newline = r"\\"
-        noindent = r"\noindent"
-        title = f"{noindent} {{ {size} {raw_title} }} {newline}"
-    elif tablefmt == "orgtbl":  # use the title for tablefmt == "pipe"
-        hashes = "*" * level
-        title = f"{hashes} {raw_title}"
-    else:  # use the title for tablefmt == "pipe"
-        hashes = "#" * level
-        title = f"{hashes} {raw_title}"
-    return title
-
-
-def _format_errors(errors: list[VolumeError], tablefmt: TableFormat | str) -> str:
-    if tablefmt in ["latex"]:
-        raise NotImplementedError
-    elif tablefmt in ["html", "unsafehtml", html_with_borders_tablefmt]:
-        if not errors:
-            return ""
-        s = "<div style='color: red'><ul>\n"
-        s += "\n".join(f"<li>{e.args[0]}</li>" for e in errors)
-        s += "</ul></div>\n"
-        return s
-    else:
-        return "".join(f"- {e.args[0]}\n" for e in errors)
-
-
-def _format_location(loc: tuple[str | None, WellPos | None]) -> str:
-    p, w = loc
-    if isinstance(p, str) and isinstance(w, WellPos):
-        return f"{p}: {w}"
-    elif isinstance(p, str) and (w is None):
-        return p
-    elif (p is None) and (w is None):
-        return ""
-    raise ValueError
 
 
 _MIXES_CLASSES = {
