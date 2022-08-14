@@ -4,15 +4,15 @@ from pint.testsuite.helpers import assert_quantity_almost_equal as assert_approx
 from alhambra_mixes.quantitate import (
     Q_,
     D,
+    dilute,
+    hydrate,
+    hydrate_from_specs,
+    measure_conc,
+    measure_conc_and_dilute,
+    measure_conc_from_specs,
     nM,
     uM,
     ureg,
-    hydrate,
-    dilute,
-    measure_conc,
-    measure_conc_and_dilute,
-    hydrate_from_specs,
-    measure_conc_from_specs,
 )
 
 

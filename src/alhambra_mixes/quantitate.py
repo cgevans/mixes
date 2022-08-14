@@ -41,16 +41,16 @@ as nicely-formatted Markdown.
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Sequence, Type, Union, cast
-import pint
-import warnings
-import pandas
-from decimal import Decimal as D
 import decimal
+import warnings
+from decimal import Decimal as D
+from typing import Any, Iterable, Sequence, Type, Union, cast
 
+import pandas
+import pint
 from pint import Quantity
-from .mixes import Q_, ureg, DNAN, uL, uM, nM
-from .mixes import _parse_vol_optional
+
+from .units import DNAN, Q_, _parse_vol_optional, nM, uL, uM, ureg
 
 
 def parse_vol(vol: Union[float, int, str, Quantity[D]]) -> Quantity[D]:
@@ -837,8 +837,8 @@ def display_hydrate_and_measure_conc_and_dilute_from_specs(
     Like :meth:`hydrate_and_measure_conc_and_dilute_from_specs`, but displays the value in a Jupyter
     notebook instead of returning it.
     """
+    from IPython.display import Markdown, display
     from tabulate import tabulate
-    from IPython.display import display, Markdown
 
     names_to_concs_and_vols_to_add = hydrate_and_measure_conc_and_dilute_from_specs(
         filename=filename,
@@ -879,8 +879,8 @@ def display_hydrate_from_specs(
         strands to hydrate. Can be list of strand names (strings), or list of of ints indicating
         which rows in the Excel spreadsheet to hydrate
     """
+    from IPython.display import Markdown, display
     from tabulate import tabulate
-    from IPython.display import display, Markdown
 
     names_to_vols = hydrate_from_specs(
         filename=filename, target_conc=target_conc, strands=strands
@@ -915,8 +915,8 @@ def display_measure_conc_from_specs(
         Each can either be a single float/int or a nonempty sequence of floats/ints
         representing repeated measurements; if the latter then an average is taken.
     """
+    from IPython.display import Markdown, display
     from tabulate import tabulate
-    from IPython.display import display, Markdown
 
     names_to_concs = measure_conc_from_specs(filename=filename, absorbances=absorbances)
 

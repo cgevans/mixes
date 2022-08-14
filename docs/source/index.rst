@@ -19,7 +19,7 @@ Alhambra-mixes is a small library to make it easier to organize complicated, hie
 
 Alhambra-mixes organizes the mixing process into several concepts:
 
-- A *Component* is something that goes into a mix, and has a source concentration.  It may be a generic component, a strand with a sequence, or a mix.  It may also contain information about 
+- A *Component* is something that goes into a mix, and has a source concentration.  It may be a generic component, a strand with a sequence, or a mix.  It may also contain information about
 - An *Action* describes how a component or set of components is to be added to a mix.  It may specify that each component be added to get a target concentration in the mix, for example, or that a fixed volume of each component be added.  For example, the `FixedConcentration` action adds a component (or several components) to a mix at a fixed desired concentration, while `FixedVolume` adds components at fixed volumes.
 - A *Mix* is a collection of Actions, each covering some Components.  It may have a fixed volume, or that may be determined by the components.  It may also have a fixed effective concentration (for use as a component), or that may be determined by a particular component.
 - A *Reference* is an object that has information about component concentrations, sequences, and locations.
@@ -60,7 +60,7 @@ Components
 
 A component is something that is added to a mix.  It must have a `name`, and generally includes some other information, such as concentration, a tube or plate and well location, or a DNA sequence.  A :any:`Mix` is also, itself, a component that can be reused in other mixes.
 
-Components are usually created by using their classes.  For simple systems, they can be be specified directly, 
+Components are usually created by using their classes.  For simple systems, they can be be specified directly,
 for example,
 
 .. code-block:: python
@@ -93,9 +93,9 @@ In order to be used in a mix, a component should have at least a name and concen
 Actions
 -------
 
-Actions describe how a component, or set of components, should be added to a mix.  An action can be seen as a collection of related pipetting steps.  
+Actions describe how a component, or set of components, should be added to a mix.  An action can be seen as a collection of related pipetting steps.
 
-There are two main actions.  `FixedConcentration` is useful when you'd like to add components so that they'll each be at some fixed concentration in the mix, but you don't care about the volume being transferred, beyond potentially wanting to ensure that it is above a certain minimum.  `FixedVolume` is useful when you'd like to add a fixed volume of each 
+There are two main actions.  `FixedConcentration` is useful when you'd like to add components so that they'll each be at some fixed concentration in the mix, but you don't care about the volume being transferred, beyond potentially wanting to ensure that it is above a certain minimum.  `FixedVolume` is useful when you'd like to add a fixed volume of each
 
 .. autosummary::
 
