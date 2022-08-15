@@ -7,6 +7,8 @@ from typing import Literal, Sequence, TypeVar
 import attrs
 import pandas as pd
 
+from warnings import warn
+
 from .components import AbstractComponent, _empty_components, _maybesequence_comps
 from .locations import WellPos, mixgaps
 from .printing import MixLine, TableFormat
@@ -145,6 +147,19 @@ class FixedVolume(AbstractAction):
     )
     set_name: str | None = None
     compact_display: bool = True
+
+    # components: Sequence[AbstractComponent | str] | AbstractComponent | str, fixed_volume: str | Quantity, set_name: str | None = None, compact_display: bool = True, equal_conc: bool | str = False
+    def __new__(cls, *args, **kwargs):
+        if (cls is FixedVolume) and ("equal_conc" in kwargs):
+            if kwargs["equal_conc"] is not False:
+                c = super().__new__(EqualConcentration)
+                # print(kwargs)
+                # c.__init__(*args, **kwargs, method=equal_conc)
+                # print("Hi")
+                return c
+        c = super().__new__(cls)
+        # c.__init__(*args, **kwargs)
+        return c
 
     def with_reference(self, reference: Reference) -> FixedVolume:
         return attrs.evolve(
@@ -335,7 +350,7 @@ class FixedVolume(AbstractAction):
         ]
 
 
-@attrs.define()
+@attrs.define(init=False)
 class EqualConcentration(FixedVolume):
     """An action adding an equal concentration of each component, without setting that concentration.
 
@@ -395,6 +410,31 @@ class EqualConcentration(FixedVolume):
     | c1, c2, c3 | 200.00 nM | 40.00 nM  | 3   | 2.50 µl     | 7.50 µl      |       |        |
     | c4         | 100.00 nM | 40.00 nM  | 1   | 5.00 µl     | 5.00 µl      |       |        |
     """
+
+    def __init__(
+        self,
+        components: Sequence[AbstractComponent | str] | AbstractComponent | str,
+        fixed_volume: str | Quantity,
+        set_name: str | None = None,
+        compact_display: bool = True,
+        method: Literal["max_volume", "min_volume", "check"]
+        | tuple[Literal["max_fill"], str] = "min_volume",
+        equal_conc: bool | str | None = None,
+    ):
+
+        if equal_conc is not None:
+            warn(
+                "The equal_conc parameter for FixedVolume is no longer supported.  Use EqualConcentration and method instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
+            if equal_conc is True:
+                equal_conc = "check"
+
+            method = equal_conc  # type: ignore
+
+        self.__attrs_init__(components, fixed_volume, set_name, compact_display, method)  # type: ignore
 
     method: Literal["max_volume", "min_volume", "check"] | tuple[
         Literal["max_fill"], str
