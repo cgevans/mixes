@@ -153,12 +153,12 @@ class FixedVolume(AbstractAction):
         if (cls is FixedVolume) and ("equal_conc" in kwargs):
             if kwargs["equal_conc"] is not False:
                 c = super().__new__(EqualConcentration)
-                # print(kwargs)
-                # c.__init__(*args, **kwargs, method=equal_conc)
-                # print("Hi")
                 return c
+            else:
+                raise ValueError(
+                    "FixedVolume no longer supports equal_conc=False, but behaves that way by default.  Remove equal_conc=False and try again."
+                )
         c = super().__new__(cls)
-        # c.__init__(*args, **kwargs)
         return c
 
     def with_reference(self, reference: Reference) -> FixedVolume:
