@@ -313,6 +313,26 @@ def test_non_plates():
     assert len(ml) == 3
 
 
+def test_fixedvolume_equal_conc_deprecation():
+    s1 = Strand("s1", "200 nM", plate="tube")
+
+    s2 = Strand("s2", "200 nM", plate="tube")
+
+    s3 = Strand("s3", "400 nM", plate="tube")
+
+    s4 = Strand("s4", "400 nM", plate="a different tube")
+
+    with pytest.warns(
+        DeprecationWarning,
+        match=r"The equal_conc parameter for FixedVolume is no longer supported.",
+    ):
+        a = FixedVolume([s1, s2, s3, s4], "1 uL", equal_conc="min_volume")  # type: ignore
+
+    b = EqualConcentration([s1, s2, s3, s4], "1 uL", method="min_volume")
+
+    assert a == b
+
+
 def test_intermediate_mix_sufficient_volume():
     s1 = Strand("s1", "100 uM", plate="plate1", well="A1")
     s2 = Strand("s2", "100 uM", plate="plate1", well="A2")
