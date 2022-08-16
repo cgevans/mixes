@@ -313,7 +313,7 @@ def get_vols_of_strands_from_dataframe(dataframe: pandas.DataFrame) -> dict[str,
     # takes care of some ugly special cases and variants IDT uses
     name_key = "Sequence Name"
     vol_key = find_volume_key(dataframe)
-    vols = keys_to_prop_from_dataframe(dataframe, name_key, vol_key)
+    vols = key_to_prop_from_dataframe(dataframe, name_key, vol_key)
     if "µL" in vol_key:
         # set units if units were listed in header rather than individual entries
         new_vols = {}
@@ -379,7 +379,7 @@ def measure_conc_and_dilute_from_specs(
 
     name_key = "Sequence Name"
     ext_coef_key = find_extinction_coefficient_key(dataframe)
-    ext_coef_of_strand = keys_to_prop_from_dataframe(dataframe, name_key, ext_coef_key)
+    ext_coef_of_strand = key_to_prop_from_dataframe(dataframe, name_key, ext_coef_key)
 
     concs_and_vols_to_add = {}
     for name, absorbance in absorbances.items():
@@ -533,7 +533,7 @@ def key_prefix_in_dataframe(dataframe: pandas.DataFrame, keys: Sequence[str]) ->
     )
 
 
-def keys_to_prop_from_dataframe(
+def key_to_prop_from_dataframe(
     dataframe: pandas.DataFrame, key: str, prop: str
 ) -> dict[str, str]:
     key_series = dataframe[key]
@@ -645,10 +645,10 @@ def hydrate_and_measure_conc_and_dilute_from_specs(
     name_key = "Sequence Name"
     nmol_key = "nmoles"
     dataframe = _read_dataframe_from_excel_or_csv(filename, enforce_utf8)
-    nmols_of_strands = keys_to_prop_from_dataframe(dataframe, name_key, nmol_key)
+    nmols_of_strands = key_to_prop_from_dataframe(dataframe, name_key, nmol_key)
 
     ext_coef_key = find_extinction_coefficient_key(dataframe)
-    ext_coef_of_strand = keys_to_prop_from_dataframe(dataframe, name_key, ext_coef_key)
+    ext_coef_of_strand = key_to_prop_from_dataframe(dataframe, name_key, ext_coef_key)
 
     concs_and_vols_to_add = {}
     for name, vol in vols_of_strands.items():
