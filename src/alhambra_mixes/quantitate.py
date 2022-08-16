@@ -318,8 +318,8 @@ def get_vols_of_strands_from_dataframe(dataframe: pandas.DataFrame) -> dict[str,
         # set units if units were listed in header rather than individual entries
         new_vols = {}
         for name, vol in vols.items():
-            if isinstance(vol, str) and "µL" not in vol:
-                new_vol = vol + " µL"
+            if isinstance(vol, (int, float)) or isinstance(vol, str) and "L" not in vol:
+                new_vol = f"{vol} µL"
             else:
                 new_vol = vol
             new_vols[name] = new_vol
