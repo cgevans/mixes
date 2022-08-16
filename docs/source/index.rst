@@ -99,8 +99,10 @@ There are two main actions.  `FixedConcentration` is useful when you'd like to a
 
 .. autosummary::
 
-  FixedConcentration
   FixedVolume
+  FixedConcentration
+  EqualConcentration
+  ToConcentration
 
 .. note::
    Previous versions of alhambra_mixes only supported single components for `FixedVolume` and `FixedConcentration`, and included separate `MultiFixedVolume` and `MultiFixedConcentration`  classes for multiple components.  The two `Multi` class names are currently kept for compatibility reasons, as aliases of `FixedVolume` and `FixedConcentration`.

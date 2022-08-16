@@ -496,7 +496,7 @@ class EqualConcentration(FixedVolume):
             sc = self.source_concentrations
             scmin = min(sc)
             return [self.fixed_volume * x for x in _ratio(scmin, sc)]
-        elif self.method is "check":
+        elif self.method == "check":
             sc = self.source_concentrations
             if any(x != sc[0] for x in sc):
                 raise ValueError("Concentrations")
@@ -662,10 +662,10 @@ class FixedConcentration(ActionWithComponents):
 
 @attrs.define()
 class ToConcentration(ActionWithComponents):
-    """An action adding an amount of components such that the concentration of each component in the mix
-    will be at some tapiprget concentration.  Unlike FixedConcentration, which *adds* a certain concentration,
-    this takes into account other contents of the mix, and only adds enough to reach a particular final
-    concentration."""
+    """Add an amount of (non-mix) components to result in a fixed total concentration of each in the mix.
+
+    An action adding an amount of components such that the concentration of each component in the mix
+    will be at some tapiprget concentration.  Unlike FixedConcentration, which *adds* a certain concentration, this takes into account other contents of the mix, and only adds enough to reach a particular final concentration."""
 
     fixed_concentration: Quantity[Decimal] = attrs.field(
         converter=_parse_conc_required, on_setattr=attrs.setters.convert
