@@ -159,6 +159,10 @@ class Mix(AbstractComponent):
         on_setattr=attrs.setters.convert,
     )
 
+    @property
+    def is_mix(self) -> bool:
+        return True
+
     def __attrs_post_init__(self) -> None:
         if self.reference is not None:
             self.actions = [
@@ -199,7 +203,9 @@ class Mix(AbstractComponent):
                 Decimal(ac.loc[self.fixed_concentration, "concentration_nM"]), ureg.nM
             )
         elif self.fixed_concentration is None:
-            return self.actions[0].dest_concentrations(self.total_volume)[0]
+            return self.actions[0].dest_concentrations(self.total_volume, self.actions)[
+                0
+            ]
         else:
             raise NotImplemented
 
@@ -216,7 +222,9 @@ class Mix(AbstractComponent):
         else:
             return sum(
                 [
-                    c.tx_volume(self.fixed_total_volume or Q_(DNAN, ureg.uL))
+                    c.tx_volume(
+                        self.fixed_total_volume or Q_(DNAN, ureg.uL), self.actions
+                    )
                     for c in self.actions
                 ],
                 Q_(Decimal(0.0), ureg.uL),
@@ -227,7 +235,7 @@ class Mix(AbstractComponent):
         """
         The volume of buffer to be added to the mix, in addition to the components.
         """
-        mvol = sum(c.tx_volume(self.total_volume) for c in self.actions)
+        mvol = sum(c.tx_volume(self.total_volume, self.actions) for c in self.actions)
         return self.total_volume - mvol
 
     def table(
@@ -294,12 +302,14 @@ class Mix(AbstractComponent):
         )
 
     def mixlines(
-        self, tablefmt: str | TableFormat, buffer_name: str = "Buffer"
+        self, tablefmt: str | TableFormat = "pipe", buffer_name: str = "Buffer"
     ) -> Sequence[MixLine]:
         mixlines: list[MixLine] = []
 
         for action in self.actions:
-            mixlines += action._mixlines(tablefmt=tablefmt, mix_vol=self.total_volume)
+            mixlines += action._mixlines(
+                tablefmt=tablefmt, mix_vol=self.total_volume, actions=self.actions
+            )
 
         if self.has_fixed_total_volume():
             mixlines.append(MixLine([buffer_name], None, None, self.buffer_volume))
@@ -411,7 +421,7 @@ class Mix(AbstractComponent):
         # XXX: this assumes 1-1 correspondence between mixlines and actions (true in current implementation)
         for action in self.actions:
             for component, volume in zip(
-                action.components, action.each_volumes(self.total_volume)
+                action.components, action.each_volumes(self.total_volume, self.actions)
             ):
                 if isinstance(component, Mix):
                     if component.fixed_total_volume < volume:
@@ -433,7 +443,7 @@ class Mix(AbstractComponent):
         cps = _empty_components()
 
         for action in self.actions:
-            mcomp = action.all_components(self.total_volume)
+            mcomp = action.all_components(self.total_volume, self.actions)
             cps, _ = cps.align(mcomp)
             cps.loc[:, "concentration_nM"].fillna(Decimal("0.0"), inplace=True)
             cps.loc[mcomp.index, "concentration_nM"] += mcomp.concentration_nM

@@ -25,6 +25,7 @@ from alhambra_mixes import (
     uM,
     ureg,
 )
+from alhambra_mixes.actions import ToConcentration
 
 
 def test_wellpos_movement():
@@ -365,6 +366,56 @@ def test_intermediate_mix_sufficient_volume():
 
     with pytest.raises(VolumeError):
         final_mix.table(raise_failed_validation=True)
+
+
+def test_toconcentration():
+
+    ca = Component("A", "1 µM")
+    cb = Component("B", "1 µM")
+    cc = Component("C", "1 µM")
+
+    ma = Mix(
+        [FixedConcentration(ca, "100 nM"), FixedVolume(cb, "11 µL")],
+        "imix",
+        fixed_total_volume="100 µL",
+    )
+
+    tca = ToConcentration(ca, "150 nM")
+    tcb = ToConcentration([ca, cb], "150 nM")
+
+    assert tcb.dest_concentrations(
+        ureg("100 µL"),
+        [FixedConcentration([ca], "50 nM"), FixedConcentration([cc], "55 nM")],
+    ) == [ureg("100 nM"), ureg("150 nM")]
+
+    assert tcb.dest_concentrations(
+        ureg("100 µL"), [FixedVolume([ma], "50 µL"), FixedConcentration(ca, "10 nM")]
+    ) == [ureg("90 nM"), ureg("95 nM")]
+
+    mix = Mix(
+        [
+            ToConcentration(ca, "150 nM"),
+            ToConcentration([cb, cc], "140 nM"),
+            FixedConcentration(ma, "50 nM"),
+            FixedVolume(cc, "1 µL"),
+        ],
+        "testmix",
+        fixed_total_volume="100 µL",
+    )
+
+    ac = mix.all_components()
+
+    assert ac.loc["A", "concentration_nM"] == 150
+    assert ac.loc["B", "concentration_nM"] == 140
+    assert ac.loc["C", "concentration_nM"] == 140
+
+    ml = mix.mixlines("pipe")
+
+    print(mix.table())
+
+    assert [m.dest_conc for m in ml] == [
+        Q_(x, nM) for x in ["100", "85", "130", "50", "10"]
+    ] + [None]
 
 
 def test_combine_plate_actions():
