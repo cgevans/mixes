@@ -7,7 +7,8 @@ Status](https://img.shields.io/github/workflow/status/cgevans/mixes/Python%20tes
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6861213.svg)](https://doi.org/10.5281/zenodo.6861213)
 
 
-For DNA 28, our [poster as a Jupyter notebook is available here](https://costi.eu/poster-notebook.zip).
+For DNA 28, our [poster as a Jupyter notebook is available here](https://costi.eu/poster-notebook.zip).  [Our documentation][docsstable] is in the process of being written ([latest git documentation is here][docslatest]); we also have [a tutorial notebook][tutorial] (WIP).
+
 
 This package, alhambra_mixes, is a separate package containing the `alhambra.mixes`
 library from
@@ -26,9 +27,7 @@ information from files such as DNA synthesis order details, the library
 generates recipes for straightforward pipetting, even in mixes with many
 components at different concentrations spread across several plates.
 
-Our [our documentation][mixref] is in the process of being written; we also have [a tutorial notebook][tutorial] (WIP).
-
-
 [alhambra]: https://github.com/DNA-and-Natural-Algorithms-Group/alhambra
-[mixref]: https://alhambra-mixes.readthedocs.io/
+[docsstable]: https://alhambra-mixes.readthedocs.io/en/stable
+[docslatest]: https://alhambra-mixes.readthedocs.io/en/latest
 [tutorial]: https://github.com/cgevans/mixes/blob/main/tutorial.ipynb
