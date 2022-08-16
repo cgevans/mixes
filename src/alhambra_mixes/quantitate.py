@@ -44,13 +44,13 @@ from __future__ import annotations
 import decimal
 import warnings
 from decimal import Decimal as D
-from typing import Any, Iterable, Sequence, Union, cast
+from typing import Any, Iterable, Sequence, Type, Union, cast
 
 import pandas
 import pint
 from pint import Quantity
 
-from .units import DNAN, Q_, _parse_vol_optional, uL, uM, ureg
+from .units import DNAN, Q_, _parse_vol_optional, nM, uL, uM, ureg
 
 
 def parse_vol(vol: Union[float, int, str, Quantity[D]]) -> Quantity[D]:
@@ -250,7 +250,7 @@ def measure_conc(
             f"absorbance = {absorbance}"
         )
 
-    conc_float = (ave_absorbance / ext_coef) * 10 ** 6
+    conc_float = (ave_absorbance / ext_coef) * 10**6
     conc = parse_conc(f"{conc_float} uM")
     conc = normalize(conc)
     return conc
