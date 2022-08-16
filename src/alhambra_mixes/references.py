@@ -17,9 +17,10 @@ from .units import (
     _parse_conc_optional,
     _parse_conc_required,
     nM,
+    ureg,
 )
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from .mixes import PlateMap
     from pandas.core.indexing import _LocIndexer
 
@@ -203,17 +204,20 @@ class Reference:
                     sheet: pd.DataFrame = data["Plate Specs"]
                     filetype = "plate-specs"
 
+                    sheet.rename(lambda x: x.lower(), inplace=True, axis="columns")
+
                     sheet.loc[:, "Concentration (nM)"] = 1000 * sheet.loc[
-                        :, "Measured Concentration µM "
+                        :, "measured concentration µm "
                     ].round(round)
                     sheet.loc[:, "Sequence"] = [
-                        x.replace(" ", "") for x in sheet.loc[:, "Sequence"]
+                        x.replace(" ", "") for x in sheet.loc[:, "sequence"]
                     ]
-                    sheet.rename(lambda x: x.lower(), inplace=True, axis="columns")
+                    sheet.loc[:, "Well"] = [
+                        str(WellPos(x)) for x in sheet.loc[:, "well position"]
+                    ]
                     sheet.rename(
                         {
                             "plate name": "Plate",
-                            "well position": "Well",
                             "sequence name": "Name",
                         },
                         axis="columns",
@@ -258,13 +262,31 @@ class Reference:
                         axis="columns",
                         inplace=True,
                     )
+                    all_seqs.loc[:, "Well"] = all_seqs.loc[:, "Well"].map(
+                        lambda x: str(WellPos(x))
+                    )
 
                     self.df = pd.concat((self.df, all_seqs), ignore_index=True)
                     continue
 
             if filepath.suffix == ".csv":
-                tubedata = pd.read_csv(filepath)
-                filetype = "idt-bulk"
+                # Are we a COA file?  If so, it isn't valid Unicode...
+                # We'll check initially in binary mode.
+                with filepath.open("rb") as f:
+                    testbin = f.read(25)
+                if testbin == b'"Sales Order","Reference"':
+                    # We're a COA file... in case IDT fixes things, we'll try UTF-8
+                    try:
+                        df = pd.read_csv(filepath)
+                    except UnicodeDecodeError:
+                        df = pd.read_csv(filepath, encoding="iso8859-1")
+                    self.df = pd.concat(
+                        (self.df, _parse_idt_coa(df)), ignore_index=True
+                    )
+                    continue
+                else:
+                    tubedata = pd.read_csv(filepath)
+                    filetype = "idt-bulk"
 
             if filepath.suffix == ".txt":
                 tubedata = pd.read_table(filepath)
@@ -300,6 +322,18 @@ class Reference:
         - An IDT plate spec sheet.
         """
         return cls().update(files, round=round)
+
+
+_REF_COLUMNS = ["Name", "Plate", "Well", "Concentration (nM)", "Sequence"]
+
+
+def _parse_idt_coa(df: pd.DataFrame) -> pd.DataFrame:
+    df.rename({"Sequence Name": "Name"}, axis="columns", inplace=True)
+    df.loc[:, "Well"] = df.loc[:, "Well Position"].map(lambda x: str(WellPos(x)))
+    df.loc[:, "Concentration (nM)"] = df.loc[:, "Conc"].map(lambda x: ureg(x).m_as(nM))
+    df.loc[:, "Plate"] = None
+    df.loc[:, "Sequence"] = df.loc[:, "Sequence"].str.replace(" ", "")
+    return df.loc[:, _REF_COLUMNS]
 
 
 def load_reference(filename_or_file: str | TextIO) -> Reference:
