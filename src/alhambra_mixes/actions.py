@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from typing import Literal, Sequence, TypeVar
+from typing import List, Literal, Sequence, TypeVar
 
 import attrs
 import pandas as pd
@@ -34,9 +34,10 @@ class AbstractAction(ABC):
     def name(self) -> str:  # pragma: no cover
         ...
 
-    @abstractmethod
     def tx_volume(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
+        self,
+        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        actions: Sequence[AbstractAction] = tuple(),
     ) -> Quantity[Decimal]:  # pragma: no cover
         """The total volume transferred by the action to the sample.  May depend on the total mix volume.
 
@@ -46,19 +47,20 @@ class AbstractAction(ABC):
         mix_vol
             The mix volume.  Does not accept strings.
         """
-        ...
+        return sum(self.each_volumes(mix_vol, actions), Q_(Decimal("0"), "uL"))
 
     @abstractmethod
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
         mix_vol: Quantity[Decimal],
+        actions: Sequence[AbstractAction] = tuple(),
     ) -> Sequence[MixLine]:  # pragma: no cover
         ...
 
     @abstractmethod
     def all_components(
-        self, mix_vol: Quantity[Decimal]
+        self, mix_vol: Quantity[Decimal], actions: Sequence[AbstractAction] = tuple()
     ) -> pd.DataFrame:  # pragma: no cover
         """A dataframe containing all base components added by the action.
 
@@ -75,7 +77,9 @@ class AbstractAction(ABC):
         """Returns a copy of the action updated from a reference dataframe."""
         ...
 
-    def dest_concentration(self, mix_vol: Quantity) -> Quantity:
+    def dest_concentration(
+        self, mix_vol: Quantity, actions: Sequence[AbstractAction] = tuple()
+    ) -> Quantity:
         """The destination concentration added to the mix by the action.
 
         Raises
@@ -87,7 +91,9 @@ class AbstractAction(ABC):
         """
         raise ValueError("Single destination concentration not defined.")
 
-    def dest_concentrations(self, mix_vol: Quantity) -> Sequence[Quantity[Decimal]]:
+    def dest_concentrations(
+        self, mix_vol: Quantity, actions: Sequence[AbstractAction] = tuple()
+    ) -> Sequence[Quantity[Decimal]]:
         raise ValueError
 
     @property
@@ -96,12 +102,173 @@ class AbstractAction(ABC):
         ...
 
     @abstractmethod
-    def each_volumes(self, total_volume: Quantity[Decimal]) -> list[Quantity[Decimal]]:
+    def each_volumes(
+        self,
+        total_volume: Quantity[Decimal],
+        actions: Sequence[AbstractAction] = tuple(),
+    ) -> list[Quantity[Decimal]]:
         ...
 
 
+T_AWC = TypeVar("T_AWC", bound="ActionWithComponents")
+
+
 @attrs.define()
-class FixedVolume(AbstractAction):
+class ActionWithComponents(AbstractAction):
+    components: list[AbstractComponent] = attrs.field(
+        converter=_maybesequence_comps, on_setattr=attrs.setters.convert
+    )
+
+    @property
+    def number(self) -> int:
+        return len(self.components)
+
+    @property
+    def name(self) -> str:
+        return ", ".join(c.name for c in self.components)
+
+    def with_reference(self: T_AWC, reference: Reference) -> T_AWC:
+        return attrs.evolve(
+            self, components=[c.with_reference(reference) for c in self.components]
+        )
+
+    @property
+    def source_concentrations(self) -> list[Quantity[Decimal]]:
+        concs = [c.concentration for c in self.components]
+        return concs
+
+    def all_components(
+        self, mix_vol: Quantity[Decimal], actions: Sequence[AbstractAction] = tuple()
+    ) -> pd.DataFrame:
+        newdf = _empty_components()
+
+        for comp, dc, sc in zip(
+            self.components,
+            self.dest_concentrations(mix_vol, actions),
+            self.source_concentrations,
+        ):
+            comps = comp.all_components()
+            comps.concentration_nM *= _ratio(dc, sc)
+
+            newdf, _ = newdf.align(comps)
+
+            # FIXME: add checks
+            newdf.loc[comps.index, "concentration_nM"] = newdf.loc[
+                comps.index, "concentration_nM"
+            ].add(comps.concentration_nM, fill_value=Decimal("0.0"))
+            newdf.loc[comps.index, "component"] = comps.component
+
+        return newdf
+
+    def _compactstrs(
+        self,
+        tablefmt: str | TableFormat,
+        dconcs: Sequence[Quantity[Decimal]],
+        eavols: Sequence[Quantity[Decimal]],
+    ) -> Sequence[MixLine]:
+        # locs = [(c.name,) + c.location for c in self.components]
+        # names = [c.name for c in self.components]
+
+        # if any(x is None for x in locs):
+        #     raise ValueError(
+        #         [name for name, loc in zip(names, locs) if loc is None]
+        #     )
+
+        locdf = pd.DataFrame(
+            {
+                "names": [c.printed_name(tablefmt=tablefmt) for c in self.components],
+                "source_concs": self.source_concentrations,
+                "dest_concs": dconcs,
+                "ea_vols": eavols,
+                "plate": [c.plate for c in self.components],
+                "well": [c.well for c in self.components],
+            }
+        )
+
+        locdf.fillna({"plate": ""}, inplace=True)
+
+        locdf.sort_values(
+            by=["plate", "ea_vols", "well"], ascending=[True, False, True]
+        )
+
+        names: list[list[str]] = []
+        source_concs: list[Quantity[Decimal]] = []
+        dest_concs: list[Quantity[Decimal]] = []
+        numbers: list[int] = []
+        ea_vols: list[Quantity[Decimal]] = []
+        tot_vols: list[Quantity[Decimal]] = []
+        plates: list[str] = []
+        wells_list: list[list[WellPos]] = []
+
+        for plate, plate_comps in locdf.groupby("plate"):  # type: str, pd.DataFrame
+            for vol, plate_vol_comps in plate_comps.groupby(
+                "ea_vols"
+            ):  # type: Quantity[Decimal], pd.DataFrame
+                if pd.isna(plate_vol_comps["well"].iloc[0]):
+                    if not pd.isna(plate_vol_comps["well"]).all():
+                        raise ValueError
+                    names.append(list(plate_vol_comps["names"]))
+                    ea_vols.append((vol))
+                    tot_vols.append((vol * len(plate_vol_comps)))
+                    numbers.append((len(plate_vol_comps)))
+                    source_concs.append((plate_vol_comps["source_concs"].iloc[0]))
+                    dest_concs.append((plate_vol_comps["dest_concs"].iloc[0]))
+                    plates.append(plate)
+                    wells_list.append([])
+                    continue
+
+                byrow = mixgaps(
+                    sorted(list(plate_vol_comps["well"]), key=WellPos.key_byrow),
+                    by="row",
+                )
+                bycol = mixgaps(
+                    sorted(list(plate_vol_comps["well"]), key=WellPos.key_bycol),
+                    by="col",
+                )
+
+                sortkey = WellPos.key_bycol if bycol <= byrow else WellPos.key_byrow
+
+                plate_vol_comps["sortkey"] = [
+                    sortkey(c) for c in plate_vol_comps["well"]
+                ]
+
+                plate_vol_comps.sort_values(by="sortkey", inplace=True)
+
+                names.append(list(plate_vol_comps["names"]))
+                ea_vols.append((vol))
+                numbers.append((len(plate_vol_comps)))
+                tot_vols.append((vol * len(plate_vol_comps)))
+                source_concs.append((plate_vol_comps["source_concs"].iloc[0]))
+                dest_concs.append((plate_vol_comps["dest_concs"].iloc[0]))
+                plates.append(plate)
+                wells_list.append(list(plate_vol_comps["well"]))
+
+        return [
+            MixLine(
+                name,
+                source_conc=source_conc,
+                dest_conc=dest_conc,
+                number=number,
+                each_tx_vol=each_tx_vol,
+                total_tx_vol=total_tx_vol,
+                plate=p,
+                wells=wells,
+            )
+            for name, source_conc, dest_conc, number, each_tx_vol, total_tx_vol, p, wells in zip(
+                names,
+                source_concs,
+                dest_concs,
+                numbers,
+                ea_vols,
+                tot_vols,
+                plates,
+                wells_list,
+            )
+        ]
+
+
+@attrs.define()
+class FixedVolume(ActionWithComponents):
     """An action adding one or multiple components, with a set transfer volume.
 
     Parameters
@@ -139,9 +306,6 @@ class FixedVolume(AbstractAction):
     | c1, c2, c3 | 200.00 nM | 66.67 nM  |   3 | 5.00 µl     | 15.00 µl     |       |        |
     """
 
-    components: list[AbstractComponent] = attrs.field(
-        converter=_maybesequence_comps, on_setattr=attrs.setters.convert
-    )
     fixed_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_required, on_setattr=attrs.setters.convert
     )
@@ -161,38 +325,10 @@ class FixedVolume(AbstractAction):
         c = super().__new__(cls)
         return c
 
-    def with_reference(self, reference: Reference) -> FixedVolume:
-        return attrs.evolve(
-            self, components=[c.with_reference(reference) for c in self.components]
-        )
-
-    @property
-    def source_concentrations(self) -> Sequence[Quantity[Decimal]]:
-        return [c.concentration.to(nM) for c in self.components]
-
-    def all_components(self, mix_vol: Quantity[Decimal]) -> pd.DataFrame:
-        newdf = _empty_components()
-
-        for comp, dc, sc in zip(
-            self.components,
-            self.dest_concentrations(mix_vol),
-            self.source_concentrations,
-        ):
-            comps = comp.all_components()
-            comps.concentration_nM *= _ratio(dc, sc)
-
-            newdf, _ = newdf.align(comps)
-
-            # FIXME: add checks
-            newdf.loc[comps.index, "concentration_nM"] = newdf.loc[
-                comps.index, "concentration_nM"
-            ].add(comps.concentration_nM, fill_value=Decimal("0.0"))
-            newdf.loc[comps.index, "component"] = comps.component
-
-        return newdf
-
     def dest_concentrations(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
+        self,
+        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        actions: Sequence[AbstractAction] = tuple(),
     ) -> list[Quantity[Decimal]]:
         return [
             x * y
@@ -202,19 +338,27 @@ class FixedVolume(AbstractAction):
         ]
 
     def each_volumes(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
+        self,
+        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        actions: Sequence[AbstractAction] = tuple(),
     ) -> list[Quantity[Decimal]]:
         return [self.fixed_volume.to(uL)] * len(self.components)
 
-    def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
-        return sum(self.each_volumes(mix_vol), ureg("0.0 uL"))
+    @property
+    def name(self) -> str:
+        if self.set_name is None:
+            return super().name
+        else:
+            return self.set_name
 
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
         mix_vol: Quantity[Decimal],
-        locations: pd.DataFrame | None = None,
+        actions: Sequence[AbstractAction] = tuple(),
     ) -> list[MixLine]:
+        dconcs = self.dest_concentrations(mix_vol)
+        eavols = self.each_volumes(mix_vol)
         if not self.compact_display:
             ml = [
                 MixLine(
@@ -226,128 +370,17 @@ class FixedVolume(AbstractAction):
                     wells=comp._well_list,
                 )
                 for dc, ev, comp in zip(
-                    self.dest_concentrations(mix_vol),
-                    self.each_volumes(mix_vol),
+                    dconcs,
+                    eavols,
                     self.components,
                 )
             ]
         else:
-            ml = list(self._compactstrs(tablefmt=tablefmt, mix_vol=mix_vol))
+            ml = list(
+                self._compactstrs(tablefmt=tablefmt, dconcs=dconcs, eavols=eavols)
+            )
 
         return ml
-
-    @property
-    def number(self) -> int:
-        return len(self.components)
-
-    @property
-    def name(self) -> str:
-        if self.set_name is None:
-            return ", ".join(c.name for c in self.components)
-        else:
-            return self.set_name
-
-    def _compactstrs(
-        self, tablefmt: str | TableFormat, mix_vol: Quantity
-    ) -> list[MixLine]:
-        # locs = [(c.name,) + c.location for c in self.components]
-        # names = [c.name for c in self.components]
-
-        # if any(x is None for x in locs):
-        #     raise ValueError(
-        #         [name for name, loc in zip(names, locs) if loc is None]
-        #     )
-
-        locdf = pd.DataFrame(
-            {
-                "names": [c.printed_name(tablefmt=tablefmt) for c in self.components],
-                "source_concs": self.source_concentrations,
-                "dest_concs": self.dest_concentrations(mix_vol),
-                "ea_vols": self.each_volumes(mix_vol),
-                "plate": [c.plate for c in self.components],
-                "well": [c.well for c in self.components],
-            }
-        )
-
-        locdf.fillna({"plate": ""}, inplace=True)
-
-        locdf.sort_values(
-            by=["plate", "ea_vols", "well"], ascending=[True, False, True]
-        )
-
-        names: list[list[str]] = []
-        source_concs: list[Quantity[Decimal]] = []
-        dest_concs: list[Quantity[Decimal]] = []
-        numbers: list[int] = []
-        ea_vols: list[Quantity[Decimal]] = []
-        tot_vols: list[Quantity[Decimal]] = []
-        plates: list[str] = []
-        wells_list: list[list[WellPos]] = []
-
-        for plate, plate_comps in locdf.groupby("plate"):  # type: str, pd.DataFrame
-            for vol, plate_vol_comps in plate_comps.groupby(
-                "ea_vols"
-            ):  # type: Quantity[Decimal], pd.DataFrame
-                if pd.isna(plate_vol_comps["well"].iloc[0]):
-                    if not pd.isna(plate_vol_comps["well"]).all():
-                        raise ValueError
-                    names.append(list(plate_vol_comps["names"]))
-                    ea_vols.append((vol))
-                    tot_vols.append((vol * len(plate_vol_comps)))
-                    numbers.append((len(plate_vol_comps)))
-                    source_concs.append((plate_vol_comps["source_concs"].iloc[0]))
-                    dest_concs.append((plate_vol_comps["dest_concs"].iloc[0]))
-                    plates.append(plate)
-                    wells_list.append([])
-                    continue
-                byrow = mixgaps(
-                    sorted(list(plate_vol_comps["well"]), key=WellPos.key_byrow),
-                    by="row",
-                )
-                bycol = mixgaps(
-                    sorted(list(plate_vol_comps["well"]), key=WellPos.key_bycol),
-                    by="col",
-                )
-
-                sortkey = WellPos.key_bycol if bycol <= byrow else WellPos.key_byrow
-
-                plate_vol_comps["sortkey"] = [
-                    sortkey(c) for c in plate_vol_comps["well"]
-                ]
-
-                plate_vol_comps.sort_values(by="sortkey", inplace=True)
-
-                names.append(list(plate_vol_comps["names"]))
-                ea_vols.append((vol))
-                numbers.append((len(plate_vol_comps)))
-                tot_vols.append((vol * len(plate_vol_comps)))
-                source_concs.append((plate_vol_comps["source_concs"].iloc[0]))
-                dest_concs.append((plate_vol_comps["dest_concs"].iloc[0]))
-                plates.append(plate)
-                wells_list.append(list(plate_vol_comps["well"]))
-
-        return [
-            MixLine(
-                name,
-                source_conc=source_conc,
-                dest_conc=dest_conc,
-                number=number,
-                each_tx_vol=each_tx_vol,
-                total_tx_vol=total_tx_vol,
-                plate=plate,
-                wells=wells,
-            )
-            for name, source_conc, dest_conc, number, each_tx_vol, total_tx_vol, plate, wells in zip(
-                names,
-                source_concs,
-                dest_concs,
-                numbers,
-                ea_vols,
-                tot_vols,
-                plates,
-                wells_list,
-            )
-        ]
 
 
 @attrs.define(init=False)
@@ -441,14 +474,16 @@ class EqualConcentration(FixedVolume):
     ] = "min_volume"
 
     @property
-    def source_concentrations(self) -> Sequence[Quantity[Decimal]]:
+    def source_concentrations(self) -> List[Quantity[Decimal]]:
         concs = super().source_concentrations
         if any(x != concs[0] for x in concs) and (self.method == "check"):
             raise ValueError("Not all components have equal concentration.")
         return concs
 
     def each_volumes(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
+        self,
+        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        actions: Sequence[AbstractAction] = tuple(),
     ) -> list[Quantity[Decimal]]:
         # match self.equal_conc:
         if self.method == "min_volume":
@@ -468,7 +503,11 @@ class EqualConcentration(FixedVolume):
             return [self.fixed_volume.to(uL)] * len(self.components)
         raise ValueError(f"equal_conc={repr(self.method)} not understood")
 
-    def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
+    def tx_volume(
+        self,
+        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        actions: Sequence[AbstractAction] = tuple(),
+    ) -> Quantity[Decimal]:
         if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
             return self.fixed_volume * len(self.components)
         return sum(self.each_volumes(mix_vol), ureg("0.0 uL"))
@@ -477,9 +516,9 @@ class EqualConcentration(FixedVolume):
         self,
         tablefmt: str | TableFormat,
         mix_vol: Quantity[Decimal],
-        locations: pd.DataFrame | None = None,
+        actions: Sequence[AbstractAction] = tuple(),
     ) -> list[MixLine]:
-        ml = super()._mixlines(tablefmt, mix_vol, locations)
+        ml = super()._mixlines(tablefmt, mix_vol)
         if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
             fv = self.fixed_volume * len(self.components) - sum(self.each_volumes())
             if not fv == Q_(Decimal("0.0"), uL):
@@ -488,7 +527,7 @@ class EqualConcentration(FixedVolume):
 
 
 @attrs.define()
-class FixedConcentration(AbstractAction):
+class FixedConcentration(ActionWithComponents):
     """An action adding one or multiple components, with a set destination concentration per component (adjusting volumes).
 
     FixedConcentration adds a selection of components, with a specified destination concentration.
@@ -541,9 +580,6 @@ class FixedConcentration(AbstractAction):
     | *Total:*   |           | 40.00 nM  |     |             | 25.00 µl     |       |        |
     """
 
-    components: list[AbstractComponent] = attrs.field(
-        converter=_maybesequence_comps, on_setattr=attrs.setters.convert
-    )
     fixed_concentration: Quantity[Decimal] = attrs.field(
         converter=_parse_conc_required, on_setattr=attrs.setters.convert
     )
@@ -555,44 +591,17 @@ class FixedConcentration(AbstractAction):
         on_setattr=attrs.setters.convert,
     )
 
-    def with_reference(self, reference: Reference) -> FixedConcentration:
-        return attrs.evolve(
-            self, components=[c.with_reference(reference) for c in self.components]
-        )
-
-    @property
-    def source_concentrations(self) -> list[Quantity[Decimal]]:
-        concs = [c.concentration for c in self.components]
-        return concs
-
-    def all_components(self, mix_vol: Quantity[Decimal]) -> pd.DataFrame:
-        newdf = _empty_components()
-
-        for comp, dc, sc in zip(
-            self.components,
-            self.dest_concentrations(mix_vol),
-            self.source_concentrations,
-        ):
-            comps = comp.all_components()
-            comps.concentration_nM *= _ratio(dc, sc)
-
-            newdf, _ = newdf.align(comps)
-
-            # FIXME: add checks
-            newdf.loc[comps.index, "concentration_nM"] = newdf.loc[
-                comps.index, "concentration_nM"
-            ].add(comps.concentration_nM, fill_value=Decimal("0.0"))
-            newdf.loc[comps.index, "component"] = comps.component
-
-        return newdf
-
     def dest_concentrations(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
+        self,
+        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        actions: Sequence[AbstractAction] = tuple(),
     ) -> list[Quantity[Decimal]]:
         return [self.fixed_concentration] * len(self.components)
 
     def each_volumes(
-        self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)
+        self,
+        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        actions: Sequence[AbstractAction] = tuple(),
     ) -> list[Quantity[Decimal]]:
         ea_vols = [
             mix_vol * r
@@ -612,15 +621,14 @@ class FixedConcentration(AbstractAction):
                 )
         return ea_vols
 
-    def tx_volume(self, mix_vol: Quantity[Decimal] = Q_(DNAN, uL)) -> Quantity[Decimal]:
-        return sum(self.each_volumes(mix_vol), Q_(Decimal("0"), "uL"))
-
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
         mix_vol: Quantity[Decimal],
-        locations: pd.DataFrame | None = None,
+        actions: Sequence[AbstractAction] = tuple(),
     ) -> list[MixLine]:
+        dconcs = self.dest_concentrations(mix_vol)
+        eavols = self.each_volumes(mix_vol)
         if not self.compact_display:
             ml = [
                 MixLine(
@@ -632,129 +640,152 @@ class FixedConcentration(AbstractAction):
                     wells=comp._well_list,
                 )
                 for dc, ev, comp in zip(
-                    self.dest_concentrations(mix_vol),
-                    self.each_volumes(mix_vol),
+                    dconcs,
+                    eavols,
                     self.components,
                 )
             ]
         else:
-            ml = list(self._compactstrs(tablefmt=tablefmt, mix_vol=mix_vol))
+            ml = list(
+                self._compactstrs(tablefmt=tablefmt, dconcs=dconcs, eavols=eavols)
+            )
 
         return ml
 
     @property
-    def number(self) -> int:
-        return len(self.components)
-
-    @property
     def name(self) -> str:
         if self.set_name is None:
-            return ", ".join(c.name for c in self.components)
+            return super().name
         else:
             return self.set_name
 
-    def _compactstrs(
-        self, tablefmt: str | TableFormat, mix_vol: Quantity
-    ) -> Sequence[MixLine]:
-        # locs = [(c.name,) + c.location for c in self.components]
-        # names = [c.name for c in self.components]
 
-        # if any(x is None for x in locs):
-        #     raise ValueError(
-        #         [name for name, loc in zip(names, locs) if loc is None]
-        #     )
+@attrs.define()
+class ToConcentration(ActionWithComponents):
+    """An action adding an amount of components such that the concentration of each component in the mix
+    will be at some tapiprget concentration.  Unlike FixedConcentration, which *adds* a certain concentration,
+    this takes into account other contents of the mix, and only adds enough to reach a particular final
+    concentration."""
 
-        locdf = pd.DataFrame(
-            {
-                "names": [c.printed_name(tablefmt=tablefmt) for c in self.components],
-                "source_concs": self.source_concentrations,
-                "dest_concs": self.dest_concentrations(mix_vol),
-                "ea_vols": self.each_volumes(mix_vol),
-                "plate": [c.plate for c in self.components],
-                "well": [c.well for c in self.components],
-            }
-        )
+    fixed_concentration: Quantity[Decimal] = attrs.field(
+        converter=_parse_conc_required, on_setattr=attrs.setters.convert
+    )
+    compact_display: bool = True
+    min_volume: Quantity[Decimal] = attrs.field(
+        converter=_parse_vol_optional,
+        default=Q_(DNAN, uL),
+        on_setattr=attrs.setters.convert,
+    )
 
-        locdf.fillna({"plate": ""}, inplace=True)
+    def _othercomps(
+        self, mix_vol: Quantity[Decimal], actions: Sequence[AbstractAction] = tuple()
+    ):
+        cps = _empty_components()
 
-        locdf.sort_values(
-            by=["plate", "ea_vols", "well"], ascending=[True, False, True]
-        )
+        mixcomps = [comp.name for comp in self.components if comp.is_mix]
 
-        names: list[list[str]] = []
-        source_concs: list[Quantity[Decimal]] = []
-        dest_concs: list[Quantity[Decimal]] = []
-        numbers: list[int] = []
-        ea_vols: list[Quantity[Decimal]] = []
-        tot_vols: list[Quantity[Decimal]] = []
-        plates: list[str] = []
-        wells_list: list[list[WellPos]] = []
-
-        for plate, plate_comps in locdf.groupby("plate"):  # type: str, pd.DataFrame
-            for vol, plate_vol_comps in plate_comps.groupby(
-                "ea_vols"
-            ):  # type: Quantity[Decimal], pd.DataFrame
-                if pd.isna(plate_vol_comps["well"].iloc[0]):
-                    if not pd.isna(plate_vol_comps["well"]).all():
-                        raise ValueError
-                    names.append(list(plate_vol_comps["names"]))
-                    ea_vols.append((vol))
-                    tot_vols.append((vol * len(plate_vol_comps)))
-                    numbers.append((len(plate_vol_comps)))
-                    source_concs.append((plate_vol_comps["source_concs"].iloc[0]))
-                    dest_concs.append((plate_vol_comps["dest_concs"].iloc[0]))
-                    plates.append(plate)
-                    wells_list.append([])
-                    continue
-
-                byrow = mixgaps(
-                    sorted(list(plate_vol_comps["well"]), key=WellPos.key_byrow),
-                    by="row",
-                )
-                bycol = mixgaps(
-                    sorted(list(plate_vol_comps["well"]), key=WellPos.key_bycol),
-                    by="col",
-                )
-
-                sortkey = WellPos.key_bycol if bycol <= byrow else WellPos.key_byrow
-
-                plate_vol_comps["sortkey"] = [
-                    sortkey(c) for c in plate_vol_comps["well"]
-                ]
-
-                plate_vol_comps.sort_values(by="sortkey", inplace=True)
-
-                names.append(list(plate_vol_comps["names"]))
-                ea_vols.append((vol))
-                numbers.append((len(plate_vol_comps)))
-                tot_vols.append((vol * len(plate_vol_comps)))
-                source_concs.append((plate_vol_comps["source_concs"].iloc[0]))
-                dest_concs.append((plate_vol_comps["dest_concs"].iloc[0]))
-                plates.append(plate)
-                wells_list.append(list(plate_vol_comps["well"]))
-
-        return [
-            MixLine(
-                name,
-                source_conc=source_conc,
-                dest_conc=dest_conc,
-                number=number,
-                each_tx_vol=each_tx_vol,
-                total_tx_vol=total_tx_vol,
-                plate=p,
-                wells=wells,
+        if mixcomps:
+            raise ValueError(
+                f"Some components in ToConcentration are mixes, which is not allowed: {mixcomps}."
             )
-            for name, source_conc, dest_conc, number, each_tx_vol, total_tx_vol, p, wells in zip(
-                names,
-                source_concs,
-                dest_concs,
-                numbers,
-                ea_vols,
-                tot_vols,
-                plates,
-                wells_list,
+
+        for action in actions:
+            if action is self:
+                # This action.
+                continue
+            elif not any(
+                x in self.components for x in action.all_components(mix_vol).component
+            ):
+                # Action has no shared components, so doesn't matter.
+                continue
+            elif isinstance(action, ToConcentration):
+                # Action is another ToConcentration, so makes a mess
+                raise ValueError(
+                    f"There are two ToConcentration actions with shared components, which is not allowed: {self} and {action}.",
+                    self,
+                    action,
+                )
+            mcomp = action.all_components(mix_vol)
+            cps, _ = cps.align(mcomp)
+            cps.loc[:, "concentration_nM"].fillna(Decimal("0.0"), inplace=True)
+            cps.loc[mcomp.index, "concentration_nM"] += mcomp.concentration_nM
+            cps.loc[mcomp.index, "component"] = mcomp.component
+
+        return cps
+
+    def dest_concentrations(
+        self,
+        mix_vol: Quantity,
+        actions: Sequence[AbstractAction] = tuple(),
+        _othercomps: pd.DataFrame | None = None,
+    ) -> Sequence[Quantity[Decimal]]:
+        if _othercomps is None and actions:
+            _othercomps = self._othercomps(mix_vol, actions)
+        if _othercomps is not None:
+            otherconcs = [
+                Q_(_othercomps.loc[comp.name, "concentration_nM"], nM)
+                if comp.name in _othercomps.index
+                else Q_(Decimal("0.0"), nM)
+                for comp in self.components
+            ]
+        else:
+            otherconcs = [Q_(Decimal("0.0"), nM) for _ in self.components]
+        return [self.fixed_concentration - other for other in otherconcs]
+
+    def each_volumes(
+        self,
+        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        actions: Sequence[AbstractAction] = tuple(),
+        _othercomps: pd.DataFrame | None = None,
+    ) -> list[Quantity[Decimal]]:
+        ea_vols = [
+            mix_vol * r
+            for r in _ratio(
+                self.dest_concentrations(mix_vol, actions, _othercomps),
+                self.source_concentrations,
             )
         ]
+        if not math.isnan(self.min_volume.m):
+            below_min = []
+            for comp, vol in zip(self.components, ea_vols):
+                if vol < self.min_volume:
+                    below_min.append((comp.name, vol))
+            if below_min:
+                raise VolumeError(
+                    "Volume of some components is below minimum: "
+                    + ", ".join(f"{n} at {v}" for n, v in below_min)
+                    + ".",
+                    below_min,
+                )
+        return ea_vols
+
+    def _mixlines(
+        self,
+        tablefmt: str | TableFormat,
+        mix_vol: Quantity[Decimal],
+        actions: Sequence[AbstractAction] = tuple(),
+    ) -> list[MixLine]:
+        othercomps = self._othercomps(mix_vol, actions)
+        dconcs = self.dest_concentrations(mix_vol, _othercomps=othercomps)
+        eavols = self.each_volumes(mix_vol, _othercomps=othercomps)
+        if not self.compact_display:
+            ml = [
+                MixLine(
+                    [comp.printed_name(tablefmt=tablefmt)],
+                    comp.concentration,
+                    dc,
+                    ev,
+                    plate=comp.plate,
+                    wells=comp._well_list,
+                )
+                for dc, ev, comp in zip(dconcs, eavols, self.components)
+            ]
+        else:
+            ml = list(
+                self._compactstrs(tablefmt=tablefmt, dconcs=dconcs, eavols=eavols)
+            )
+
+        return ml
 
 
 MultiFixedConcentration = FixedConcentration

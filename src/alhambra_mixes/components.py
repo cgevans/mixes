@@ -39,6 +39,10 @@ class AbstractComponent(ABC):
         return ""
 
     @property
+    def is_mix(self) -> bool:
+        return False
+
+    @property
     def well(self) -> WellPos | None:
         return None
 
