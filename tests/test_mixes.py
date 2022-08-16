@@ -409,6 +409,14 @@ def test_toconcentration():
     assert ac.loc["B", "concentration_nM"] == 140
     assert ac.loc["C", "concentration_nM"] == 140
 
+    ml = mix.mixlines("pipe")
+
+    print(mix.table())
+
+    assert [m.dest_conc for m in ml] == [
+        Q_(x, nM) for x in ["100", "85", "130", "50", "10"]
+    ] + [None]
+
 
 def test_combine_plate_actions():
     from alhambra_mixes import Mix, MultiFixedConcentration, Strand

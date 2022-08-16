@@ -302,7 +302,7 @@ class Mix(AbstractComponent):
         )
 
     def mixlines(
-        self, tablefmt: str | TableFormat, buffer_name: str = "Buffer"
+        self, tablefmt: str | TableFormat = "pipe", buffer_name: str = "Buffer"
     ) -> Sequence[MixLine]:
         mixlines: list[MixLine] = []
 
