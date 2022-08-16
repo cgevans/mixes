@@ -62,6 +62,8 @@ def parse_vol(vol: Union[float, int, str, Quantity[D]]) -> Quantity[D]:
 __all__ = (
     "measure_conc_and_dilute",
     "hydrate_and_measure_conc_and_dilute",
+    "hydrate_from_specs",
+    "hydrate_and_measure_conc_and_dilute_from_specs",
 )
 
 # This needs to be here to make Decimal NaNs behave the way that NaNs
@@ -157,8 +159,7 @@ def parse_nmol(nmoles: float | int | str | Quantity[D]) -> Quantity[D]:
 
 # initial hydration of dry DNA
 def hydrate(
-    target_conc: float | int | str | Quantity[D],
-    nmol: float | int | str | Quantity[D],
+    target_conc: float | int | str | Quantity[D], nmol: float | int | str | Quantity[D]
 ) -> Quantity[D]:
     """
     Indicates how much buffer/water volume to add to a dry DNA sample to reach a particular concentration.
@@ -217,8 +218,7 @@ def _has_length(lst: Any) -> bool:
 
 
 def measure_conc(
-    absorbance: float | int | Sequence[float | int],
-    ext_coef: float | int,
+    absorbance: float | int | Sequence[float | int], ext_coef: float | int
 ) -> Quantity[D]:
     """
     Calculates concentration of DNA sample given an absorbance reading on a NanoDrop machine.
@@ -309,6 +309,24 @@ def measure_conc_and_dilute(
     return start_conc, vol_to_add
 
 
+def get_vols_of_strands_from_dataframe(dataframe: pandas.DataFrame) -> dict[str, str]:
+    # takes care of some ugly special cases and variants IDT uses
+    name_key = "Sequence Name"
+    vol_key = find_volume_key(dataframe)
+    vols = key_to_prop_from_dataframe(dataframe, name_key, vol_key)
+    if "µL" in vol_key:
+        # set units if units were listed in header rather than individual entries
+        new_vols = {}
+        for name, vol in vols.items():
+            if isinstance(vol, (int, float)) or isinstance(vol, str) and "L" not in vol:
+                new_vol = f"{vol} µL"
+            else:
+                new_vol = vol
+            new_vols[name] = new_vol
+        vols = new_vols
+    return vols
+
+
 def measure_conc_and_dilute_from_specs(
     filename: str,
     target_conc: float | int | str | Quantity[D],
@@ -356,20 +374,19 @@ def measure_conc_and_dilute_from_specs(
     if vols_removed is None:
         vols_removed = {}
 
-    name_key = "Sequence Name"
-    vol_key = "Volume"
     dataframe = _read_dataframe_from_excel_or_csv(filename, enforce_utf8)
-    vols_of_strands = key_to_prop_from_dataframe(dataframe, name_key, vol_key)
+    vols_of_strands = get_vols_of_strands_from_dataframe(dataframe)
 
+    name_key = "Sequence Name"
     ext_coef_key = find_extinction_coefficient_key(dataframe)
     ext_coef_of_strand = key_to_prop_from_dataframe(dataframe, name_key, ext_coef_key)
 
     concs_and_vols_to_add = {}
-    for name, vol in vols_of_strands.items():
+    for name, absorbance in absorbances.items():
         vol_removed = vols_removed.get(name)  # None if name not a key in vol_removed
         ext_coef_str = ext_coef_of_strand[name]
         ext_coef = float(ext_coef_str)
-        absorbance = absorbances[name]
+        vol = vols_of_strands[name]
         conc_and_vol_to_add = measure_conc_and_dilute(
             absorbance=absorbance,
             ext_coef=ext_coef,
@@ -496,6 +513,24 @@ def hydrate_and_measure_conc_and_dilute(
         vol_removed=vol_removed,
     )
     return actual_start_conc, vol_to_add
+
+
+def key_prefix_in_dataframe(dataframe: pandas.DataFrame, keys: Sequence[str]) -> str:
+    # If any key in keys is either in the dataframe, or if it is a prefix of a
+    for key in keys:
+        if key in dataframe.keys():
+            return key
+
+    for key in keys:
+        for existing_key in dataframe.keys():
+            if existing_key.startswith(key):
+                return existing_key
+
+    raise KeyError(
+        f"key in {keys} not found in dataframe, "
+        f"nor is it a prefix of any key in the dataframe.\n"
+        f"dataframe =\n{dataframe}"
+    )
 
 
 def key_to_prop_from_dataframe(
@@ -776,6 +811,16 @@ def find_extinction_coefficient_key(dataframe: pandas.DataFrame) -> str:
     return key
 
 
+def find_volume_key(dataframe: pandas.DataFrame) -> str:
+    key = "Volume"
+    # can be "Volume" or "Final Volume µL"
+    for column_name in dataframe.columns:
+        if key in column_name:
+            key = column_name
+            return key
+    raise KeyError(f"no key found with f{key} as a substring; dataframe =\n{dataframe}")
+
+
 def measure_conc_from_specs(
     filename: str,
     absorbances: dict[str, float | int | Sequence[float] | Sequence[int]],
@@ -899,8 +944,7 @@ def display_hydrate_from_specs(
 
 
 def display_measure_conc_from_specs(
-    filename: str,
-    absorbances: dict[str, float | int | Sequence[float] | Sequence[int]],
+    filename: str, absorbances: dict[str, float | int | Sequence[float] | Sequence[int]]
 ) -> None:
     """
     Indicates how much volume to add to a dry DNA sample to reach a particular concentration,
