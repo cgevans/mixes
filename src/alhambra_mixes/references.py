@@ -63,9 +63,7 @@ class Reference:
         return len(self.df)
 
     def plate_map(
-        self,
-        name: str,
-        plate_type: PlateType = PlateType.wells96,
+        self, name: str, plate_type: PlateType = PlateType.wells96
     ) -> PlateMap:
         """
         :param name:
@@ -79,7 +77,7 @@ class Reference:
         """
         well_to_strand_name = {}
         from .mixes import Strand, PlateMap
-        
+
         for row in self.df.itertuples():
             if row.Plate == name:  # type: ignore
                 well = row.Well  # type: ignore
@@ -218,10 +216,7 @@ class Reference:
                         str(WellPos(x)) for x in sheet.loc[:, "well position"]
                     ]
                     sheet.rename(
-                        {
-                            "plate name": "Plate",
-                            "sequence name": "Name",
-                        },
+                        {"plate name": "Plate", "sequence name": "Name"},
                         axis="columns",
                         inplace=True,
                     )
