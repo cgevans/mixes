@@ -78,6 +78,7 @@ class Reference:
             `name`. Currently always makes a 96-well plate.
         """
         well_to_strand_name = {}
+        from .mixes import Strand, PlateMap
         for row in self.df.itertuples():
             if row.Plate == name:  # type: ignore
                 well = row.Well  # type: ignore
