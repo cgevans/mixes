@@ -54,7 +54,9 @@ from .printing import (
     emphasize,
     html_with_borders_tablefmt,
 )
-from .references import Reference
+
+if TYPE_CHECKING:
+    from .references import Reference
 from .units import *
 from .units import VolumeError, _parse_vol_optional
 from .util import _maybesequence

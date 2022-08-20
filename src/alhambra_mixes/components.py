@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isnan
-from typing import Any, Sequence, TypeVar
+from typing import TYPE_CHECKING, Any, Sequence, TypeVar
 
 import attrs
 import pandas as pd
@@ -10,9 +10,11 @@ import pandas as pd
 from .locations import WellPos, _parse_wellpos_optional
 from .logging import log
 from .printing import TableFormat
-from .references import Reference
 from .units import Decimal, Quantity, _parse_conc_optional, nM, ureg
 from .util import _none_as_empty_string
+
+if TYPE_CHECKING:
+    from .references import Reference
 
 T = TypeVar("T")
 

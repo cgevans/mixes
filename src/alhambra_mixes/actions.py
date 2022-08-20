@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from typing import List, Literal, Sequence, TypeVar
+from typing import TYPE_CHECKING, List, Literal, Sequence, TypeVar
 
 import attrs
 import pandas as pd
@@ -12,7 +12,9 @@ from warnings import warn
 from .components import AbstractComponent, _empty_components, _maybesequence_comps
 from .locations import WellPos, mixgaps
 from .printing import MixLine, TableFormat
-from .references import Reference
+
+if TYPE_CHECKING:
+    from .references import Reference
 from .units import *
 from .units import (
     VolumeError,
