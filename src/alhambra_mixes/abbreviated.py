@@ -5,6 +5,7 @@ from .components import *
 from .mixes import *
 from .references import *
 from .units import *
+from .experiments import Experiment
 
 __all__ = (
     "Q_",
@@ -16,6 +17,7 @@ __all__ = (
     "C",
     "Ref",
     "Mix",
+    "Exp",
     #    "µM",
     "uM",
     "nM",
@@ -24,8 +26,6 @@ __all__ = (
     #   "µL",
     "uL",
     "mL",
-    "save_mixes",
-    "load_mixes",
     "ureg",
 )
 
@@ -37,6 +37,7 @@ S = Strand
 C = Component
 Ref = Reference
 Mix = Mix
+Exp = Experiment
 
 µM = ureg("µM")
 uM = ureg("uM")
