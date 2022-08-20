@@ -3,17 +3,29 @@ from __future__ import annotations
 import json
 from os import PathLike
 from pathlib import Path
-from typing import Any, Dict, Iterator, Mapping, Sequence, Set, TextIO, Tuple, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterator,
+    Mapping,
+    Sequence,
+    Set,
+    TextIO,
+    Tuple,
+    cast,
+)
 
 import attrs
 
-from alhambra_mixes.actions import AbstractAction
-
-from .components import AbstractComponent
 from .dictstructure import _structure, _unstructure
-from .mixes import Mix
-from .references import Reference
 from .units import DNAN, Q_, ZERO_VOL, Decimal, Quantity, uL
+from .mixes import Mix
+
+if TYPE_CHECKING:
+    from alhambra_mixes.actions import AbstractAction
+    from .components import AbstractComponent
+    from .references import Reference
 
 
 @attrs.define()
@@ -21,6 +33,8 @@ class Experiment:
     """
     A class collecting many related mixes and components, allowing methods to be run that consider all of them
     together.
+
+    Components can be referenced, and set, by name with [], and can be iterated through.
     """
 
     components: Dict[str, AbstractComponent] = attrs.field(
@@ -48,8 +62,8 @@ class Experiment:
         if isinstance(mix_or_actions, Mix):
             mix = mix_or_actions
         else:
-            if name is None:
-                raise ValueError("Mix must have a name.")
+            if not name:
+                raise ValueError("Mix must have a name to be added to an experiment.")
             mix = Mix(
                 mix_or_actions,
                 name=name,
@@ -66,10 +80,14 @@ class Experiment:
         self.components[mix.name] = cast(AbstractComponent, mix)
 
     def __setitem__(self, name: str, value: AbstractComponent) -> None:
-        if value.name is None:
-            value.name = name
+        if not value.name:
+            try:
+                value.name = name  # type: ignore
+            except ValueError:
+                raise ValueError(f"Component does not have a settable name: {value}.")
         else:
-            assert value.name == name
+            if value.name != name:
+                raise ValueError(f"Component name {value.name} does not match {name}.")
         self.components[name] = value
 
     def __getitem__(self, name: str) -> AbstractComponent:
@@ -131,7 +149,7 @@ class Experiment:
     @classmethod
     def load(cls, filename_or_stream: str | PathLike | TextIO) -> "Experiment":
         """
-        Load an experiment from a JSON-formatted file created by Experiment.save
+        Load an experiment from a JSON-formatted file created by Experiment.save.
         """
         if isinstance(filename_or_stream, (str, PathLike)):
             p = Path(filename_or_stream)
@@ -151,6 +169,8 @@ class Experiment:
     def save(self, filename_or_stream: str | PathLike | TextIO) -> None:
         """
         Save an experiment to a JSON-formatted file.
+
+        Tries to store each component/mix only once, with other mixes referencing those components.
         """
         if isinstance(filename_or_stream, (str, PathLike)):
             p = Path(filename_or_stream)

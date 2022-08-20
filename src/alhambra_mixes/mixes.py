@@ -151,7 +151,7 @@ class Mix(AbstractComponent):
     actions: Sequence[AbstractAction] = attrs.field(
         converter=_maybesequence_action, on_setattr=attrs.setters.convert
     )
-    name: str
+    name: str = ""
     test_tube_name: str | None = attrs.field(kw_only=True, default=None)
     "A short name, eg, for labelling a test tube."
     fixed_total_volume: Quantity[Decimal] = attrs.field(

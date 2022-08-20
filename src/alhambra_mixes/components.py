@@ -3,23 +3,22 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from math import isnan
 from typing import TYPE_CHECKING, Any, Dict, Sequence, Tuple, TypeVar, cast
+from typing_extensions import Self
 
 import attrs
 import pandas as pd
-from typing_extensions import Self
 
-from .dictstructure import _STRUCTURE_CLASSES, _structure, _unstructure
 from .locations import WellPos, _parse_wellpos_optional
 from .logging import log
 from .printing import TableFormat
 from .units import ZERO_VOL, Decimal, Quantity, _parse_conc_optional, nM, ureg
 from .util import _none_as_empty_string
+from .dictstructure import _structure, _unstructure, _STRUCTURE_CLASSES
 
 if TYPE_CHECKING:
-    from attrs import Attribute
-
-    from .experiments import Experiment
     from .references import Reference
+    from .experiments import Experiment
+    from attrs import Attribute
 
 
 T = TypeVar("T")
@@ -177,7 +176,6 @@ class Component(AbstractComponent):
             val = getattr(self, att.name)
             if val is att.default:
                 continue
-            # FIXME: nan quantities are always default, and pint handles them poorly
             if isinstance(val, Quantity) and isnan(val.m):
                 continue
             d[att.name] = _unstructure(val)
