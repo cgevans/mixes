@@ -1,11 +1,11 @@
 from .actions import *
 from .components import *
+from .experiments import Experiment
 from .mixes import *
 from .printing import *
 from .quantitate import *
 from .references import *
 from .units import *
-from .experiments import Experiment
 
 __all__ = (
     "uL",

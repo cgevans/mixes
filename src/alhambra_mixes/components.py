@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isnan
-from typing import TYPE_CHECKING, Any, Dict, Sequence, Tuple, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, Sequence, Tuple, TypeVar, cast
 
 import attrs
 import pandas as pd
+from typing_extensions import Self
 
+from .dictstructure import _STRUCTURE_CLASSES, _structure, _unstructure
 from .locations import WellPos, _parse_wellpos_optional
 from .logging import log
 from .printing import TableFormat
@@ -14,6 +16,9 @@ from .units import ZERO_VOL, Decimal, Quantity, _parse_conc_optional, nM, ureg
 from .util import _none_as_empty_string
 
 if TYPE_CHECKING:
+    from attrs import Attribute
+
+    from .experiments import Experiment
     from .references import Reference
 
 
@@ -68,6 +73,23 @@ class AbstractComponent(ABC):
 
     @abstractmethod
     def with_reference(self: T, reference: Reference) -> T:  # pragma: no cover
+        ...
+
+    @abstractmethod
+    def with_experiment(
+        self, reference: "Experiment", inplace: bool = True
+    ) -> AbstractComponent:  # pragma: no cover
+        ...
+
+    @classmethod
+    @abstractmethod
+    def _structure(
+        cls, d: dict[str, Any], experiment: "Experiment" | None = None
+    ) -> "AbstractComponent":  # pragma: no cover
+        ...
+
+    @abstractmethod
+    def _unstructure(self, experiment: "Experiment" | None = None) -> dict[str, Any]:
         ...
 
     def printed_name(self, tablefmt: str | TableFormat) -> str:
@@ -145,6 +167,38 @@ class Component(AbstractComponent):
             index=pd.Index([self.name], name="name"),
         )
         return df
+
+    def _unstructure(self, experiment: "Experiment" | None = None) -> dict[str, Any]:
+        d = {}
+        d["class"] = self.__class__.__name__
+        for att in cast("Sequence[Attribute]", self.__attrs_attrs__):
+            if att.name in ["reference"]:
+                continue
+            val = getattr(self, att.name)
+            if val is att.default:
+                continue
+            # FIXME: nan quantities are always default, and pint handles them poorly
+            if isinstance(val, Quantity) and isnan(val.m):
+                continue
+            d[att.name] = _unstructure(val)
+        return d
+
+    @classmethod
+    def _structure(
+        cls, d: dict[str, Any], experiment: "Experiment" | None = None
+    ) -> "Component":
+        for k, v in d.items():
+            d[k] = _structure(v, experiment)
+        return cls(**d)
+
+    def with_experiment(
+        self: Component, experiment: "Experiment", inplace: bool = True
+    ) -> AbstractComponent:
+        if self.name in experiment.components:
+            return experiment.components[self.name]
+            # FIXME: add checks
+        else:
+            return self
 
     def with_reference(self: Component, reference: Reference) -> Component:
         if reference.df.index.name == "Name":
@@ -299,3 +353,7 @@ def _empty_components() -> pd.DataFrame:
     cps["concentration_nM"] = pd.Series([], dtype=object)
     cps["component"] = pd.Series([], dtype=object)
     return cps
+
+
+for c in [Component, Strand]:
+    _STRUCTURE_CLASSES[c.__name__] = c

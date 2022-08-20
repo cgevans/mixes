@@ -429,8 +429,8 @@ def display_measure_conc_and_dilute_from_specs(
         If do not want to convert the specs file to UTF-8 and you are certain that no important Unicode
         characters would be dropped, then you can set this parameter to false.
     """
+    from IPython.display import Markdown, display
     from tabulate import tabulate
-    from IPython.display import display, Markdown
 
     names_to_concs_and_vols_to_add = measure_conc_and_dilute_from_specs(
         filename=filename,
@@ -782,10 +782,10 @@ def _read_dataframe_from_excel_or_csv(
         if enforce_utf8 and not _is_utf8(filename):
             raise ValueError(
                 f"""{filename}
-is not a valid UTF-8 file. To avoid accidentally skipping Unicode 
-characters such as µ (which would silently convert µL to L, for instance), 
-first convert the file to UTF-8 format. Alternately, if you are certain that 
-the file contains no important Unicode characters, set the parameter 
+is not a valid UTF-8 file. To avoid accidentally skipping Unicode
+characters such as µ (which would silently convert µL to L, for instance),
+first convert the file to UTF-8 format. Alternately, if you are certain that
+the file contains no important Unicode characters, set the parameter
 enforce_utf8 to False to avoid getting this error."""
             )
         # encoding_errors='ignore' prevents problems with, e.g., µ Unicode symbol

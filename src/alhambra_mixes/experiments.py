@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-from typing import Dict, Iterator, Mapping, Sequence, Set, Tuple, cast
+import json
+from os import PathLike
+from pathlib import Path
+from typing import Any, Dict, Iterator, Mapping, Sequence, Set, TextIO, Tuple, cast
+
+import attrs
 
 from alhambra_mixes.actions import AbstractAction
 
-from .references import Reference
+from .components import AbstractComponent
+from .dictstructure import _structure, _unstructure
 from .mixes import Mix
-from .components import Component
-from .units import DNAN, Q_, Quantity, ZERO_VOL, Decimal, uL
-import attrs
+from .references import Reference
+from .units import DNAN, Q_, ZERO_VOL, Decimal, Quantity, uL
 
 
 @attrs.define()
@@ -18,7 +23,9 @@ class Experiment:
     together.
     """
 
-    components: Dict[str, Component]  # FIXME: CompRef
+    components: Dict[str, AbstractComponent] = attrs.field(
+        factory=dict
+    )  # FIXME: CompRef
 
     def add_mix(
         self,
@@ -32,6 +39,12 @@ class Experiment:
         reference: Reference | None = None,
         min_volume: Quantity[Decimal] | str = Q_(Decimal("0.5"), uL),
     ) -> None:
+        """
+        Add a mix to the experiment, either as a Mix object, or by creating a new Mix.
+
+        Either the first argument should be a Mix, or arguments should be passed as for
+        initializing a Mix.
+        """
         if isinstance(mix_or_actions, Mix):
             mix = mix_or_actions
         else:
@@ -49,19 +62,20 @@ class Experiment:
             )
         if mix.name in self.components:
             raise ValueError(f"Mix {mix.name} already exists in experiment.")
-        self.components[mix.name] = cast(Component, mix)
+        mix.with_experiment(self, True)
+        self.components[mix.name] = cast(AbstractComponent, mix)
 
-    def __setitem__(self, name: str, value: Component) -> None:
+    def __setitem__(self, name: str, value: AbstractComponent) -> None:
         if value.name is None:
             value.name = name
         else:
             assert value.name == name
         self.components[name] = value
 
-    def __getitem__(self, name: str) -> Component:
+    def __getitem__(self, name: str) -> AbstractComponent:
         return self.components[name]
 
-    def __iter__(self) -> Iterator[Component]:
+    def __iter__(self) -> Iterator[AbstractComponent]:
         return iter(self.components.values())
 
     def consumed_volumes(self) -> Mapping[str, Tuple[Quantity, Quantity]]:
@@ -90,3 +104,64 @@ class Experiment:
         print("\n".join(badlines))
         print("\n")
         print("\n".join(conslines))
+
+    def _unstructure(self) -> dict[str, Any]:
+        """
+        Create a dict representation of the Experiment.
+        """
+        return {
+            "class": "Experiment",
+            "components": {
+                k: v._unstructure(experiment=self) for k, v in self.components.items()
+            },
+        }
+
+    @classmethod
+    def _structure(cls, d: dict[str, Any]) -> "Experiment":
+        """
+        Create an Experiment from a dict representation.
+        """
+        if d["class"] != "Experiment":
+            raise ValueError("Not an Experiment dict.")
+        del d["class"]
+        for k, v in d["components"].items():
+            d["components"][k] = _structure(v)
+        return cls(**d)
+
+    @classmethod
+    def load(cls, filename_or_stream: str | PathLike | TextIO) -> "Experiment":
+        """
+        Load an experiment from a JSON-formatted file created by Experiment.save
+        """
+        if isinstance(filename_or_stream, (str, PathLike)):
+            p = Path(filename_or_stream)
+            if not p.suffix:
+                p = p.with_suffix(".json")
+            s: TextIO = open(p, "r")
+            close = True
+        else:
+            s = filename_or_stream
+            close = False
+
+        exp = cls._structure(json.load(s))
+        if close:
+            s.close()
+        return exp
+
+    def save(self, filename_or_stream: str | PathLike | TextIO) -> None:
+        """
+        Save an experiment to a JSON-formatted file.
+        """
+        if isinstance(filename_or_stream, (str, PathLike)):
+            p = Path(filename_or_stream)
+            if not p.suffix:
+                p = p.with_suffix(".json")
+            s: TextIO = open(p, "w")
+            close = True
+        else:
+            s = filename_or_stream
+            close = False
+
+        json.dump(self._unstructure(), s, indent=2, ensure_ascii=False)
+        if close:
+            s.close()

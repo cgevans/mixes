@@ -1,5 +1,6 @@
-import pytest
 import pandas as pd
+import pytest
+
 from alhambra_mixes import Reference
 
 

@@ -8,10 +8,9 @@ from typing import TYPE_CHECKING, Any, Mapping, Sequence, TextIO, cast
 import attrs
 from typing_extensions import TypeAlias
 
-from .mixes import PlateMap
-
+from .components import Component, Strand
 from .locations import PlateType, WellPos, _parse_wellpos_optional
-from .components import Strand, Component
+from .mixes import PlateMap
 from .units import (
     DNAN,
     Q_,

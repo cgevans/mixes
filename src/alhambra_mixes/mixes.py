@@ -43,6 +43,7 @@ from typing_extensions import TypeAlias
 from .actions import AbstractAction  # Fixme: should not need special cases
 from .actions import FixedConcentration, FixedVolume
 from .components import AbstractComponent, Component, Strand, _empty_components
+from .dictstructure import _STRUCTURE_CLASSES, _structure, _unstructure
 from .locations import PlateType, WellPos
 from .logging import log
 from .printing import (
@@ -58,6 +59,9 @@ from .printing import (
 
 if TYPE_CHECKING:
     from .references import Reference
+    from .experiments import Experiment
+    from attrs import Attribute
+
 from .units import *
 from .units import VolumeError, _parse_vol_optional
 from .util import _maybesequence
@@ -483,6 +487,16 @@ class Mix(AbstractComponent):
 
     def __str__(self) -> str:
         return f"Table: {self.infoline()}\n\n" + self.table()
+
+    def with_experiment(self: Mix, experiment: Experiment, inplace: bool = True) -> Mix:
+        newactions = [
+            action.with_experiment(experiment, inplace) for action in self.actions
+        ]
+        if inplace:
+            self.actions = newactions
+            return self
+        else:
+            return attrs.evolve(self, actions=newactions)
 
     def with_reference(self: Mix, reference: Reference) -> Mix:
         new = attrs.evolve(
@@ -913,6 +927,30 @@ class Mix(AbstractComponent):
 
         return consumed_volumes, made_volumes
 
+    def _unstructure(self, experiment: "Experiment" | None = None) -> dict[str, Any]:
+        d: dict[str, Any] = {}
+        d["class"] = self.__class__.__name__
+        for a in cast("Sequence[Attribute]", self.__attrs_attrs__):
+            if a.name == "actions":
+                d[a.name] = [a._unstructure(experiment) for a in self.actions]
+            else:
+                val = getattr(self, a.name)
+                if val == a.default:
+                    continue
+                # FIXME: nan quantities are always default, and pint handles them poorly
+                if isinstance(val, Quantity) and isnan(val.m):
+                    continue
+                d[a.name] = _unstructure(val)
+        return d
+
+    @classmethod
+    def _structure(
+        cls, d: dict[str, Any], experiment: "Experiment" | None = None
+    ) -> "Mix":
+        for k, v in d.items():
+            d[k] = _structure(v, experiment)
+        return cls(**d)
+
 
 @attrs.define()
 class PlateMap:
@@ -1077,76 +1115,4 @@ class PlateMap:
         return table_with_title
 
 
-_MIXES_CLASSES = {
-    c.__name__: c for c in [FixedVolume, FixedConcentration, Mix, Strand, Component]
-}
-
-
-def _unstructure(x):
-    if isinstance(x, ureg.Quantity):
-        return str(x)
-    elif isinstance(x, list):
-        return [_unstructure(y) for y in x]
-    elif isinstance(x, WellPos):
-        return str(x)
-    elif hasattr(x, "__attrs_attrs__"):
-        d = {}
-        d["class"] = x.__class__.__name__
-        for att in x.__attrs_attrs__:
-            if att.name in ["reference"]:
-                continue
-            val = getattr(x, att.name)
-            if val is att.default:
-                continue
-            d[att.name] = _unstructure(val)
-        return d
-    else:
-        return x
-
-
-def _structure(x):
-    if isinstance(x, dict) and ("class" in x):
-        c = _MIXES_CLASSES[x["class"]]
-        del x["class"]
-        for k in x.keys():
-            x[k] = _structure(x[k])
-        return c(**x)
-    elif isinstance(x, list):
-        return [_structure(y) for y in x]
-    else:
-        return x
-
-
-def load_mixes(file_or_stream: str | PathLike | TextIO):
-    if isinstance(file_or_stream, (str, PathLike)):
-        p = Path(file_or_stream)
-        if not p.suffix:
-            p = p.with_suffix(".json")
-        s: TextIO = open(file_or_stream, "r")
-    else:
-        s = file_or_stream
-
-    d = json.load(s)
-
-    return {k: _structure(v) for k, v in d.items()}
-
-
-def save_mixes(
-    mixes: Sequence | Mapping | Mix, file_or_stream: str | PathLike | TextIO
-):
-    if isinstance(file_or_stream, (str, PathLike)):
-        p = Path(file_or_stream)
-        if not p.suffix:
-            p = p.with_suffix(".json")
-        s: TextIO = open(p, "w")
-    else:
-        s = file_or_stream
-
-    if isinstance(mixes, Mix):
-        d = {mixes.name: _unstructure(mixes)}
-    elif isinstance(mixes, Sequence):
-        d = {x.name: _unstructure(x) for x in mixes}
-    elif isinstance(mixes, Mapping):
-        d = {x.name: _unstructure(x) for x in mixes.values()}  # FIXME: check mapping
-
-    json.dump(d, s)
+_STRUCTURE_CLASSES["Mix"] = Mix
