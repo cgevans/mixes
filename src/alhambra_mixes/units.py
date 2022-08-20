@@ -139,6 +139,27 @@ def _parse_vol_optional(v: str | pint.Quantity) -> pint.Quantity:
     raise ValueError
 
 
+def _parse_vol_optional_none_zero(v: str | pint.Quantity) -> pint.Quantity:
+    """Parses a string or quantity as a volume, returning a NaN volume
+    if the value is None.
+    """
+    # if isinstance(v, (float, int)):  # FIXME: was in quantitate.py, but potentially unsafe
+    #    v = f"{v} µL"
+    if isinstance(v, str):
+        q = ureg(v)
+        if not q.check(uL):
+            raise ValueError(f"{v} is not a valid quantity here (should be volume).")
+        return q
+    elif isinstance(v, pint.Quantity):
+        if not v.check(uL):
+            raise ValueError(f"{v} is not a valid quantity here (should be volume).")
+        v = Q_(v.m, v.u)
+        return v.to_compact()
+    elif v is None:
+        return ZERO_VOL
+    raise ValueError
+
+
 def _parse_vol_required(v: str | pint.Quantity) -> pint.Quantity:
     """Parses a string or quantity as a volume, requiring that it result in a
     value.

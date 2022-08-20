@@ -142,7 +142,7 @@ def _maybesequence_action(
     return [object_or_sequence]
 
 
-@attrs.define()
+@attrs.define(eq=False)
 class Mix(AbstractComponent):
     """Class denoting a Mix, a collection of source components mixed to
     some volume or concentration.
@@ -174,6 +174,20 @@ class Mix(AbstractComponent):
 
     @property
     def is_mix(self) -> bool:
+        return True
+
+    def __eq__(self, other: Any) -> bool:
+        if type(self) != type(other):
+            return False
+        for a in self.__attrs_attrs__:  # type: ignore
+            a = cast("Attribute", a)
+            v1 = getattr(self, a.name)
+            v2 = getattr(other, a.name)
+            if isinstance(v1, Quantity):
+                if isnan(v1.m) and isnan(v2.m) and (v1.units == v2.units):
+                    continue
+            if v1 != v2:
+                return False
         return True
 
     def __attrs_post_init__(self) -> None:

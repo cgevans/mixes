@@ -13,10 +13,12 @@ from .components import AbstractComponent, _empty_components, _maybesequence_com
 from .dictstructure import _STRUCTURE_CLASSES, _structure, _unstructure
 from .locations import WellPos, mixgaps
 from .printing import MixLine, TableFormat
+from .units import _parse_vol_optional_none_zero
 
 if TYPE_CHECKING:
     from .references import Reference
     from .experiments import Experiment
+    from attrs import Attribute
 
 from .units import *
 from .units import (
@@ -137,7 +139,7 @@ class AbstractAction(ABC):
 T_AWC = TypeVar("T_AWC", bound="ActionWithComponents")
 
 
-@attrs.define()
+@attrs.define(eq=False)
 class ActionWithComponents(AbstractAction):
     components: list[AbstractComponent] = attrs.field(
         converter=_maybesequence_comps, on_setattr=attrs.setters.convert
@@ -150,6 +152,19 @@ class ActionWithComponents(AbstractAction):
     @property
     def name(self) -> str:
         return ", ".join(c.name for c in self.components)
+
+    def __eq__(self, other: Any) -> bool:
+        if type(self) != type(other):
+            return False
+        for a in self.__attrs_attrs__:  # type: Attribute
+            v1 = getattr(self, a.name)
+            v2 = getattr(other, a.name)
+            if isinstance(v1, Quantity):
+                if isnan(v1.m) and isnan(v2.m) and (v1.units == v2.units):
+                    continue
+            if v1 != v2:
+                return False
+        return True
 
     def with_experiment(
         self: T_AWC, experiment: "Experiment", inplace: bool = True
@@ -202,7 +217,7 @@ class ActionWithComponents(AbstractAction):
             if experiment and (cd["name"] in experiment.components):
                 scomps.append(experiment.components[cd["name"]])
             elif experiment:
-                c = cast(AbstractComponent, _structure(cd, experiment))
+                c = _structure(cd, experiment)
                 experiment[c.name] = c
                 scomps.append(c)
             else:
@@ -663,8 +678,8 @@ class FixedConcentration(ActionWithComponents):
     set_name: str | None = None
     compact_display: bool = True
     min_volume: Quantity[Decimal] = attrs.field(
-        converter=_parse_vol_optional,
-        default=Q_(DNAN, uL),
+        converter=_parse_vol_optional_none_zero,
+        default=ZERO_VOL,
         on_setattr=attrs.setters.convert,
     )
 

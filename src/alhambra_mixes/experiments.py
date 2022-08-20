@@ -76,8 +76,8 @@ class Experiment:
             )
         if mix.name in self.components:
             raise ValueError(f"Mix {mix.name} already exists in experiment.")
-        mix.with_experiment(self, True)
-        self.components[mix.name] = cast(AbstractComponent, mix)
+        mix = mix.with_experiment(self, True)
+        self.components[mix.name] = mix
 
     def __setitem__(self, name: str, value: AbstractComponent) -> None:
         if not value.name:
@@ -88,6 +88,7 @@ class Experiment:
         else:
             if value.name != name:
                 raise ValueError(f"Component name {value.name} does not match {name}.")
+        value = value.with_experiment(self, True)
         self.components[name] = value
 
     def __getitem__(self, name: str) -> AbstractComponent:
