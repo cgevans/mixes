@@ -19,6 +19,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Dict,
     Iterable,
     Literal,
     Mapping,
@@ -869,6 +870,40 @@ class Mix(AbstractComponent):
                     )
                 existing_plate_map.well_to_strand_name[well_str] = strand_name
             return existing_plate_map
+
+    def _update_volumes(
+        self,
+        consumed_volumes: Dict[str, Quantity] = {},
+        made_volumes: Dict[str, Quantity] = {},
+    ) -> Tuple[Dict[str, Quantity], Dict[str, Quantity]]:
+        """
+        Given a
+        """
+        if self.name in made_volumes:
+            # We've already been seen.  Ignore our components.
+            return consumed_volumes, made_volumes
+
+        made_volumes[self.name] = self.total_volume
+
+        for action in self.actions:
+            for component, volume in zip(
+                action.components, action.each_volumes(self.total_volume, self.actions)
+            ):
+                consumed_volumes[component.name] = (
+                    consumed_volumes.get(component.name, 0 * ureg.ul) + volume
+                )
+                component._update_volumes(consumed_volumes, made_volumes)
+
+        # Potentially deal with buffer...
+        if self.buffer_volume.m > 0:
+            made_volumes[self.buffer_name] = made_volumes.get(
+                self.buffer_name, 0 * ureg.ul
+            )
+            consumed_volumes[self.buffer_name] = (
+                consumed_volumes.get(self.buffer_name, 0 * ureg.ul) + self.buffer_volume
+            )
+
+        return consumed_volumes, made_volumes
 
 
 @attrs.define()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isnan
-from typing import TYPE_CHECKING, Any, Sequence, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, Sequence, Tuple, TypeVar
 
 import attrs
 import pandas as pd
@@ -10,11 +10,12 @@ import pandas as pd
 from .locations import WellPos, _parse_wellpos_optional
 from .logging import log
 from .printing import TableFormat
-from .units import Decimal, Quantity, _parse_conc_optional, nM, ureg
+from .units import ZERO_VOL, Decimal, Quantity, _parse_conc_optional, nM, ureg
 from .util import _none_as_empty_string
 
 if TYPE_CHECKING:
     from .references import Reference
+
 
 T = TypeVar("T")
 
@@ -71,6 +72,22 @@ class AbstractComponent(ABC):
 
     def printed_name(self, tablefmt: str | TableFormat) -> str:
         return self.name
+
+    def _update_volumes(
+        self,
+        consumed_volumes: Dict[str, Quantity] = {},
+        made_volumes: Dict[str, Quantity] = {},
+    ) -> Tuple[Dict[str, Quantity], Dict[str, Quantity]]:
+        """
+        Given a
+        """
+        if self.name in made_volumes:
+            # We've already been seen.  Ignore our components.
+            return consumed_volumes, made_volumes
+
+        made_volumes[self.name] = ZERO_VOL
+
+        return consumed_volumes, made_volumes
 
 
 @attrs.define()
