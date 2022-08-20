@@ -132,6 +132,14 @@ def findloc_tuples(
     return (loc["Name"], loc["Plate"], well)
 
 
+def _maybesequence_action(
+    object_or_sequence: Sequence[AbstractAction] | AbstractAction,
+) -> list[AbstractAction]:
+    if isinstance(object_or_sequence, Sequence):
+        return list(object_or_sequence)
+    return [object_or_sequence]
+
+
 @attrs.define()
 class Mix(AbstractComponent):
     """Class denoting a Mix, a collection of source components mixed to
@@ -139,7 +147,7 @@ class Mix(AbstractComponent):
     """
 
     actions: Sequence[AbstractAction] = attrs.field(
-        converter=_maybesequence, on_setattr=attrs.setters.convert
+        converter=_maybesequence_action, on_setattr=attrs.setters.convert
     )
     name: str
     test_tube_name: str | None = attrs.field(kw_only=True, default=None)
@@ -157,7 +165,7 @@ class Mix(AbstractComponent):
     reference: Reference | None = None
     min_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_optional,
-        default=Q_(Decimal(0.5), uL),
+        default=Q_(Decimal("0.5"), uL),
         kw_only=True,
         on_setattr=attrs.setters.convert,
     )

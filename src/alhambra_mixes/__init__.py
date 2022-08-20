@@ -5,6 +5,7 @@ from .printing import *
 from .quantitate import *
 from .references import *
 from .units import *
+from .experiments import Experiment
 
 __all__ = (
     "uL",
@@ -14,6 +15,7 @@ __all__ = (
     "ureg",
     "Component",
     "Strand",
+    "Experiment",
     "FixedVolume",
     "FixedConcentration",
     "EqualConcentration",

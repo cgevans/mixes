@@ -1,22 +1,74 @@
 from __future__ import annotations
 
-from typing import Dict, Mapping, Sequence, Set, Tuple
+from typing import Dict, Iterator, Mapping, Sequence, Set, Tuple, cast
+
+from alhambra_mixes.actions import AbstractAction
+
+from .references import Reference
 from .mixes import Mix
 from .components import Component
-from .units import Quantity, ZERO_VOL
+from .units import DNAN, Q_, Quantity, ZERO_VOL, Decimal, uL
 import attrs
 
 
+@attrs.define()
 class Experiment:
-    mixes: Sequence[Mix | Component]
+    """
+    A class collecting many related mixes and components, allowing methods to be run that consider all of them
+    together.
+    """
+
+    components: Dict[str, Component]  # FIXME: CompRef
+
+    def add_mix(
+        self,
+        mix_or_actions: Mix | Sequence[AbstractAction] | AbstractAction,
+        name: str | None = None,
+        test_tube_name: str | None = None,
+        *,
+        fixed_total_volume: Quantity[Decimal] | str = Q_(DNAN, uL),
+        fixed_concentration: str | Quantity[Decimal] | None = None,
+        buffer_name: str = "Buffer",
+        reference: Reference | None = None,
+        min_volume: Quantity[Decimal] | str = Q_(Decimal("0.5"), uL),
+    ) -> None:
+        if isinstance(mix_or_actions, Mix):
+            mix = mix_or_actions
+        else:
+            if name is None:
+                raise ValueError("Mix must have a name.")
+            mix = Mix(
+                mix_or_actions,
+                name=name,
+                test_tube_name=test_tube_name,
+                fixed_total_volume=fixed_total_volume,
+                fixed_concentration=fixed_concentration,
+                buffer_name=buffer_name,
+                reference=reference,
+                min_volume=min_volume,
+            )
+        if mix.name in self.components:
+            raise ValueError(f"Mix {mix.name} already exists in experiment.")
+        self.components[mix.name] = cast(Component, mix)
+
+    def __setitem__(self, name: str, value: Component) -> None:
+        if value.name is None:
+            value.name = name
+        else:
+            assert value.name == name
+        self.components[name] = value
+
+    def __getitem__(self, name: str) -> Component:
+        return self.components[name]
+
+    def __iter__(self) -> Iterator[Component]:
+        return iter(self.components.values())
 
     def consumed_volumes(self) -> Mapping[str, Tuple[Quantity, Quantity]]:
         consumed_volume: Dict[str, Quantity] = {}
         made_volume: Dict[str, Quantity] = {}
-        for mix in self.mixes:
-            if not isinstance(mix, Mix):
-                continue
-            mix._update_volumes(consumed_volume, made_volume)
+        for component in self.components.values():
+            component._update_volumes(consumed_volume, made_volume)
         return {
             k: (consumed_volume[k], made_volume[k]) for k in consumed_volume
         }  # FIXME
