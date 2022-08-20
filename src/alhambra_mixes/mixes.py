@@ -945,6 +945,8 @@ class Mix(AbstractComponent):
         for a in cast("Sequence[Attribute]", self.__attrs_attrs__):
             if a.name == "actions":
                 d[a.name] = [a._unstructure(experiment) for a in self.actions]
+            elif a.name == "reference":
+                continue
             else:
                 val = getattr(self, a.name)
                 if val == a.default:
