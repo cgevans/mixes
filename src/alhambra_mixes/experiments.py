@@ -167,6 +167,16 @@ class Experiment:
             s.close()
         return exp
 
+    def resolve_components(self) -> None:
+        """
+        Resolve string/blank-component components in mixes, searching through the mixes
+        in the experiment.  FIXME Add used mixes to the experiment if they are not already there.
+        """
+        for mix in self:
+            if not isinstance(mix, Mix):
+                continue
+            mix.with_experiment(self, True)
+
     def save(self, filename_or_stream: str | PathLike | TextIO) -> None:
         """
         Save an experiment to a JSON-formatted file.
