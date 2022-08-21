@@ -15,7 +15,7 @@ from .units import ZERO_VOL, Decimal, Quantity, _parse_conc_optional, nM, ureg
 from .util import _none_as_empty_string
 from .dictstructure import _structure, _unstructure, _STRUCTURE_CLASSES
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from .references import Reference
     from .experiments import Experiment
     from attrs import Attribute

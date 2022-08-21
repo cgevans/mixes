@@ -22,7 +22,7 @@ from .dictstructure import _structure, _unstructure
 from .units import DNAN, Q_, ZERO_VOL, Decimal, Quantity, uL
 from .mixes import Mix
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from alhambra_mixes.actions import AbstractAction
     from .components import AbstractComponent
     from .references import Reference
@@ -44,7 +44,7 @@ class Experiment:
     def add_mix(
         self,
         mix_or_actions: Mix | Sequence[AbstractAction] | AbstractAction,
-        name: str | None = None,
+        name: str = "",
         test_tube_name: str | None = None,
         *,
         fixed_total_volume: Quantity[Decimal] | str = Q_(DNAN, uL),
@@ -61,9 +61,8 @@ class Experiment:
         """
         if isinstance(mix_or_actions, Mix):
             mix = mix_or_actions
+            name = mix.name
         else:
-            if not name:
-                raise ValueError("Mix must have a name to be added to an experiment.")
             mix = Mix(
                 mix_or_actions,
                 name=name,
@@ -74,7 +73,9 @@ class Experiment:
                 reference=reference,
                 min_volume=min_volume,
             )
-        if mix.name in self.components:
+        if not name:
+            raise ValueError("Mix must have a name to be added to an experiment.")
+        elif mix.name in self.components:
             raise ValueError(f"Mix {mix.name} already exists in experiment.")
         mix = mix.with_experiment(self, True)
         self.components[mix.name] = mix
@@ -83,7 +84,9 @@ class Experiment:
         if not value.name:
             try:
                 value.name = name  # type: ignore
-            except ValueError:
+            except ValueError:  # pragma: no cover
+                # This will only happen in a hypothetical component where
+                # the name cannot be changed.
                 raise ValueError(f"Component does not have a settable name: {value}.")
         else:
             if value.name != name:
@@ -94,23 +97,26 @@ class Experiment:
     def __getitem__(self, name: str) -> AbstractComponent:
         return self.components[name]
 
+    def __len__(self) -> int:
+        return len(self.components)
+
     def __iter__(self) -> Iterator[AbstractComponent]:
         return iter(self.components.values())
 
-    def consumed_volumes(self) -> Mapping[str, Tuple[Quantity, Quantity]]:
+    def consumed_and_produced_volumes(self) -> Mapping[str, Tuple[Quantity, Quantity]]:
         consumed_volume: Dict[str, Quantity] = {}
-        made_volume: Dict[str, Quantity] = {}
+        produced_volume: Dict[str, Quantity] = {}
         for component in self.components.values():
-            component._update_volumes(consumed_volume, made_volume)
+            component._update_volumes(consumed_volume, produced_volume)
         return {
-            k: (consumed_volume[k], made_volume[k]) for k in consumed_volume
+            k: (consumed_volume[k], produced_volume[k]) for k in consumed_volume
         }  # FIXME
 
     def check_volumes(self, showall: bool = False) -> None:
         """
         Check to ensure that consumed volumes are less than made volumes.
         """
-        volumes = self.consumed_volumes()
+        volumes = self.consumed_and_produced_volumes()
         conslines = []
         badlines = []
         for k, (consumed, made) in volumes.items():
@@ -140,7 +146,7 @@ class Experiment:
         """
         Create an Experiment from a dict representation.
         """
-        if d["class"] != "Experiment":
+        if ("class" not in d) or (d["class"] != "Experiment"):
             raise ValueError("Not an Experiment dict.")
         del d["class"]
         for k, v in d["components"].items():

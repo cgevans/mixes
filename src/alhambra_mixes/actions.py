@@ -15,7 +15,7 @@ from .locations import WellPos, mixgaps
 from .printing import MixLine, TableFormat
 from .units import _parse_vol_optional_none_zero
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from .references import Reference
     from .experiments import Experiment
     from attrs import Attribute

@@ -57,14 +57,13 @@ from .printing import (
     html_with_borders_tablefmt,
 )
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from .references import Reference
     from .experiments import Experiment
     from attrs import Attribute
 
 from .units import *
 from .units import VolumeError, _parse_vol_optional
-from .util import _maybesequence
 
 warnings.filterwarnings(
     "ignore",
@@ -918,13 +917,14 @@ class Mix(AbstractComponent):
             return consumed_volumes, made_volumes
 
         made_volumes[self.name] = self.total_volume
+        consumed_volumes[self.name] = ZERO_VOL
 
         for action in self.actions:
             for component, volume in zip(
                 action.components, action.each_volumes(self.total_volume, self.actions)
             ):
                 consumed_volumes[component.name] = (
-                    consumed_volumes.get(component.name, 0 * ureg.ul) + volume
+                    consumed_volumes.get(component.name, ZERO_VOL) + volume
                 )
                 component._update_volumes(consumed_volumes, made_volumes)
 

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 from .locations import WellPos
 from .units import Quantity
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from attrs import Attribute
 
     from .experiments import Experiment
