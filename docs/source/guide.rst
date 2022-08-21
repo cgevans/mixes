@@ -14,6 +14,7 @@ Alhambra-mixes organizes the mixing process into several concepts:
 - An *Action* describes how a component or set of components is to be added to a mix.  It may specify that each component be added to get a target concentration in the mix, for example, or that a fixed volume of each component be added.  For example, the `FixedConcentration` action adds a component (or several components) to a mix at a fixed desired concentration, while `FixedVolume` adds components at fixed volumes.
 - A *Mix* is a collection of Actions, each covering some Components.  It may have a fixed volume, or that may be determined by the components.  It may also have a fixed effective concentration (for use as a component), or that may be determined by a particular component.
 - A *Reference* is an object that has information about component concentrations, sequences, and locations.
+- An *Experiment* collects many mixes/components.  These are not necessary, but allow saving and loading to and from files, tracking of produced and used concentrations, and referencing of other components and mixes by name.
 
 Physical units are used extensively in alhambra-mixes.  Internally, the library uses pint to handle units, and the decimal library to handle numbers, to avoid floating point inaccuracies.  While using the library, units can be specifid flexibly as strings, which will be processed as the correct quantity, for example `"50 nM"`, or `"10 µL"`,
 or `"5 uM"`.  If you need to do calculations, quantities can be created using :any:`Q_`, for example, `Q_(10, "µL")`,
@@ -144,3 +145,22 @@ With this reference, components, actions, and mixes can be updated with the info
    Mix.with_reference
    AbstractAction.with_reference
    Component.with_reference
+
+Experiments
+-----------
+
+Experiments hold mixes, and potentially concentrations, to be referred to later and tracked as a group.
+
+Mixes can be added to an experiment using the :any:`Experiment.add_mix` method, or by using `experiment[mix_name] = Mix(...)`.  In the latter case, the name in the Mix does not need to be set: it will be set to `mix_name` when it is added to the experiment.  When mixes are added, components that are string references are resolved to components with the same names in the experiment.  This is obviously not possible if the mix being referred to is only added later: in this case, you can use the :any:`Experiment.resolve_components` method to resolve the references.
+
+A useful feature of an Experiment is that the consumed and produced volumes of mixes, and the consumed volumes of other components, can be tracked across all of the mixes involved:
+
+.. autosummary::
+   Experiment.check_volumes
+   Experiment.consumed_and_produced_volumes
+
+Experiments also allow groups of mixes to be saved and loaded to JSON files.  When written, any mixes used in other mixes are replaced with references to those mixes, so that when the file is loaded, the mixes are linked back together, and changes to one mix in the experiment will propagate to all the mixes that use it:
+
+.. autosummary::
+   Experiment.save
+   Experiment.load

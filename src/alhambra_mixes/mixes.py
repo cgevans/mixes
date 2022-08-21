@@ -19,6 +19,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Dict,
     Iterable,
     Literal,
     Mapping,
@@ -42,6 +43,7 @@ from typing_extensions import TypeAlias
 from .actions import AbstractAction  # Fixme: should not need special cases
 from .actions import FixedConcentration, FixedVolume
 from .components import AbstractComponent, Component, Strand, _empty_components
+from .dictstructure import _STRUCTURE_CLASSES, _structure, _unstructure
 from .locations import PlateType, WellPos
 from .logging import log
 from .printing import (
@@ -55,11 +57,13 @@ from .printing import (
     html_with_borders_tablefmt,
 )
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from .references import Reference
+    from .experiments import Experiment
+    from attrs import Attribute
+
 from .units import *
 from .units import VolumeError, _parse_vol_optional
-from .util import _maybesequence
 
 warnings.filterwarnings(
     "ignore",
@@ -76,8 +80,6 @@ warnings.filterwarnings(
 __all__ = (
     "Mix",
     "_format_title",
-    "save_mixes",
-    "load_mixes",
 )
 
 MIXHEAD_EA = (
@@ -131,16 +133,24 @@ def findloc_tuples(
     return (loc["Name"], loc["Plate"], well)
 
 
-@attrs.define()
+def _maybesequence_action(
+    object_or_sequence: Sequence[AbstractAction] | AbstractAction,
+) -> list[AbstractAction]:
+    if isinstance(object_or_sequence, Sequence):
+        return list(object_or_sequence)
+    return [object_or_sequence]
+
+
+@attrs.define(eq=False)
 class Mix(AbstractComponent):
     """Class denoting a Mix, a collection of source components mixed to
     some volume or concentration.
     """
 
     actions: Sequence[AbstractAction] = attrs.field(
-        converter=_maybesequence, on_setattr=attrs.setters.convert
+        converter=_maybesequence_action, on_setattr=attrs.setters.convert
     )
-    name: str
+    name: str = ""
     test_tube_name: str | None = attrs.field(kw_only=True, default=None)
     "A short name, eg, for labelling a test tube."
     fixed_total_volume: Quantity[Decimal] = attrs.field(
@@ -156,13 +166,27 @@ class Mix(AbstractComponent):
     reference: Reference | None = None
     min_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_optional,
-        default=Q_(Decimal(0.5), uL),
+        default=Q_(Decimal("0.5"), uL),
         kw_only=True,
         on_setattr=attrs.setters.convert,
     )
 
     @property
     def is_mix(self) -> bool:
+        return True
+
+    def __eq__(self, other: Any) -> bool:
+        if type(self) != type(other):
+            return False
+        for a in self.__attrs_attrs__:  # type: ignore
+            a = cast("Attribute", a)
+            v1 = getattr(self, a.name)
+            v2 = getattr(other, a.name)
+            if isinstance(v1, Quantity):
+                if isnan(v1.m) and isnan(v2.m) and (v1.units == v2.units):
+                    continue
+            if v1 != v2:
+                return False
         return True
 
     def __attrs_post_init__(self) -> None:
@@ -474,6 +498,16 @@ class Mix(AbstractComponent):
 
     def __str__(self) -> str:
         return f"Table: {self.infoline()}\n\n" + self.table()
+
+    def with_experiment(self: Mix, experiment: Experiment, inplace: bool = True) -> Mix:
+        newactions = [
+            action.with_experiment(experiment, inplace) for action in self.actions
+        ]
+        if inplace:
+            self.actions = newactions
+            return self
+        else:
+            return attrs.evolve(self, actions=newactions)
 
     def with_reference(self: Mix, reference: Reference) -> Mix:
         new = attrs.evolve(
@@ -870,6 +904,67 @@ class Mix(AbstractComponent):
                 existing_plate_map.well_to_strand_name[well_str] = strand_name
             return existing_plate_map
 
+    def _update_volumes(
+        self,
+        consumed_volumes: Dict[str, Quantity] = {},
+        made_volumes: Dict[str, Quantity] = {},
+    ) -> Tuple[Dict[str, Quantity], Dict[str, Quantity]]:
+        """
+        Given a
+        """
+        if self.name in made_volumes:
+            # We've already been seen.  Ignore our components.
+            return consumed_volumes, made_volumes
+
+        made_volumes[self.name] = self.total_volume
+        consumed_volumes[self.name] = ZERO_VOL
+
+        for action in self.actions:
+            for component, volume in zip(
+                action.components, action.each_volumes(self.total_volume, self.actions)
+            ):
+                consumed_volumes[component.name] = (
+                    consumed_volumes.get(component.name, ZERO_VOL) + volume
+                )
+                component._update_volumes(consumed_volumes, made_volumes)
+
+        # Potentially deal with buffer...
+        if self.buffer_volume.m > 0:
+            made_volumes[self.buffer_name] = made_volumes.get(
+                self.buffer_name, 0 * ureg.ul
+            )
+            consumed_volumes[self.buffer_name] = (
+                consumed_volumes.get(self.buffer_name, 0 * ureg.ul) + self.buffer_volume
+            )
+
+        return consumed_volumes, made_volumes
+
+    def _unstructure(self, experiment: "Experiment" | None = None) -> dict[str, Any]:
+        d: dict[str, Any] = {}
+        d["class"] = self.__class__.__name__
+        for a in cast("Sequence[Attribute]", self.__attrs_attrs__):
+            if a.name == "actions":
+                d[a.name] = [a._unstructure(experiment) for a in self.actions]
+            elif a.name == "reference":
+                continue
+            else:
+                val = getattr(self, a.name)
+                if val == a.default:
+                    continue
+                # FIXME: nan quantities are always default, and pint handles them poorly
+                if isinstance(val, Quantity) and isnan(val.m):
+                    continue
+                d[a.name] = _unstructure(val)
+        return d
+
+    @classmethod
+    def _structure(
+        cls, d: dict[str, Any], experiment: "Experiment" | None = None
+    ) -> "Mix":
+        for k, v in d.items():
+            d[k] = _structure(v, experiment)
+        return cls(**d)
+
 
 @attrs.define()
 class PlateMap:
@@ -1034,76 +1129,4 @@ class PlateMap:
         return table_with_title
 
 
-_MIXES_CLASSES = {
-    c.__name__: c for c in [FixedVolume, FixedConcentration, Mix, Strand, Component]
-}
-
-
-def _unstructure(x):
-    if isinstance(x, ureg.Quantity):
-        return str(x)
-    elif isinstance(x, list):
-        return [_unstructure(y) for y in x]
-    elif isinstance(x, WellPos):
-        return str(x)
-    elif hasattr(x, "__attrs_attrs__"):
-        d = {}
-        d["class"] = x.__class__.__name__
-        for att in x.__attrs_attrs__:
-            if att.name in ["reference"]:
-                continue
-            val = getattr(x, att.name)
-            if val is att.default:
-                continue
-            d[att.name] = _unstructure(val)
-        return d
-    else:
-        return x
-
-
-def _structure(x):
-    if isinstance(x, dict) and ("class" in x):
-        c = _MIXES_CLASSES[x["class"]]
-        del x["class"]
-        for k in x.keys():
-            x[k] = _structure(x[k])
-        return c(**x)
-    elif isinstance(x, list):
-        return [_structure(y) for y in x]
-    else:
-        return x
-
-
-def load_mixes(file_or_stream: str | PathLike | TextIO):
-    if isinstance(file_or_stream, (str, PathLike)):
-        p = Path(file_or_stream)
-        if not p.suffix:
-            p = p.with_suffix(".json")
-        s: TextIO = open(file_or_stream, "r")
-    else:
-        s = file_or_stream
-
-    d = json.load(s)
-
-    return {k: _structure(v) for k, v in d.items()}
-
-
-def save_mixes(
-    mixes: Sequence | Mapping | Mix, file_or_stream: str | PathLike | TextIO
-):
-    if isinstance(file_or_stream, (str, PathLike)):
-        p = Path(file_or_stream)
-        if not p.suffix:
-            p = p.with_suffix(".json")
-        s: TextIO = open(p, "w")
-    else:
-        s = file_or_stream
-
-    if isinstance(mixes, Mix):
-        d = {mixes.name: _unstructure(mixes)}
-    elif isinstance(mixes, Sequence):
-        d = {x.name: _unstructure(x) for x in mixes}
-    elif isinstance(mixes, Mapping):
-        d = {x.name: _unstructure(x) for x in mixes.values()}  # FIXME: check mapping
-
-    json.dump(d, s)
+_STRUCTURE_CLASSES["Mix"] = Mix

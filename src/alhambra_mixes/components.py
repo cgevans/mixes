@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isnan
-from typing import TYPE_CHECKING, Any, Sequence, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, Sequence, Tuple, TypeVar, cast
+from typing_extensions import Self
 
 import attrs
 import pandas as pd
@@ -10,11 +11,15 @@ import pandas as pd
 from .locations import WellPos, _parse_wellpos_optional
 from .logging import log
 from .printing import TableFormat
-from .units import Decimal, Quantity, _parse_conc_optional, nM, ureg
+from .units import ZERO_VOL, Decimal, Quantity, _parse_conc_optional, nM, ureg
 from .util import _none_as_empty_string
+from .dictstructure import _structure, _unstructure, _STRUCTURE_CLASSES
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from .references import Reference
+    from .experiments import Experiment
+    from attrs import Attribute
+
 
 T = TypeVar("T")
 
@@ -69,8 +74,41 @@ class AbstractComponent(ABC):
     def with_reference(self: T, reference: Reference) -> T:  # pragma: no cover
         ...
 
+    @abstractmethod
+    def with_experiment(
+        self, reference: "Experiment", inplace: bool = True
+    ) -> AbstractComponent:  # pragma: no cover
+        ...
+
+    @classmethod
+    @abstractmethod
+    def _structure(
+        cls, d: dict[str, Any], experiment: "Experiment" | None = None
+    ) -> "AbstractComponent":  # pragma: no cover
+        ...
+
+    @abstractmethod
+    def _unstructure(self, experiment: "Experiment" | None = None) -> dict[str, Any]:
+        ...
+
     def printed_name(self, tablefmt: str | TableFormat) -> str:
         return self.name
+
+    def _update_volumes(
+        self,
+        consumed_volumes: Dict[str, Quantity] = {},
+        made_volumes: Dict[str, Quantity] = {},
+    ) -> Tuple[Dict[str, Quantity], Dict[str, Quantity]]:
+        """
+        Given a
+        """
+        if self.name in made_volumes:
+            # We've already been seen.  Ignore our components.
+            return consumed_volumes, made_volumes
+
+        made_volumes[self.name] = ZERO_VOL
+
+        return consumed_volumes, made_volumes
 
 
 @attrs.define()
@@ -128,6 +166,37 @@ class Component(AbstractComponent):
             index=pd.Index([self.name], name="name"),
         )
         return df
+
+    def _unstructure(self, experiment: "Experiment" | None = None) -> dict[str, Any]:
+        d = {}
+        d["class"] = self.__class__.__name__
+        for att in cast("Sequence[Attribute]", self.__attrs_attrs__):
+            if att.name in ["reference"]:
+                continue
+            val = getattr(self, att.name)
+            if val is att.default:
+                continue
+            if isinstance(val, Quantity) and isnan(val.m):
+                continue
+            d[att.name] = _unstructure(val)
+        return d
+
+    @classmethod
+    def _structure(
+        cls, d: dict[str, Any], experiment: "Experiment" | None = None
+    ) -> "Component":
+        for k, v in d.items():
+            d[k] = _structure(v, experiment)
+        return cls(**d)
+
+    def with_experiment(
+        self: Component, experiment: "Experiment", inplace: bool = True
+    ) -> AbstractComponent:
+        if self.name in experiment.components:
+            return experiment.components[self.name]
+            # FIXME: add checks
+        else:
+            return self
 
     def with_reference(self: Component, reference: Reference) -> Component:
         if reference.df.index.name == "Name":
@@ -282,3 +351,7 @@ def _empty_components() -> pd.DataFrame:
     cps["concentration_nM"] = pd.Series([], dtype=object)
     cps["component"] = pd.Series([], dtype=object)
     return cps
+
+
+for c in [Component, Strand]:
+    _STRUCTURE_CLASSES[c.__name__] = c

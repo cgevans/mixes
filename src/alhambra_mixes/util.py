@@ -4,11 +4,11 @@ from typing import Sequence, TypeVar
 
 T = TypeVar("T")
 
-
-def _maybesequence(object_or_sequence: Sequence[T] | T) -> list[T]:
-    if isinstance(object_or_sequence, Sequence):
-        return list(object_or_sequence)
-    return [object_or_sequence]
+# Largely replaced by concrete type code.
+# def _maybesequence(object_or_sequence: Sequence[T] | T) -> list[T]:
+#     if isinstance(object_or_sequence, Sequence):
+#         return list(object_or_sequence)
+#     return [object_or_sequence]
 
 
 def _none_as_empty_string(v: str | None) -> str:

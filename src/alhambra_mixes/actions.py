@@ -2,19 +2,24 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, List, Literal, Sequence, TypeVar
+from math import isnan
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Sequence, TypeVar, cast
+from warnings import warn
 
 import attrs
 import pandas as pd
 
-from warnings import warn
-
 from .components import AbstractComponent, _empty_components, _maybesequence_comps
+from .dictstructure import _STRUCTURE_CLASSES, _structure, _unstructure
 from .locations import WellPos, mixgaps
 from .printing import MixLine, TableFormat
+from .units import _parse_vol_optional_none_zero
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from .references import Reference
+    from .experiments import Experiment
+    from attrs import Attribute
+
 from .units import *
 from .units import (
     VolumeError,
@@ -75,6 +80,13 @@ class AbstractAction(ABC):
         ...
 
     @abstractmethod
+    def with_experiment(
+        self: T, experiment: "Experiment", inplace: bool = True
+    ) -> T:  # pragma: no cover
+        """Returns a copy of the action updated from a experiment dataframe."""
+        ...
+
+    @abstractmethod
     def with_reference(self: T, reference: Reference) -> T:  # pragma: no cover
         """Returns a copy of the action updated from a reference dataframe."""
         ...
@@ -111,11 +123,23 @@ class AbstractAction(ABC):
     ) -> list[Quantity[Decimal]]:
         ...
 
+    @classmethod
+    @abstractmethod
+    def _structure(
+        cls, d: dict[str, Any], experiment: "Experiment"
+    ) -> "AbstractAction":  # pragma: no cover
+        ...
+
+    def _unstructure(
+        self, experiment: "Experiment" | None
+    ) -> dict[str, Any]:  # pragma: no cover
+        ...
+
 
 T_AWC = TypeVar("T_AWC", bound="ActionWithComponents")
 
 
-@attrs.define()
+@attrs.define(eq=False)
 class ActionWithComponents(AbstractAction):
     components: list[AbstractComponent] = attrs.field(
         converter=_maybesequence_comps, on_setattr=attrs.setters.convert
@@ -129,6 +153,35 @@ class ActionWithComponents(AbstractAction):
     def name(self) -> str:
         return ", ".join(c.name for c in self.components)
 
+    def __eq__(self, other: Any) -> bool:
+        if type(self) != type(other):
+            return False
+        for a in self.__attrs_attrs__:  # type: Attribute
+            v1 = getattr(self, a.name)
+            v2 = getattr(other, a.name)
+            if isinstance(v1, Quantity):
+                if isnan(v1.m) and isnan(v2.m) and (v1.units == v2.units):
+                    continue
+            if v1 != v2:
+                return False
+        return True
+
+    def with_experiment(
+        self: T_AWC, experiment: "Experiment", inplace: bool = True
+    ) -> T_AWC:
+        if inplace:
+            self.components = [
+                c.with_experiment(experiment, inplace) for c in self.components
+            ]
+            return self
+        else:
+            return attrs.evolve(
+                self,
+                components=[
+                    c.with_experiment(experiment, inplace) for c in self.components
+                ],
+            )
+
     def with_reference(self: T_AWC, reference: Reference) -> T_AWC:
         return attrs.evolve(
             self, components=[c.with_reference(reference) for c in self.components]
@@ -138,6 +191,43 @@ class ActionWithComponents(AbstractAction):
     def source_concentrations(self) -> list[Quantity[Decimal]]:
         concs = [c.concentration for c in self.components]
         return concs
+
+    def _unstructure(self, experiment: "Experiment" | None) -> dict[str, Any]:
+        d: dict[str, Any] = {}
+        d["class"] = self.__class__.__name__
+        d["components"] = [c._unstructure(experiment) for c in self.components]
+        for a in self.__attrs_attrs__:
+            if a.name == "components":
+                continue
+            val = getattr(self, a.name)
+            if val is a.default:
+                continue
+            # FIXME: nan quantities are always default, and pint handles them poorly
+            if isinstance(val, Quantity) and isnan(val.m):
+                continue
+            d[a.name] = _unstructure(val)
+        return d
+
+    @classmethod
+    def _structure(
+        cls, d: dict[str, Any], experiment: "Experiment" | None = None
+    ) -> "ActionWithComponents":
+        scomps: List[AbstractComponent] = []
+        for cd in d["components"]:
+            if experiment and (cd["name"] in experiment.components):
+                scomps.append(experiment.components[cd["name"]])
+            elif experiment:
+                c = _structure(cd, experiment)
+                experiment[c.name] = c
+                scomps.append(c)
+            else:
+                scomps.append(_structure(cd))
+        d["components"] = scomps
+        for k in d.keys():
+            if k == "components":
+                continue
+            d[k] = _structure(d[k])
+        return cls(**d)
 
     def all_components(
         self, mix_vol: Quantity[Decimal], actions: Sequence[AbstractAction] = tuple()
@@ -588,8 +678,8 @@ class FixedConcentration(ActionWithComponents):
     set_name: str | None = None
     compact_display: bool = True
     min_volume: Quantity[Decimal] = attrs.field(
-        converter=_parse_vol_optional,
-        default=Q_(DNAN, uL),
+        converter=_parse_vol_optional_none_zero,
+        default=ZERO_VOL,
         on_setattr=attrs.setters.convert,
     )
 
@@ -792,3 +882,6 @@ class ToConcentration(ActionWithComponents):
 
 MultiFixedConcentration = FixedConcentration
 MultiFixedVolume = FixedVolume
+
+for c in [FixedConcentration, FixedVolume, EqualConcentration, ToConcentration]:
+    _STRUCTURE_CLASSES[c.__name__] = c

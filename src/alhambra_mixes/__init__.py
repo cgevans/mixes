@@ -1,5 +1,6 @@
 from .actions import *
 from .components import *
+from .experiments import Experiment
 from .mixes import *
 from .printing import *
 from .quantitate import *
@@ -14,6 +15,7 @@ __all__ = (
     "ureg",
     "Component",
     "Strand",
+    "Experiment",
     "FixedVolume",
     "FixedConcentration",
     "EqualConcentration",
@@ -33,6 +35,4 @@ __all__ = (
     #    "D",
     "measure_conc_and_dilute",
     "hydrate_and_measure_conc_and_dilute",
-    "save_mixes",
-    "load_mixes",
 )
