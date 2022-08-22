@@ -71,7 +71,9 @@ class AbstractComponent(ABC):
         ...
 
     @abstractmethod
-    def with_reference(self: T, reference: Reference) -> T:  # pragma: no cover
+    def with_reference(
+        self: T, reference: Reference, inplace: bool = False
+    ) -> T:  # pragma: no cover
         ...
 
     @abstractmethod
@@ -198,7 +200,9 @@ class Component(AbstractComponent):
         else:
             return self
 
-    def with_reference(self: Component, reference: Reference) -> Component:
+    def with_reference(
+        self: Component, reference: Reference, inplace: bool = False
+    ) -> Component:
         if reference.df.index.name == "Name":
             ref_by_name = reference.df
         else:
@@ -246,9 +250,19 @@ class Component(AbstractComponent):
         ref_plate = match["Plate"]
         ref_well = _parse_wellpos_optional(match["Well"])
 
-        return attrs.evolve(
-            self, name=self.name, concentration=ref_conc, plate=ref_plate, well=ref_well
-        )
+        if inplace:
+            self.concentration = ref_conc
+            self.plate = ref_plate
+            self.well = ref_well
+            return self
+        else:
+            return attrs.evolve(
+                self,
+                name=self.name,
+                concentration=ref_conc,
+                plate=ref_plate,
+                well=ref_well,
+            )
 
 
 @attrs.define()
@@ -257,7 +271,9 @@ class Strand(Component):
 
     sequence: str | None = None
 
-    def with_reference(self: Strand, reference: Reference) -> Strand:
+    def with_reference(
+        self: Strand, reference: Reference, inplace: bool = False
+    ) -> Strand:
         if reference.df.index.name == "Name":
             ref_by_name = reference.df
         else:
@@ -324,14 +340,21 @@ class Strand(Component):
         else:
             raise RuntimeError("should be unreachable")
 
-        return attrs.evolve(
-            self,
-            name=self.name,
-            concentration=ref_conc,
-            plate=ref_plate,
-            well=ref_well,
-            sequence=seq,
-        )
+        if inplace:
+            self.concentration = ref_conc
+            self.plate = ref_plate
+            self.well = ref_well
+            self.sequence = seq
+            return self
+        else:
+            return attrs.evolve(
+                self,
+                name=self.name,
+                concentration=ref_conc,
+                plate=ref_plate,
+                well=ref_well,
+                sequence=seq,
+            )
 
 
 def _maybesequence_comps(

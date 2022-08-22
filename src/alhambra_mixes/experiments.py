@@ -21,11 +21,20 @@ import attrs
 from .dictstructure import _structure, _unstructure
 from .units import DNAN, Q_, ZERO_VOL, Decimal, Quantity, uL
 from .mixes import Mix
+from .mixes import VolumeError
 
 if TYPE_CHECKING:  # pragma: no cover
     from alhambra_mixes.actions import AbstractAction
     from .components import AbstractComponent
     from .references import Reference
+
+
+def _exp_attr_set_reference(self, attribute: Any, reference: Reference | None) -> None:
+    if reference is not None:
+        self.use_reference(reference)
+        self.reference = reference
+    else:
+        self.reference = None
 
 
 @attrs.define()
@@ -40,6 +49,10 @@ class Experiment:
     components: Dict[str, AbstractComponent] = attrs.field(
         factory=dict
     )  # FIXME: CompRef
+    volume_checks: bool = True
+    reference: Reference | None = attrs.field(
+        default=None, on_setattr=_exp_attr_set_reference
+    )
 
     def add_mix(
         self,
@@ -52,13 +65,20 @@ class Experiment:
         buffer_name: str = "Buffer",
         reference: Reference | None = None,
         min_volume: Quantity[Decimal] | str = Q_(Decimal("0.5"), uL),
-    ) -> None:
+        check_volumes: bool | None = None,
+    ) -> Experiment:
         """
         Add a mix to the experiment, either as a Mix object, or by creating a new Mix.
 
         Either the first argument should be a Mix, or arguments should be passed as for
         initializing a Mix.
+
+        If check_volumes is True (by default), the mix will be added to the experiment, and
+        volumes checked.  If the mix causes a volume usage problem, it will not be added to
+        the Experiment, and a VolumeError will be raised.
         """
+        if check_volumes is None:
+            check_volumes = self.volume_checks
         if isinstance(mix_or_actions, Mix):
             mix = mix_or_actions
             name = mix.name
@@ -78,7 +98,17 @@ class Experiment:
         elif mix.name in self.components:
             raise ValueError(f"Mix {mix.name} already exists in experiment.")
         mix = mix.with_experiment(self, True)
+
         self.components[mix.name] = mix
+
+        if check_volumes:
+            try:
+                self.check_volumes(display=False, raise_error=True)
+            except VolumeError as e:
+                del self.components[mix.name]
+                raise e
+
+        return self
 
     def __setitem__(self, name: str, value: AbstractComponent) -> None:
         if not value.name:
@@ -93,9 +123,27 @@ class Experiment:
                 raise ValueError(f"Component name {value.name} does not match {name}.")
         value = value.with_experiment(self, True)
         self.components[name] = value
+        if self.volume_checks:
+            try:
+                self.check_volumes(display=False, raise_error=True)
+            except VolumeError as e:
+                del self.components[name]
+                raise e
 
     def __getitem__(self, name: str) -> AbstractComponent:
         return self.components[name]
+
+    def __delitem__(self, name: str) -> None:
+        del self.components[name]
+
+    def __contains__(self, name: str) -> bool:
+        return name in self.components
+
+    def remove_mix(self, name: str) -> None:
+        """
+        Remove a mix from the experiment, referenced by name,
+        """
+        del self.components[name]
 
     def __len__(self) -> int:
         return len(self.components)
@@ -112,7 +160,9 @@ class Experiment:
             k: (consumed_volume[k], produced_volume[k]) for k in consumed_volume
         }  # FIXME
 
-    def check_volumes(self, showall: bool = False) -> None:
+    def check_volumes(
+        self, showall: bool = False, display: bool = True, raise_error: bool = False
+    ) -> str | None:
         """
         Check to ensure that consumed volumes are less than made volumes.
         """
@@ -126,9 +176,17 @@ class Experiment:
                 badlines.append(f"Making {made} of {k} but need at least {consumed}.")
             elif showall:
                 conslines.append(f"Consuming {consumed} of {k}, making {made}.")
-        print("\n".join(badlines))
-        print("\n")
-        print("\n".join(conslines))
+
+        if badlines and raise_error:
+            raise VolumeError("\n".join(badlines))
+
+        if display:
+            print("\n".join(badlines))
+            print("\n")
+            print("\n".join(conslines))
+            return None
+        else:
+            return "\n".join(badlines) + "\n" + "\n".join(conslines)
 
     def _unstructure(self) -> dict[str, Any]:
         """
@@ -202,3 +260,11 @@ class Experiment:
         json.dump(self._unstructure(), s, indent=2, ensure_ascii=False)
         if close:
             s.close()
+
+    def use_reference(self, reference: Reference) -> Experiment:
+        """
+        Apply a Reference, in place, to all components in the Experiment.
+        """
+        for component in self:
+            component.with_reference(reference, inplace=True)
+        return self
