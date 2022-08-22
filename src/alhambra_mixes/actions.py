@@ -87,7 +87,9 @@ class AbstractAction(ABC):
         ...
 
     @abstractmethod
-    def with_reference(self: T, reference: Reference) -> T:  # pragma: no cover
+    def with_reference(
+        self: T, reference: Reference, inplace: bool = False
+    ) -> T:  # pragma: no cover
         """Returns a copy of the action updated from a reference dataframe."""
         ...
 
@@ -182,10 +184,18 @@ class ActionWithComponents(AbstractAction):
                 ],
             )
 
-    def with_reference(self: T_AWC, reference: Reference) -> T_AWC:
-        return attrs.evolve(
-            self, components=[c.with_reference(reference) for c in self.components]
-        )
+    def with_reference(
+        self: T_AWC, reference: Reference, inplace: bool = False
+    ) -> T_AWC:
+        if inplace:
+            self.components = [
+                c.with_reference(reference, inplace=True) for c in self.components
+            ]
+            return self
+        else:
+            return attrs.evolve(
+                self, components=[c.with_reference(reference) for c in self.components]
+            )
 
     @property
     def source_concentrations(self) -> list[Quantity[Decimal]]:

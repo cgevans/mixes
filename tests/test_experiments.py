@@ -26,7 +26,9 @@ def experiment():
     exp.add_mix(Mix(FC([c1], "1 µM"), "mix3"))
 
     # Add a mix with mixes, by reference
-    exp["mixmix"] = Mix(FC(["mix1", "mix2", c3], "100 nM"), fixed_total_volume="200 µL")
+    exp.add_mix(
+        FC(["mix1", "mix2", c3], "100 nM"), "mixmix", fixed_total_volume="90 µL"
+    )
 
     return exp
 
@@ -42,6 +44,14 @@ def test_forward_reference():
     exp.resolve_components()
 
     assert exp["mix3"].actions[0].components == [exp["mix1"], exp["mix2"]]
+
+
+def test_use_reference():
+    exp = Exp()
+
+    exp["mix1"] = Mix(FC(["c1", "c2"], "1 µM"), fixed_total_volume="10 µL")
+    exp["mix2"] = Mix(FC(["c1", "c2"], "1 µM"), fixed_total_volume="10 µL")
+    exp.add_mix(Mix(FV(["mix1", "mix2"], "10 µL"), "mix3"))
 
 
 def test_iterate_mixes(experiment):
@@ -65,23 +75,38 @@ def test_consumed_and_produced_volumes(experiment):
     del cp["mix3"]
 
     assert cp == {
-        "mix1": (ureg("4.00000 µL"), ureg("20 µL")),
-        "mix2": (ureg("20 µL"), ureg("10 µL")),
-        "mixmix": (ureg("0 µL"), 200 * ureg("µL")),
+        "mix1": (ureg("1.80000 µL"), ureg("20 µL")),
+        "mix2": (ureg("9 µL"), ureg("10 µL")),
+        "mixmix": (ureg("0 µL"), 90 * ureg("µL")),
         "c2": (Decimal("10") * ureg("µL"), ureg("0.0 µL")),
-        "c3": (Decimal("14") * ureg("µL"), ureg("0.0 µL")),
+        "c3": (Decimal("11.8") * ureg("µL"), ureg("0.0 µL")),
         "c4": (Decimal("2.0") * ureg("µL"), ureg("0.0 µL")),
-        "Buffer": (ureg("179 µL"), ureg("0 µL")),
+        "Buffer": (ureg("84.4 µL"), ureg("0 µL")),
     }
 
 
 def test_check_volumes(experiment, capsys):
+
+    # First, try adding a mix that will cause a problem
+    with pytest.raises(VolumeError):
+        experiment.add_mix(
+            Mix(FC(["mix2"], "100 nM"), "mixmix2", fixed_total_volume="100 µL")
+        )
+
+    assert "mixmix2" not in experiment
+
+    experiment.add_mix(
+        Mix(FC(["mix2"], "100 nM"), "mixmix2", fixed_total_volume="100 µL"),
+        volume_checks=False,
+    )
+
     experiment.check_volumes(showall=True)
     cvstring = capsys.readouterr().out
     assert re.search(
-        r"Making 10 µl of mix2 but need at least 20(\.0*)? µl", cvstring, re.UNICODE
+        r"Making 10 µl of mix2 but need at least 19(\.0*)? µl", cvstring, re.UNICODE
     )
-    assert len([x for x in cvstring.splitlines() if x]) == 9
+    assert len([x for x in cvstring.splitlines() if x]) == 10
+    experiment.remove_mix("mixmix2")
 
 
 def test_unnamed_mix(experiment):

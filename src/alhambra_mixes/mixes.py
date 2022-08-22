@@ -509,12 +509,19 @@ class Mix(AbstractComponent):
         else:
             return attrs.evolve(self, actions=newactions)
 
-    def with_reference(self: Mix, reference: Reference) -> Mix:
-        new = attrs.evolve(
-            self, actions=[action.with_reference(reference) for action in self.actions]
-        )
-        new.reference = reference
-        return new
+    def with_reference(self: Mix, reference: Reference, inplace: bool = True) -> Mix:
+        if inplace:
+            self.reference = reference
+            for action in self.actions:
+                action.with_reference(reference, inplace=True)
+            return self
+        else:
+            new = attrs.evolve(
+                self,
+                actions=[action.with_reference(reference) for action in self.actions],
+            )
+            new.reference = reference
+            return new
 
     @property
     def location(self) -> tuple[str, WellPos | None]:
