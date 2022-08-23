@@ -64,6 +64,18 @@ def test_iterate_mixes(experiment):
     ]
 
 
+def test_reference():
+    r_platespec = Reference.compile("tests/data/holes-platespecs.xlsx")
+
+    exp = Exp(reference=r_platespec)
+
+    exp.add_mix(FC("h_4-13", "20 µM"), fixed_total_volume="100 µL", name="testmix")
+
+    assert exp["testmix"].actions[0].each_volumes(exp["testmix"].total_volume) == [
+        ureg("10 µL")
+    ]
+
+
 def test_consumed_and_produced_volumes(experiment):
     cp = experiment.consumed_and_produced_volumes()
 
@@ -97,7 +109,7 @@ def test_check_volumes(experiment, capsys):
 
     experiment.add_mix(
         Mix(FC(["mix2"], "100 nM"), "mixmix2", fixed_total_volume="100 µL"),
-        volume_checks=False,
+        check_volumes=False,
     )
 
     experiment.check_volumes(showall=True)

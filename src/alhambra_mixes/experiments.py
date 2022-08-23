@@ -63,9 +63,9 @@ class Experiment:
         fixed_total_volume: Quantity[Decimal] | str = Q_(DNAN, uL),
         fixed_concentration: str | Quantity[Decimal] | None = None,
         buffer_name: str = "Buffer",
-        reference: Reference | None = None,
         min_volume: Quantity[Decimal] | str = Q_(Decimal("0.5"), uL),
         check_volumes: bool | None = None,
+        apply_reference: bool = True,
     ) -> Experiment:
         """
         Add a mix to the experiment, either as a Mix object, or by creating a new Mix.
@@ -90,14 +90,16 @@ class Experiment:
                 fixed_total_volume=fixed_total_volume,
                 fixed_concentration=fixed_concentration,
                 buffer_name=buffer_name,
-                reference=reference,
                 min_volume=min_volume,
             )
         if not name:
             raise ValueError("Mix must have a name to be added to an experiment.")
         elif mix.name in self.components:
             raise ValueError(f"Mix {mix.name} already exists in experiment.")
+
         mix = mix.with_experiment(self, True)
+        if apply_reference and self.reference:
+            mix = mix.with_reference(self.reference, inplace=True)
 
         self.components[mix.name] = mix
 
@@ -110,19 +112,21 @@ class Experiment:
 
         return self
 
-    def __setitem__(self, name: str, value: AbstractComponent) -> None:
-        if not value.name:
+    def __setitem__(self, name: str, mix: AbstractComponent) -> None:
+        if not mix.name:
             try:
-                value.name = name  # type: ignore
+                mix.name = name  # type: ignore
             except ValueError:  # pragma: no cover
                 # This will only happen in a hypothetical component where
                 # the name cannot be changed.
-                raise ValueError(f"Component does not have a settable name: {value}.")
+                raise ValueError(f"Component does not have a settable name: {mix}.")
         else:
-            if value.name != name:
-                raise ValueError(f"Component name {value.name} does not match {name}.")
-        value = value.with_experiment(self, True)
-        self.components[name] = value
+            if mix.name != name:
+                raise ValueError(f"Component name {mix.name} does not match {name}.")
+        mix = mix.with_experiment(self, True)
+        if self.reference:
+            mix = mix.with_reference(self.reference, inplace=True)
+        self.components[name] = mix
         if self.volume_checks:
             try:
                 self.check_volumes(display=False, raise_error=True)
@@ -172,7 +176,7 @@ class Experiment:
         for k, (consumed, made) in volumes.items():
             if made.m == 0:
                 conslines.append(f"Consuming {consumed} of untracked {k}.")
-            elif consumed >= made:
+            elif consumed > made:
                 badlines.append(f"Making {made} of {k} but need at least {consumed}.")
             elif showall:
                 conslines.append(f"Consuming {consumed} of {k}, making {made}.")
