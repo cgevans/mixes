@@ -29,12 +29,15 @@ if TYPE_CHECKING:  # pragma: no cover
     from .references import Reference
 
 
-def _exp_attr_set_reference(self, attribute: Any, reference: Reference | None) -> None:
+def _exp_attr_set_reference(
+    self, attribute: Any, reference: Reference | None
+) -> Reference | None:
     if reference is not None:
         self.use_reference(reference)
-        self.reference = reference
-    else:
-        self.reference = None
+    return reference
+    #     self.reference = reference
+    # else:
+    #     self.reference = None
 
 
 @attrs.define()

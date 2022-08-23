@@ -76,6 +76,47 @@ def test_reference():
     ]
 
 
+def test_delitem():
+    exp = Exp()
+
+    exp["mix1"] = Mix(FC(["a"], "1 µM"), fixed_total_volume="10 µL")
+
+    del exp["mix1"]
+    # FIXME: should check if deletion breaks links
+
+    assert len(exp) == 0
+
+
+def test_setitem_reference():
+    r_platespec = Reference.compile("tests/data/holes-platespecs.xlsx")
+
+    exp = Exp(reference=r_platespec)
+
+    exp["testmix"] = Mix(
+        FC("h_4-13", "20 µM"), fixed_total_volume="100 µL", name="testmix"
+    )
+
+    assert exp["testmix"].actions[0].each_volumes(exp["testmix"].total_volume) == [
+        ureg("10 µL")
+    ]
+
+
+def test_post_reference():
+    r_platespec = Reference.compile("tests/data/holes-platespecs.xlsx")
+
+    exp = Exp()
+
+    exp.add_mix(FC("h_4-13", "20 µM"), fixed_total_volume="100 µL", name="testmix")
+
+    exp.reference = r_platespec
+
+    assert exp["testmix"].actions[0].each_volumes(exp["testmix"].total_volume) == [
+        ureg("10 µL")
+    ]
+
+    assert exp.reference == r_platespec
+
+
 def test_consumed_and_produced_volumes(experiment):
     cp = experiment.consumed_and_produced_volumes()
 
@@ -103,6 +144,11 @@ def test_check_volumes(experiment, capsys):
     with pytest.raises(VolumeError):
         experiment.add_mix(
             Mix(FC(["mix2"], "100 nM"), "mixmix2", fixed_total_volume="100 µL")
+        )
+
+    with pytest.raises(VolumeError):
+        experiment["mixmix2"] = Mix(
+            FC(["mix2"], "100 nM"), "mixmix2", fixed_total_volume="100 µL"
         )
 
     assert "mixmix2" not in experiment

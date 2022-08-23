@@ -11,7 +11,7 @@ import pandas as pd
 from .locations import WellPos, _parse_wellpos_optional
 from .logging import log
 from .printing import TableFormat
-from .units import ZERO_VOL, Decimal, Quantity, _parse_conc_optional, nM, ureg
+from .units import Q_, ZERO_VOL, Decimal, Quantity, _parse_conc_optional, nM, ureg
 from .util import _none_as_empty_string
 from .dictstructure import _structure, _unstructure, _STRUCTURE_CLASSES
 
@@ -217,7 +217,7 @@ class Component(AbstractComponent):
         mismatches = []
         matches = []
         for _, ref_comp in ref_comps.iterrows():
-            ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], nM)
+            ref_conc = Q_(Decimal(ref_comp["Concentration (nM)"]), nM)
             if not isnan(self.concentration.m) and not (ref_conc == self.concentration):
                 mismatches.append(("Concentration (nM)", ref_comp))
                 continue
@@ -246,7 +246,7 @@ class Component(AbstractComponent):
             )
 
         match = matches[0]
-        ref_conc = ureg.Quantity(match["Concentration (nM)"], nM)
+        ref_conc = ureg.Quantity(Decimal(match["Concentration (nM)"]), nM)
         ref_plate = match["Plate"]
         ref_well = _parse_wellpos_optional(match["Well"])
 
@@ -288,7 +288,7 @@ class Strand(Component):
         mismatches = []
         matches = []
         for _, ref_comp in ref_comps.iterrows():
-            ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], nM)
+            ref_conc = ureg.Quantity(Decimal(ref_comp["Concentration (nM)"]), nM)
             if not isnan(self.concentration.m) and not (ref_conc == self.concentration):
                 mismatches.append(("Concentration (nM)", ref_comp))
                 continue
@@ -327,7 +327,7 @@ class Strand(Component):
             )
 
         m = matches[0]
-        ref_conc = ureg.Quantity(m["Concentration (nM)"], nM)
+        ref_conc = Q_(Decimal(m["Concentration (nM)"]), nM)
         ref_plate = m["Plate"]
         ref_well = _parse_wellpos_optional(m["Well"])
         ss, ms = self.sequence, m["Sequence"]
