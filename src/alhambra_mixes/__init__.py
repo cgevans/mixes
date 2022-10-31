@@ -35,4 +35,5 @@ __all__ = (
     #    "D",
     "measure_conc_and_dilute",
     "hydrate_and_measure_conc_and_dilute",
+    "split_mix",
 )

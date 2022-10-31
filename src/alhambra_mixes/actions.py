@@ -766,8 +766,10 @@ class FixedConcentration(ActionWithComponents):
 class ToConcentration(ActionWithComponents):
     """Add an amount of (non-mix) components to result in a fixed total concentration of each in the mix.
 
-    An action adding an amount of components such that the concentration of each component in the mix
-    will be at some tapiprget concentration.  Unlike FixedConcentration, which *adds* a certain concentration, this takes into account other contents of the mix, and only adds enough to reach a particular final concentration."""
+    An action adding an amount of components such that the concentration of each component in the mix will
+    be at some target concentration.  Unlike FixedConcentration, which *adds* a certain concentration, this
+    takes into account other contents of the mix, and only adds enough to reach a particular final
+    concentration."""
 
     fixed_concentration: Quantity[Decimal] = attrs.field(
         converter=_parse_conc_required, on_setattr=attrs.setters.convert

@@ -80,6 +80,7 @@ warnings.filterwarnings(
 __all__ = (
     "Mix",
     "_format_title",
+    "split_mix",
 )
 
 MIXHEAD_EA = (
@@ -1134,6 +1135,113 @@ class PlateMap:
         )
         table_with_title = f"{title}\n{out_table}"
         return table_with_title
+
+
+def split_mix(
+    mix: Mix, num_tubes: int, excess: int | float | Decimal = Decimal(0.05)
+) -> Mix:
+    """
+    A "split mix" is a :any:`Mix` that involves creating a large volume mix and splitting it into several
+    test tubes with identical contents. The advantage of specifying a split mix is that one can give
+    the desired volumes/concentrations in the individual test tubes (post splitting) and the number of
+    test tubes, and the correct amounts in the larger mix will automatically be calculated.
+
+    The :meth:`Mix.instructions` method of a split mix includes the additional instruction at the end
+    to aliquot from the larger mix.
+
+    :param mix:
+        The :any:`Mix` object describing what each
+        individual smaller test tube should contain after the split.
+    :param num_tubes:
+        The number of test tubes into which to split the large mix.
+    :param excess:
+        A fraction (between 0 and 1) indicating how much extra of the large mix to make. This is useful
+        when `num_tubes` is large, since the aliquots prior to the last test tube may take a small amount
+        of extra volume, resulting in the final test tube receiving significantly less volume if the
+        large mix contained only just enough total volume.
+
+        For example, if the total volume is 100 uL and `num_tubes` is 20, then each aliquot
+        from the large mix to test tubes would be 100/20 = 5 uL. But if due to pipetting imprecision 5.05 uL
+        is actually taken, then the first 19 aliquots will total to 19*5.05 = 95.95 uL, so there will only be
+        100 - 95.95 = 4.05 uL left for the last test tube. But by setting `excess` to 0.05,
+        then to make 20 test tubes of 5 uL each, we would have 5*20*1.05 = 105 uL total, and in this case
+        even assuming pipetting error resulting in taking 95.95 uL for the first 19 samples, there is still
+        105 - 95.95 = 9.05 uL left, more than enough for the 20'th test tube.
+
+        Note: using `excess` > 0 means than the test tube with the large mix should *not* be
+        reused as one of the final test tubes, since it will have too much volume at the end.
+    """
+    if isinstance(excess, (float, int)):
+        excess = Decimal(excess)
+    elif not isinstance(excess, Decimal):
+        raise TypeError(
+            f"parameter `excess` = {excess} must be a float or Decimal but is {type(excess)}"
+        )
+
+    # create new action with large fixed total volume if specified
+    volume_multiplier = num_tubes * (1 + excess)
+    large_volume = mix.total_volume * volume_multiplier
+    actions = list(mix.actions)
+
+    # define subclass with overridden instructions methods that prints final instruction for splitting.
+    @attrs.define(eq=False)
+    class SplitMix(Mix):
+        def instructions(
+            self,
+            plate_type: PlateType = PlateType.wells96,
+            raise_failed_validation: bool = False,
+            combine_plate_actions: bool = True,
+            well_marker: None | str | Callable[[str], str] = None,
+            title_level: Literal[1, 2, 3, 4, 5, 6] = 3,
+            warn_unsupported_title_format: bool = True,
+            buffer_name: str = "Buffer",
+            tablefmt: str | TableFormat = "pipe",
+            include_plate_maps: bool = True,
+        ) -> str:
+            super_instructions = super().instructions(
+                plate_type=plate_type,
+                raise_failed_validation=raise_failed_validation,
+                combine_plate_actions=combine_plate_actions,
+                well_marker=well_marker,
+                title_level=title_level,
+                warn_unsupported_title_format=warn_unsupported_title_format,
+                buffer_name=buffer_name,
+                tablefmt=tablefmt,
+                include_plate_maps=include_plate_maps,
+            )
+            super_instructions += (
+                f"\n\nAliquot {mix.total_volume} from this mix "
+                f"into {num_tubes} different test tubes."
+            )
+            return super_instructions
+
+    large_mix = SplitMix(
+        actions=actions,
+        name=mix.name,
+        test_tube_name=mix.test_tube_name,
+        fixed_total_volume=large_volume if mix.fixed_total_volume is not None else None,
+        fixed_concentration=mix.fixed_concentration,
+        buffer_name=mix.buffer_name,
+        reference=mix.reference,
+        min_volume=mix.min_volume,
+    )
+
+    # replace FixedVolume actions in `large_mix` with larger volumes
+    new_fixed_volume_actions = {}
+    for i, action in enumerate(large_mix.actions):
+        if isinstance(action, FixedVolume):
+            large_fixed_volume_action = FixedVolume(
+                components=action.components,
+                fixed_volume=action.fixed_volume * volume_multiplier,
+                set_name=action.set_name,
+                compact_display=action.compact_display,
+            )
+            new_fixed_volume_actions[i] = large_fixed_volume_action
+
+    for i, large_fixed_volume_action in new_fixed_volume_actions.items():
+        large_mix.actions[i] = large_fixed_volume_action
+
+    return large_mix
 
 
 _STRUCTURE_CLASSES["Mix"] = Mix
