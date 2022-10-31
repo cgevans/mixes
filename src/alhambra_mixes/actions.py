@@ -37,6 +37,7 @@ class AbstractAction(ABC):
     Abstract class defining an action in a mix recipe.
     """
 
+    @abstractmethod
     @property
     def name(self) -> str:  # pragma: no cover
         ...
@@ -132,6 +133,7 @@ class AbstractAction(ABC):
     ) -> "AbstractAction":  # pragma: no cover
         ...
 
+    @abstractmethod
     def _unstructure(
         self, experiment: "Experiment" | None
     ) -> dict[str, Any]:  # pragma: no cover
