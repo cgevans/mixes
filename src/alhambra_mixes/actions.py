@@ -37,8 +37,8 @@ class AbstractAction(ABC):
     Abstract class defining an action in a mix recipe.
     """
 
-    @abstractmethod
     @property
+    @abstractmethod
     def name(self) -> str:  # pragma: no cover
         ...
 
