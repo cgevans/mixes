@@ -1215,20 +1215,9 @@ def split_mix(
             )
             return super_instructions
 
-    large_mix = SplitMix(
-        actions=actions,
-        name=mix.name,
-        test_tube_name=mix.test_tube_name,
-        fixed_total_volume=large_volume if mix.fixed_total_volume is not None else None,
-        fixed_concentration=mix.fixed_concentration,
-        buffer_name=mix.buffer_name,
-        reference=mix.reference,
-        min_volume=mix.min_volume,
-    )
-
     # replace FixedVolume actions in `large_mix` with larger volumes
     new_fixed_volume_actions = {}
-    for i, action in enumerate(large_mix.actions):
+    for i, action in enumerate(actions):
         if isinstance(action, FixedVolume):
             large_fixed_volume_action = FixedVolume(
                 components=action.components,
@@ -1239,7 +1228,18 @@ def split_mix(
             new_fixed_volume_actions[i] = large_fixed_volume_action
 
     for i, large_fixed_volume_action in new_fixed_volume_actions.items():
-        large_mix.actions[i] = large_fixed_volume_action
+        actions[i] = large_fixed_volume_action
+
+    large_mix = SplitMix(
+        actions=actions,
+        name=mix.name,
+        test_tube_name=mix.test_tube_name,
+        fixed_total_volume=large_volume if mix.fixed_total_volume is not None else None,
+        fixed_concentration=mix.fixed_concentration,
+        buffer_name=mix.buffer_name,
+        reference=mix.reference,
+        min_volume=mix.min_volume,
+    )
 
     return large_mix
 
