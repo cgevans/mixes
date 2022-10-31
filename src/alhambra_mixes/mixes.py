@@ -4,41 +4,24 @@ A module for handling mixes.
 
 from __future__ import annotations
 
-import decimal
-import enum
-import json
-import logging
 import warnings
-from abc import ABC, abstractmethod
-from decimal import Decimal
 from math import isnan
-from os import PathLike
-from pathlib import Path
 from typing import (
-    IO,
     TYPE_CHECKING,
     Any,
     Callable,
     Dict,
-    Iterable,
     Literal,
-    Mapping,
     Sequence,
-    TextIO,
     Tuple,
     TypeVar,
-    Union,
     cast,
-    overload,
 )
 
 import attrs
-import numpy as np
 import pandas as pd
 import pint
-from pint import Quantity
 from tabulate import TableFormat, tabulate
-from typing_extensions import TypeAlias
 
 from .actions import AbstractAction  # Fixme: should not need special cases
 from .actions import FixedConcentration, FixedVolume
@@ -131,7 +114,7 @@ def findloc_tuples(
     except Exception:
         well = loc["Well"]
 
-    return (loc["Name"], loc["Plate"], well)
+    return loc["Name"], loc["Plate"], well
 
 
 def _maybesequence_action(
@@ -1149,12 +1132,17 @@ def split_mix(
     The :meth:`Mix.instructions` method of a split mix includes the additional instruction at the end
     to aliquot from the larger mix.
 
-    :param mix:
+    Parameters
+    ----------
+
+    mix
         The :any:`Mix` object describing what each
         individual smaller test tube should contain after the split.
-    :param num_tubes:
+
+    num_tubes
         The number of test tubes into which to split the large mix.
-    :param excess:
+
+    excess
         A fraction (between 0 and 1) indicating how much extra of the large mix to make. This is useful
         when `num_tubes` is large, since the aliquots prior to the last test tube may take a small amount
         of extra volume, resulting in the final test tube receiving significantly less volume if the
@@ -1170,6 +1158,11 @@ def split_mix(
 
         Note: using `excess` > 0 means than the test tube with the large mix should *not* be
         reused as one of the final test tubes, since it will have too much volume at the end.
+
+    Returns
+    -------
+        A "large" mix, from which `num_tubes` aliquots can be made to create each of the identical
+        "small" mixes.
     """
     if isinstance(excess, (float, int)):
         excess = Decimal(excess)
