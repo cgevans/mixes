@@ -44,3 +44,23 @@ def test_ensure_decimal_quantity():
 def test_parsers_return_decimal(func, unit):
     assert isinstance(func("1.0 " + unit).m, Decimal)
     assert isinstance(func(pint.Quantity("1.0 " + unit)).m, Decimal)
+
+
+@pytest.mark.parametrize(
+    ["func", "unit"],
+    zip(
+        [
+            _parse_conc_optional,
+            _parse_conc_required,
+            _parse_vol_optional,
+            _parse_vol_optional_none_zero,
+            _parse_vol_required,
+        ],
+        ["m^2", "nL", "C", "nM", "cm^2"],
+    ),
+)
+def test_parsers_wrong_unit(func, unit):
+    with pytest.raises(ValueError, match=".*not a valid quantity here.*"):
+        func("1.0 " + unit)
+    with pytest.raises(ValueError, match=".*not a valid quantity here.*"):
+        func(pint.Quantity("1.0 " + unit))
