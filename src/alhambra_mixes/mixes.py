@@ -1121,7 +1121,9 @@ class PlateMap:
 
 
 def split_mix(
-    mix: Mix, num_tubes: int, excess: int | float | Decimal = Decimal(0.05)
+    mix: Mix,
+    num_tubes: int,
+    excess: int | float | Decimal = Decimal(0.05),
 ) -> Mix:
     """
     A "split mix" is a :any:`Mix` that involves creating a large volume mix and splitting it into several
@@ -1176,7 +1178,7 @@ def split_mix(
     large_volume = mix.total_volume * volume_multiplier
     actions = list(mix.actions)
 
-    # define subclass with overridden instructions methods that prints final instruction for splitting.
+    # define subclass with overridden instructions method that prints final instruction for splitting.
     @attrs.define(eq=False)
     class SplitMix(Mix):
         def instructions(
