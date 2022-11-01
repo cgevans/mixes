@@ -15,7 +15,7 @@ from .units import (
     DNAN,
     Q_,
     Decimal,
-    Quantity,
+    DecimalQuantity,
     _parse_conc_optional,
     _parse_conc_required,
     nM,
@@ -32,7 +32,9 @@ import pandas as pd
 _REF_COLUMNS = ["Name", "Plate", "Well", "Concentration (nM)", "Sequence"]
 _REF_DTYPES = [object, object, object, np.float64, object]
 
-RefFile: TypeAlias = "str | tuple[str, Quantity | str | dict[str, Quantity]]"
+RefFile: TypeAlias = (
+    "str | tuple[str, DecimalQuantity | str | dict[str, DecimalQuantity]]"
+)
 
 
 def _new_ref_df() -> pd.DataFrame:
@@ -99,7 +101,7 @@ class Reference:
         name: str | None = None,
         plate: str | None = None,
         well: str | WellPos | None = None,
-        concentration: str | Quantity[Decimal] | None = None,
+        concentration: str | DecimalQuantity | None = None,
         sequence: str | None = None,
     ) -> Reference:
         well = _parse_wellpos_optional(well)
@@ -124,9 +126,9 @@ class Reference:
         name: str | None = None,
         plate: str | None = None,
         well: str | WellPos | None = None,
-        concentration: str | Quantity | None = None,
+        concentration: str | DecimalQuantity | None = None,
         sequence: str | None = None,
-    ) -> Quantity[Decimal]:
+    ) -> DecimalQuantity:
         valref = self.search(name, plate, well, concentration, sequence)
 
         if len(valref) == 1:
@@ -178,15 +180,16 @@ class Reference:
         for filename in files_list:
             filetype = None
             all_conc = None
-            conc_dict: dict[str, Quantity] = {}
+            conc_dict: dict[str, DecimalQuantity] = {}
 
             if isinstance(filename, tuple):
                 conc_info = filename[1]
                 filepath = Path(filename[0])
 
-                if isinstance(conc_info, Mapping):
+                if isinstance(conc_info, dict):
                     conc_dict = {
-                        k: _parse_conc_required(v) for k, v in conc_info.values()
+                        k: _parse_conc_required(v)
+                        for k, v in cast(dict[str, DecimalQuantity], conc_info).items()
                     }
                     if "default" in conc_dict:
                         all_conc = _parse_conc_required(conc_dict["default"])
@@ -332,7 +335,9 @@ _REF_COLUMNS = ["Name", "Plate", "Well", "Concentration (nM)", "Sequence"]
 def _parse_idt_coa(df: pd.DataFrame) -> pd.DataFrame:
     df.rename({"Sequence Name": "Name"}, axis="columns", inplace=True)
     df.loc[:, "Well"] = df.loc[:, "Well Position"].map(lambda x: str(WellPos(x)))
-    df.loc[:, "Concentration (nM)"] = df.loc[:, "Conc"].map(lambda x: ureg(x).m_as(nM))
+    df.loc[:, "Concentration (nM)"] = df.loc[:, "Conc"].map(
+        lambda x: ureg.Quantity(x).m_as(nM)
+    )
     df.loc[:, "Plate"] = None
     df.loc[:, "Sequence"] = df.loc[:, "Sequence"].str.replace(" ", "")
     return df.loc[:, _REF_COLUMNS]

@@ -11,7 +11,15 @@ import pandas as pd
 from .locations import WellPos, _parse_wellpos_optional
 from .logging import log
 from .printing import TableFormat
-from .units import Q_, ZERO_VOL, Decimal, Quantity, _parse_conc_optional, nM, ureg
+from .units import (
+    Q_,
+    ZERO_VOL,
+    Decimal,
+    DecimalQuantity,
+    _parse_conc_optional,
+    nM,
+    ureg,
+)
 from .util import _none_as_empty_string
 from .dictstructure import _structure, _unstructure, _STRUCTURE_CLASSES
 
@@ -61,7 +69,7 @@ class AbstractComponent(ABC):
 
     @property
     @abstractmethod
-    def concentration(self) -> Quantity[Decimal]:  # pragma: no cover
+    def concentration(self) -> DecimalQuantity:  # pragma: no cover
         "(Source) concentration of the component as a pint Quantity.  NaN if undefined."
         ...
 
@@ -98,9 +106,9 @@ class AbstractComponent(ABC):
 
     def _update_volumes(
         self,
-        consumed_volumes: Dict[str, Quantity] = {},
-        made_volumes: Dict[str, Quantity] = {},
-    ) -> Tuple[Dict[str, Quantity], Dict[str, Quantity]]:
+        consumed_volumes: Dict[str, DecimalQuantity] = {},
+        made_volumes: Dict[str, DecimalQuantity] = {},
+    ) -> Tuple[Dict[str, DecimalQuantity], Dict[str, DecimalQuantity]]:
         """
         Given a
         """
@@ -122,7 +130,7 @@ class Component(AbstractComponent):
     """
 
     name: str
-    concentration: Quantity[Decimal] = attrs.field(
+    concentration: DecimalQuantity = attrs.field(
         converter=_parse_conc_optional, default=None, on_setattr=attrs.setters.convert
     )
     # FIXME: this is not a great way to do this: should make code not give None
@@ -145,8 +153,8 @@ class Component(AbstractComponent):
             return False
         if self.name != other.name:
             return False
-        if isinstance(self.concentration, Quantity) and isinstance(
-            other.concentration, Quantity
+        if isinstance(self.concentration, ureg.Quantity) and isinstance(
+            other.concentration, ureg.Quantity
         ):
             if isnan(self.concentration.m) and isnan(other.concentration.m):
                 return True
@@ -178,7 +186,7 @@ class Component(AbstractComponent):
             val = getattr(self, att.name)
             if val is att.default:
                 continue
-            if isinstance(val, Quantity) and isnan(val.m):
+            if isinstance(val, ureg.Quantity) and isnan(val.m):
                 continue
             d[att.name] = _unstructure(val)
         return d

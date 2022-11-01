@@ -117,7 +117,7 @@ def parse_conc(conc: float | int | str | Quantity[D]) -> Quantity[D]:
         conc = f"{conc} µM"
 
     if isinstance(conc, str):
-        q = ureg(conc)
+        q = ureg.Quantity(conc)
         if not q.check(uM):
             raise ValueError(
                 f"{conc} is not a valid quantity here (should be concentration)."
@@ -143,7 +143,7 @@ def parse_nmol(nmoles: float | int | str | Quantity[D]) -> Quantity[D]:
         nmoles = f"{nmoles} nmol"
 
     if isinstance(nmoles, str):
-        q = ureg(nmoles)
+        q = ureg.Quantity(nmoles)
         if not q.check(ureg.nmol):
             raise ValueError(f"{nmoles} is not a valid quantity here (should be nmol).")
         return q
