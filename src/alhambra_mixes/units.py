@@ -36,7 +36,9 @@ nM = ureg.nM
 DecimalQuantity: TypeAlias = "PlainQuantity[Decimal]"
 
 
-def Q_(qty: int | str | Decimal | float, unit: str | pint.Unit) -> DecimalQuantity:
+def Q_(
+    qty: int | str | Decimal | float, unit: str | pint.Unit | None = None
+) -> DecimalQuantity:
     "Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`.  Ensures that the quantity is a Decimal."
     return ureg.Quantity(Decimal(qty), unit)
 

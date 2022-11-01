@@ -166,7 +166,7 @@ class Mix(AbstractComponent):
     reference: Reference | None = None
     min_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_optional,
-        default=Q_(Decimal("0.5"), uL),
+        default=Q_("0.5", uL),
         kw_only=True,
         on_setattr=attrs.setters.convert,
     )
@@ -253,7 +253,7 @@ class Mix(AbstractComponent):
                     )
                     for c in self.actions
                 ],
-                Q_(Decimal(0.0), ureg.uL),
+                Q_("0.0", ureg.uL),
             )
 
     @property

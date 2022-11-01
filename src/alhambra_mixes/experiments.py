@@ -66,7 +66,7 @@ class Experiment:
         fixed_total_volume: DecimalQuantity | str = Q_(DNAN, uL),
         fixed_concentration: str | DecimalQuantity | None = None,
         buffer_name: str = "Buffer",
-        min_volume: DecimalQuantity | str = Q_(Decimal("0.5"), uL),
+        min_volume: DecimalQuantity | str = Q_("0.5", uL),
         check_volumes: bool | None = None,
         apply_reference: bool = True,
     ) -> Experiment:

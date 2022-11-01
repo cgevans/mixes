@@ -54,7 +54,7 @@ class AbstractAction(ABC):
         mix_vol
             The mix volume.  Does not accept strings.
         """
-        return sum(self.each_volumes(mix_vol, actions), Q_(Decimal("0"), "uL"))
+        return sum(self.each_volumes(mix_vol, actions), Q_("0", "uL"))
 
     @abstractmethod
     def _mixlines(
@@ -623,7 +623,7 @@ class EqualConcentration(FixedVolume):
         ml = super()._mixlines(tablefmt, mix_vol)
         if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
             fv = self.fixed_volume * len(self.components) - sum(self.each_volumes())
-            if not fv == Q_(Decimal("0.0"), uL):
+            if not fv == Q_("0.0", uL):
                 ml.append(MixLine([self.method[1]], None, None, fv))
         return ml
 
@@ -827,11 +827,11 @@ class ToConcentration(ActionWithComponents):
             otherconcs = [
                 Q_(_othercomps.loc[comp.name, "concentration_nM"], nM)
                 if comp.name in _othercomps.index
-                else Q_(Decimal("0.0"), nM)
+                else Q_("0.0", nM)
                 for comp in self.components
             ]
         else:
-            otherconcs = [Q_(Decimal("0.0"), nM) for _ in self.components]
+            otherconcs = [Q_("0.0", nM) for _ in self.components]
         return [self.fixed_concentration - other for other in otherconcs]
 
     def each_volumes(
