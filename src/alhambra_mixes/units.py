@@ -36,7 +36,7 @@ nM = ureg.nM
 DecimalQuantity: TypeAlias = "PlainQuantity[Decimal]"
 
 
-def Q_(qty: int | str | Decimal | float, unit: str | pint.Unit) -> PlainQuantity:
+def Q_(qty: int | str | Decimal | float, unit: str | pint.Unit) -> DecimalQuantity:
     "Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`.  Ensures that the quantity is a Decimal."
     return ureg.Quantity(Decimal(qty), unit)
 
@@ -87,7 +87,7 @@ def _ratio(
     return (top / bottom).m_as("")
 
 
-def _parse_conc_optional(v: str | PlainQuantity[T] | None) -> PlainQuantity[T]:
+def _parse_conc_optional(v: str | PlainQuantity | None) -> DecimalQuantity:
     """Parses a string or Quantity as a concentration; if None, returns a NaN
     concentration."""
     if isinstance(v, str):
@@ -105,7 +105,7 @@ def _parse_conc_optional(v: str | PlainQuantity[T] | None) -> PlainQuantity[T]:
     raise ValueError
 
 
-def _parse_conc_required(v: str | PlainQuantity) -> PlainQuantity:
+def _parse_conc_required(v: str | PlainQuantity) -> DecimalQuantity:
     """Parses a string or Quantity as a concentration, requiring that
     it result in a value."""
     if isinstance(v, str):
@@ -121,7 +121,7 @@ def _parse_conc_required(v: str | PlainQuantity) -> PlainQuantity:
     raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
 
 
-def _parse_vol_optional(v: str | PlainQuantity) -> PlainQuantity:
+def _parse_vol_optional(v: str | PlainQuantity) -> DecimalQuantity:
     """Parses a string or quantity as a volume, returning a NaN volume
     if the value is None.
     """
@@ -142,7 +142,7 @@ def _parse_vol_optional(v: str | PlainQuantity) -> PlainQuantity:
     raise ValueError
 
 
-def _parse_vol_optional_none_zero(v: str | PlainQuantity) -> PlainQuantity:
+def _parse_vol_optional_none_zero(v: str | PlainQuantity) -> DecimalQuantity:
     """Parses a string or quantity as a volume, returning a NaN volume
     if the value is None.
     """
@@ -163,7 +163,7 @@ def _parse_vol_optional_none_zero(v: str | PlainQuantity) -> PlainQuantity:
     raise ValueError
 
 
-def _parse_vol_required(v: str | PlainQuantity) -> PlainQuantity:
+def _parse_vol_required(v: str | PlainQuantity) -> DecimalQuantity:
     """Parses a string or quantity as a volume, requiring that it result in a
     value.
     """
