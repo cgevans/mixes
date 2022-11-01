@@ -15,9 +15,9 @@ from .units import (
     DNAN,
     Q_,
     Decimal,
-    DecimalQuantity,
     _parse_conc_optional,
     _parse_conc_required,
+    Quantity,
     nM,
     ureg,
 )
@@ -33,7 +33,7 @@ _REF_COLUMNS = ["Name", "Plate", "Well", "Concentration (nM)", "Sequence"]
 _REF_DTYPES = [object, object, object, np.float64, object]
 
 RefFile: TypeAlias = (
-    "str | tuple[str, DecimalQuantity | str | dict[str, DecimalQuantity]]"
+    "str | tuple[str, Quantity[Decimal] | str | dict[str, Quantity[Decimal]]]"
 )
 
 
@@ -101,7 +101,7 @@ class Reference:
         name: str | None = None,
         plate: str | None = None,
         well: str | WellPos | None = None,
-        concentration: str | DecimalQuantity | None = None,
+        concentration: str | Quantity[Decimal] | None = None,
         sequence: str | None = None,
     ) -> Reference:
         well = _parse_wellpos_optional(well)
@@ -126,9 +126,9 @@ class Reference:
         name: str | None = None,
         plate: str | None = None,
         well: str | WellPos | None = None,
-        concentration: str | DecimalQuantity | None = None,
+        concentration: str | Quantity[Decimal] | None = None,
         sequence: str | None = None,
-    ) -> DecimalQuantity:
+    ) -> Quantity[Decimal]:
         valref = self.search(name, plate, well, concentration, sequence)
 
         if len(valref) == 1:
@@ -180,7 +180,7 @@ class Reference:
         for filename in files_list:
             filetype = None
             all_conc = None
-            conc_dict: dict[str, DecimalQuantity] = {}
+            conc_dict: dict[str, Quantity[Decimal]] = {}
 
             if isinstance(filename, tuple):
                 conc_info = filename[1]
@@ -189,7 +189,9 @@ class Reference:
                 if isinstance(conc_info, dict):
                     conc_dict = {
                         k: _parse_conc_required(v)
-                        for k, v in cast(dict[str, DecimalQuantity], conc_info).items()
+                        for k, v in cast(
+                            dict[str, Quantity[Decimal]], conc_info
+                        ).items()
                     }
                     if "default" in conc_dict:
                         all_conc = _parse_conc_required(conc_dict["default"])

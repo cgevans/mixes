@@ -11,8 +11,7 @@ from alhambra_mixes.units import (
     uL,
     DNAN,
     ureg,
-    DecimalQuantity,
-    PlainQuantity,
+    Quantity,
 )
 import pytest
 import pint

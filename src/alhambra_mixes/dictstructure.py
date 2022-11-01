@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .locations import WellPos
-from .units import ureg, PlainQuantity
+from .units import ureg, Quantity
 
 if TYPE_CHECKING:  # pragma: no cover
     from attrs import Attribute

@@ -15,7 +15,7 @@ from .units import (
     Q_,
     ZERO_VOL,
     Decimal,
-    DecimalQuantity,
+    Quantity,
     _parse_conc_optional,
     nM,
     ureg,
@@ -69,7 +69,7 @@ class AbstractComponent(ABC):
 
     @property
     @abstractmethod
-    def concentration(self) -> DecimalQuantity:  # pragma: no cover
+    def concentration(self) -> Quantity[Decimal]:  # pragma: no cover
         "(Source) concentration of the component as a pint Quantity.  NaN if undefined."
         ...
 
@@ -106,9 +106,9 @@ class AbstractComponent(ABC):
 
     def _update_volumes(
         self,
-        consumed_volumes: Dict[str, DecimalQuantity] = {},
-        made_volumes: Dict[str, DecimalQuantity] = {},
-    ) -> Tuple[Dict[str, DecimalQuantity], Dict[str, DecimalQuantity]]:
+        consumed_volumes: Dict[str, Quantity[Decimal]] = {},
+        made_volumes: Dict[str, Quantity[Decimal]] = {},
+    ) -> Tuple[Dict[str, Quantity[Decimal]], Dict[str, Quantity[Decimal]]]:
         """
         Given a
         """
@@ -130,7 +130,7 @@ class Component(AbstractComponent):
     """
 
     name: str
-    concentration: DecimalQuantity = attrs.field(
+    concentration: Quantity[Decimal] = attrs.field(
         converter=_parse_conc_optional, default=None, on_setattr=attrs.setters.convert
     )
     # FIXME: this is not a great way to do this: should make code not give None
