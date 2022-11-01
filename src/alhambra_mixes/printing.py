@@ -159,6 +159,7 @@ _SUPPORTED_TABLEFMTS_TITLE = [
 
 _NL: dict[Union[str, TableFormat], str] = {
     "pipe": "\n",
+    "grid": "\n",
     "html": "<br/>",
     "unsafehtml": "<br/>",
     html_with_borders_tablefmt: "<br/>",
@@ -187,7 +188,7 @@ def _formatter(
             out = _format_error_span(out, tablefmt)
     elif isinstance(x, (list, np.ndarray, pd.Series)):
         out = ", ".join(
-            (_NL[tablefmt] if i - 1 in splits else "") + _formatter(y)
+            (_NL.get(tablefmt, "\n") if i - 1 in splits else "") + _formatter(y)
             for i, y in enumerate(x)
         )
     else:
