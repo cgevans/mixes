@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import decimal
 from decimal import Decimal
-from typing import Sequence, TypeVar, overload
-
+from typing import Sequence, TypeVar, Union, overload
+from typing_extensions import TypeAlias
 import pint
 from pint import Quantity
+from pint.facets.plain import PlainQuantity
 
 # This needs to be here to make Decimal NaNs behave the way that NaNs
 # *everywhere else in the standard library* behave.
@@ -22,6 +23,7 @@ __all__ = [
     "NAN_VOL",
     "Decimal",
     "Quantity",
+    "DecimalQuantity",
 ]
 
 ureg = pint.UnitRegistry(non_int_type=Decimal)
@@ -32,8 +34,12 @@ uL = ureg.uL
 uM = ureg.uM
 nM = ureg.nM
 
+DecimalQuantity: TypeAlias = "Quantity[Decimal]"
 
-def Q_(qty: int | str | Decimal | float, unit: str | pint.Unit) -> pint.Quantity:
+
+def Q_(
+    qty: int | str | Decimal | float, unit: str | pint.Unit | None = None
+) -> DecimalQuantity:
     "Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`.  Ensures that the quantity is a Decimal."
     return ureg.Quantity(Decimal(qty), unit)
 
@@ -46,35 +52,39 @@ DNAN = Decimal("nan")
 ZERO_VOL = Q_("0.0", "µL")
 NAN_VOL = Q_("nan", "µL")
 
-T = TypeVar("T")
+T = TypeVar("T", bound=Union[float, Decimal])
 
 
 @overload
 def _ratio(
-    top: Sequence[pint.Quantity[T]], bottom: Sequence[pint.Quantity[T]]
+    top: Sequence[PlainQuantity[T]], bottom: Sequence[Quantity[Union[float, Decimal]]]
 ) -> Sequence[T]:
     ...
 
 
 @overload
-def _ratio(top: pint.Quantity[T], bottom: Sequence[pint.Quantity[T]]) -> Sequence[T]:
+def _ratio(
+    top: PlainQuantity[T], bottom: Sequence[PlainQuantity[T]]
+) -> Sequence[Union[float, Decimal]]:
     ...
 
 
 @overload
-def _ratio(top: Sequence[pint.Quantity[T]], bottom: pint.Quantity[T]) -> Sequence[T]:
+def _ratio(
+    top: Sequence[PlainQuantity[T]], bottom: PlainQuantity[T]
+) -> Sequence[Union[float, Decimal]]:
     ...
 
 
 @overload
-def _ratio(top: pint.Quantity[T], bottom: pint.Quantity[T]) -> T:
+def _ratio(top: PlainQuantity[T], bottom: PlainQuantity[T]) -> Union[float, Decimal]:
     ...
 
 
 def _ratio(
-    top: pint.Quantity[T] | Sequence[pint.Quantity[T]],
-    bottom: pint.Quantity[T] | Sequence[pint.Quantity[T]],
-) -> T | Sequence[T]:
+    top: PlainQuantity[T] | Sequence[PlainQuantity[T]],
+    bottom: PlainQuantity[T] | Sequence[PlainQuantity[T]],
+) -> Union[float, Decimal] | Sequence[Union[float, Decimal]]:
     if isinstance(top, Sequence) and isinstance(bottom, Sequence):
         return [(x / y).m_as("") for x, y in zip(top, bottom)]
     elif isinstance(top, Sequence):
@@ -84,15 +94,15 @@ def _ratio(
     return (top / bottom).m_as("")
 
 
-def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
+def _parse_conc_optional(v: str | Quantity | None) -> DecimalQuantity:
     """Parses a string or Quantity as a concentration; if None, returns a NaN
     concentration."""
     if isinstance(v, str):
-        q = ureg(v)
+        q = ureg.Quantity(v)
         if not q.check(nM):
             raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
         return q
-    elif isinstance(v, pint.Quantity):
+    elif isinstance(v, Quantity):
         if not v.check(nM):
             raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
         v = Q_(v.m, v.u)
@@ -102,15 +112,15 @@ def _parse_conc_optional(v: str | pint.Quantity | None) -> pint.Quantity:
     raise ValueError
 
 
-def _parse_conc_required(v: str | pint.Quantity) -> pint.Quantity:
+def _parse_conc_required(v: str | Quantity) -> DecimalQuantity:
     """Parses a string or Quantity as a concentration, requiring that
     it result in a value."""
     if isinstance(v, str):
-        q = ureg(v)
+        q = ureg.Quantity(v)
         if not q.check(nM):
             raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
         return q
-    elif isinstance(v, pint.Quantity):
+    elif isinstance(v, Quantity):
         if not v.check(nM):
             raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
         v = Q_(v.m, v.u)
@@ -118,18 +128,18 @@ def _parse_conc_required(v: str | pint.Quantity) -> pint.Quantity:
     raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
 
 
-def _parse_vol_optional(v: str | pint.Quantity) -> pint.Quantity:
+def _parse_vol_optional(v: str | Quantity) -> DecimalQuantity:
     """Parses a string or quantity as a volume, returning a NaN volume
     if the value is None.
     """
     # if isinstance(v, (float, int)):  # FIXME: was in quantitate.py, but potentially unsafe
     #    v = f"{v} µL"
     if isinstance(v, str):
-        q = ureg(v)
+        q = ureg.Quantity(v)
         if not q.check(uL):
             raise ValueError(f"{v} is not a valid quantity here (should be volume).")
         return q
-    elif isinstance(v, pint.Quantity):
+    elif isinstance(v, Quantity):
         if not v.check(uL):
             raise ValueError(f"{v} is not a valid quantity here (should be volume).")
         v = Q_(v.m, v.u)
@@ -139,18 +149,18 @@ def _parse_vol_optional(v: str | pint.Quantity) -> pint.Quantity:
     raise ValueError
 
 
-def _parse_vol_optional_none_zero(v: str | pint.Quantity) -> pint.Quantity:
+def _parse_vol_optional_none_zero(v: str | Quantity) -> DecimalQuantity:
     """Parses a string or quantity as a volume, returning a NaN volume
     if the value is None.
     """
     # if isinstance(v, (float, int)):  # FIXME: was in quantitate.py, but potentially unsafe
     #    v = f"{v} µL"
     if isinstance(v, str):
-        q = ureg(v)
+        q = ureg.Quantity(v)
         if not q.check(uL):
             raise ValueError(f"{v} is not a valid quantity here (should be volume).")
         return q
-    elif isinstance(v, pint.Quantity):
+    elif isinstance(v, Quantity):
         if not v.check(uL):
             raise ValueError(f"{v} is not a valid quantity here (should be volume).")
         v = Q_(v.m, v.u)
@@ -160,18 +170,18 @@ def _parse_vol_optional_none_zero(v: str | pint.Quantity) -> pint.Quantity:
     raise ValueError
 
 
-def _parse_vol_required(v: str | pint.Quantity) -> pint.Quantity:
+def _parse_vol_required(v: str | Quantity) -> DecimalQuantity:
     """Parses a string or quantity as a volume, requiring that it result in a
     value.
     """
     # if isinstance(v, (float, int)):
     #    v = f"{v} µL"
     if isinstance(v, str):
-        q = ureg(v)
+        q = ureg.Quantity(v)
         if not q.check(uL):
             raise ValueError(f"{v} is not a valid quantity here (should be volume).")
         return q
-    elif isinstance(v, pint.Quantity):
+    elif isinstance(v, Quantity):
         if not v.check(uL):
             raise ValueError(f"{v} is not a valid quantity here (should be volume).")
         v = Q_(v.m, v.u)

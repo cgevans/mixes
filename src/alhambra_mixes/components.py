@@ -11,7 +11,15 @@ import pandas as pd
 from .locations import WellPos, _parse_wellpos_optional
 from .logging import log
 from .printing import TableFormat
-from .units import Q_, ZERO_VOL, Decimal, Quantity, _parse_conc_optional, nM, ureg
+from .units import (
+    Q_,
+    ZERO_VOL,
+    Decimal,
+    Quantity,
+    _parse_conc_optional,
+    nM,
+    ureg,
+)
 from .util import _none_as_empty_string
 from .dictstructure import _structure, _unstructure, _STRUCTURE_CLASSES
 
@@ -98,9 +106,9 @@ class AbstractComponent(ABC):
 
     def _update_volumes(
         self,
-        consumed_volumes: Dict[str, Quantity] = {},
-        made_volumes: Dict[str, Quantity] = {},
-    ) -> Tuple[Dict[str, Quantity], Dict[str, Quantity]]:
+        consumed_volumes: Dict[str, Quantity[Decimal]] = {},
+        made_volumes: Dict[str, Quantity[Decimal]] = {},
+    ) -> Tuple[Dict[str, Quantity[Decimal]], Dict[str, Quantity[Decimal]]]:
         """
         Given a
         """
@@ -145,8 +153,8 @@ class Component(AbstractComponent):
             return False
         if self.name != other.name:
             return False
-        if isinstance(self.concentration, Quantity) and isinstance(
-            other.concentration, Quantity
+        if isinstance(self.concentration, ureg.Quantity) and isinstance(
+            other.concentration, ureg.Quantity
         ):
             if isnan(self.concentration.m) and isnan(other.concentration.m):
                 return True
@@ -178,7 +186,7 @@ class Component(AbstractComponent):
             val = getattr(self, att.name)
             if val is att.default:
                 continue
-            if isinstance(val, Quantity) and isnan(val.m):
+            if isinstance(val, ureg.Quantity) and isnan(val.m):
                 continue
             d[att.name] = _unstructure(val)
         return d
@@ -217,7 +225,7 @@ class Component(AbstractComponent):
         mismatches = []
         matches = []
         for _, ref_comp in ref_comps.iterrows():
-            ref_conc = Q_(Decimal(ref_comp["Concentration (nM)"]), nM)
+            ref_conc = Q_(ref_comp["Concentration (nM)"], nM)
             if not isnan(self.concentration.m) and not (ref_conc == self.concentration):
                 mismatches.append(("Concentration (nM)", ref_comp))
                 continue
@@ -246,7 +254,7 @@ class Component(AbstractComponent):
             )
 
         match = matches[0]
-        ref_conc = ureg.Quantity(Decimal(match["Concentration (nM)"]), nM)
+        ref_conc = ureg.Quantity(match["Concentration (nM)"], nM)
         ref_plate = match["Plate"]
         ref_well = _parse_wellpos_optional(match["Well"])
 
@@ -288,7 +296,7 @@ class Strand(Component):
         mismatches = []
         matches = []
         for _, ref_comp in ref_comps.iterrows():
-            ref_conc = ureg.Quantity(Decimal(ref_comp["Concentration (nM)"]), nM)
+            ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], nM)
             if not isnan(self.concentration.m) and not (ref_conc == self.concentration):
                 mismatches.append(("Concentration (nM)", ref_comp))
                 continue
@@ -327,7 +335,7 @@ class Strand(Component):
             )
 
         m = matches[0]
-        ref_conc = Q_(Decimal(m["Concentration (nM)"]), nM)
+        ref_conc = Q_(m["Concentration (nM)"], nM)
         ref_plate = m["Plate"]
         ref_well = _parse_wellpos_optional(m["Well"])
         ss, ms = self.sequence, m["Sequence"]

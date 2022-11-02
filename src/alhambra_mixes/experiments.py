@@ -19,7 +19,7 @@ from typing import (
 import attrs
 
 from .dictstructure import _structure, _unstructure
-from .units import DNAN, Q_, ZERO_VOL, Decimal, Quantity, uL
+from .units import DNAN, Q_, ZERO_VOL, Decimal, uL, Quantity
 from .mixes import Mix
 from .mixes import VolumeError
 
@@ -66,7 +66,7 @@ class Experiment:
         fixed_total_volume: Quantity[Decimal] | str = Q_(DNAN, uL),
         fixed_concentration: str | Quantity[Decimal] | None = None,
         buffer_name: str = "Buffer",
-        min_volume: Quantity[Decimal] | str = Q_(Decimal("0.5"), uL),
+        min_volume: Quantity[Decimal] | str = Q_("0.5", uL),
         check_volumes: bool | None = None,
         apply_reference: bool = True,
     ) -> Experiment:
@@ -158,9 +158,11 @@ class Experiment:
     def __iter__(self) -> Iterator[AbstractComponent]:
         return iter(self.components.values())
 
-    def consumed_and_produced_volumes(self) -> Mapping[str, Tuple[Quantity, Quantity]]:
-        consumed_volume: Dict[str, Quantity] = {}
-        produced_volume: Dict[str, Quantity] = {}
+    def consumed_and_produced_volumes(
+        self,
+    ) -> Mapping[str, Tuple[Quantity[Decimal], Quantity[Decimal]]]:
+        consumed_volume: Dict[str, Quantity[Decimal]] = {}
+        produced_volume: Dict[str, Quantity[Decimal]] = {}
         for component in self.components.values():
             component._update_volumes(consumed_volume, produced_volume)
         return {

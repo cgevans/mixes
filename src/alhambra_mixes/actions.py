@@ -54,7 +54,7 @@ class AbstractAction(ABC):
         mix_vol
             The mix volume.  Does not accept strings.
         """
-        return sum(self.each_volumes(mix_vol, actions), Q_(Decimal("0"), "uL"))
+        return sum(self.each_volumes(mix_vol, actions), Q_("0", "uL"))
 
     @abstractmethod
     def _mixlines(
@@ -94,8 +94,8 @@ class AbstractAction(ABC):
         ...
 
     def dest_concentration(
-        self, mix_vol: Quantity, actions: Sequence[AbstractAction] = tuple()
-    ) -> Quantity:
+        self, mix_vol: Quantity[Decimal], actions: Sequence[AbstractAction] = tuple()
+    ) -> Quantity[Decimal]:
         """The destination concentration added to the mix by the action.
 
         Raises
@@ -108,7 +108,7 @@ class AbstractAction(ABC):
         raise ValueError("Single destination concentration not defined.")
 
     def dest_concentrations(
-        self, mix_vol: Quantity, actions: Sequence[AbstractAction] = tuple()
+        self, mix_vol: Quantity[Decimal], actions: Sequence[AbstractAction] = tuple()
     ) -> Sequence[Quantity[Decimal]]:
         raise ValueError
 
@@ -161,7 +161,7 @@ class ActionWithComponents(AbstractAction):
         for a in self.__attrs_attrs__:  # type: Attribute
             v1 = getattr(self, a.name)
             v2 = getattr(other, a.name)
-            if isinstance(v1, Quantity):
+            if isinstance(v1, ureg.Quantity):
                 if isnan(v1.m) and isnan(v2.m) and (v1.units == v2.units):
                     continue
             if v1 != v2:
@@ -213,7 +213,7 @@ class ActionWithComponents(AbstractAction):
             if val is a.default:
                 continue
             # FIXME: nan quantities are always default, and pint handles them poorly
-            if isinstance(val, Quantity) and isnan(val.m):
+            if isinstance(val, ureg.Quantity) and isnan(val.m):
                 continue
             d[a.name] = _unstructure(val)
         return d
@@ -549,7 +549,7 @@ class EqualConcentration(FixedVolume):
     def __init__(
         self,
         components: Sequence[AbstractComponent | str] | AbstractComponent | str,
-        fixed_volume: str | Quantity,
+        fixed_volume: str | Quantity[Decimal],
         set_name: str | None = None,
         compact_display: bool = True,
         method: Literal["max_volume", "min_volume", "check"]
@@ -623,7 +623,7 @@ class EqualConcentration(FixedVolume):
         ml = super()._mixlines(tablefmt, mix_vol)
         if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
             fv = self.fixed_volume * len(self.components) - sum(self.each_volumes())
-            if not fv == Q_(Decimal("0.0"), uL):
+            if not fv == Q_("0.0", uL):
                 ml.append(MixLine([self.method[1]], None, None, fv))
         return ml
 
@@ -817,7 +817,7 @@ class ToConcentration(ActionWithComponents):
 
     def dest_concentrations(
         self,
-        mix_vol: Quantity,
+        mix_vol: Quantity[Decimal],
         actions: Sequence[AbstractAction] = tuple(),
         _othercomps: pd.DataFrame | None = None,
     ) -> Sequence[Quantity[Decimal]]:
@@ -827,11 +827,11 @@ class ToConcentration(ActionWithComponents):
             otherconcs = [
                 Q_(_othercomps.loc[comp.name, "concentration_nM"], nM)
                 if comp.name in _othercomps.index
-                else Q_(Decimal("0.0"), nM)
+                else Q_("0.0", nM)
                 for comp in self.components
             ]
         else:
-            otherconcs = [Q_(Decimal("0.0"), nM) for _ in self.components]
+            otherconcs = [Q_("0.0", nM) for _ in self.components]
         return [self.fixed_concentration - other for other in otherconcs]
 
     def each_volumes(

@@ -180,7 +180,7 @@ def _formatter(
         out = f"{x:,.2f}"
         if isnan(x):
             out = _format_error_span(out, tablefmt)
-    elif isinstance(x, Quantity):
+    elif isinstance(x, ureg.Quantity):
         out = f"{x:,.2f~#P}"
         if isnan(x.m):
             out = _format_error_span(out, tablefmt)
