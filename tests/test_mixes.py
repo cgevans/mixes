@@ -5,6 +5,7 @@ from typing import cast
 
 import numpy as np
 import pandas as pd
+import pint.testing
 import pytest
 
 from alhambra_mixes import (
@@ -483,3 +484,77 @@ def test_combine_plate_actions_false():
     assert pms[1].well_to_strand_name["B1"] == "s3"
     assert pms[2].well_to_strand_name["A2"] == "s2"
     assert pms[3].well_to_strand_name["B2"] == "s4"
+
+
+def assert_close(actual, expected, rtol=Decimal(1e-7), atol=Decimal(0), msg=None):
+    # This helps with comparing Decimal quantities, which cannot be multiplied by floats, which is
+    # what happens with the default rtol parameter of pint.testing.assert_allclose.
+    pint.testing.assert_allclose(actual, expected, rtol, atol, msg)
+
+
+def test_split_mix():
+    from alhambra_mixes import Mix, FixedConcentration, FixedVolume, Strand, split_mix
+
+    staples = [Strand(f"stap{i}", concentration="1uM") for i in range(10)]
+    staple_mix = Mix(
+        actions=[FixedConcentration(components=staples, fixed_concentration="100 nM")],
+        name="staple mix",
+    )
+    m13 = Strand("m13 100nM", concentration="100 nM")
+    buffer_10x = Component(name="10x buffer", concentration="100 mM")
+    mix = Mix(
+        actions=[
+            FixedVolume(components=[buffer_10x], fixed_volume=f"10 uL"),
+            FixedConcentration(components=[m13], fixed_concentration=f"1 nM"),
+            FixedConcentration(components=[staple_mix], fixed_concentration=f"10 nM"),
+        ],
+        name="mm",
+        fixed_total_volume=f"100 uL",
+    )
+    sm = split_mix(mix=mix, num_tubes=5, excess=0)
+
+    assert_close(sm.buffer_volume, ureg("395 uL"))
+
+    mixlines = sm.mixlines()
+    assert len(mixlines) == 4
+
+    buffer_10x_mixline, m13_mixline, staple_mixline, buffer_mixline = mixlines
+
+    assert_close(buffer_10x_mixline.total_tx_vol, ureg("50 uL"))
+    assert_close(m13_mixline.total_tx_vol, ureg("5 uL"))
+    assert_close(staple_mixline.total_tx_vol, ureg("50 uL"))
+    assert_close(buffer_mixline.total_tx_vol, ureg("395 uL"))
+
+
+def test_split_mix_with_excess():
+    from alhambra_mixes import Mix, FixedConcentration, FixedVolume, Strand, split_mix
+
+    staples = [Strand(f"stap{i}", concentration="1uM") for i in range(10)]
+    staple_mix = Mix(
+        actions=[FixedConcentration(components=staples, fixed_concentration="100 nM")],
+        name="staple mix",
+    )
+    m13 = Strand("m13 100nM", concentration="100 nM")
+    buffer_10x = Component(name="10x buffer", concentration="100 mM")
+    mix = Mix(
+        actions=[
+            FixedVolume(components=[buffer_10x], fixed_volume=f"10 uL"),
+            FixedConcentration(components=[m13], fixed_concentration=f"1 nM"),
+            FixedConcentration(components=[staple_mix], fixed_concentration=f"10 nM"),
+        ],
+        name="mm",
+        fixed_total_volume=f"100 uL",
+    )
+    sm = split_mix(mix=mix, num_tubes=5, excess=0.1)
+
+    assert_close(sm.buffer_volume, ureg("434.50 uL"))
+
+    mixlines = sm.mixlines()
+    assert len(mixlines) == 4
+
+    buffer_10x_mixline, m13_mixline, staple_mixline, buffer_mixline = mixlines
+
+    assert_close(buffer_10x_mixline.total_tx_vol, ureg("55 uL"))
+    assert_close(m13_mixline.total_tx_vol, ureg("5.5 uL"))
+    assert_close(staple_mixline.total_tx_vol, ureg("55 uL"))
+    assert_close(buffer_mixline.total_tx_vol, ureg("434.50 uL"))
