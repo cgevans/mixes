@@ -1389,9 +1389,11 @@ def verify_mixes_for_master_mix(mixes: Iterable[Mix]) -> None:
     for mix in mixes:
         for action in mix.actions:
             if not isinstance(action, (FixedVolume, FixedConcentration)):
-                raise ValueError(f'master_mix can only handle mixes with FixedVolume and FixedConcentration '
-                                 f'actions, but mix {mix.name} contains a {type(action)} action: '
-                                 f'{action}')
+                raise ValueError(
+                    f"master_mix can only handle mixes with FixedVolume and FixedConcentration "
+                    f"actions, but mix {mix.name} contains a {type(action)} action: "
+                    f"{action}"
+                )
 
 
 def master_mix(
@@ -1437,20 +1439,28 @@ def master_mix(
     """
     verify_mixes_for_master_mix(mixes)
 
-    shared_actions, unique_actions_list = compute_shared_actions(mixes, exclude_shared_components)
+    shared_actions, unique_actions_list = compute_shared_actions(
+        mixes, exclude_shared_components
+    )
 
     num_shared_actions = len(shared_actions)
     if num_shared_actions <= 1:
-        raise ValueError(f'master_mix can only be used when mixes have at least two actions shared '
-                         f'among all of them, but I only found {num_shared_actions}'
-                         f', which is {shared_actions[0]}' if num_shared_actions == 1 else '')
+        raise ValueError(
+            f"master_mix can only be used when mixes have at least two actions shared "
+            f"among all of them, but I only found {num_shared_actions}"
+            f", which is {shared_actions[0]}"
+            if num_shared_actions == 1
+            else ""
+        )
 
     mixes = list(mixes)
     num_tubes = len(mixes)
     first_mix = mixes[0]
     total_small_mix_volume = first_mix.total_volume
-    volume_shared_actions = sum(shared_action.tx_volume(total_small_mix_volume)
-                                for shared_action in shared_actions)
+    volume_shared_actions = sum(
+        shared_action.tx_volume(total_small_mix_volume)
+        for shared_action in shared_actions
+    )
     concentration_multiplier = total_small_mix_volume / volume_shared_actions
 
     # need to adjust FixedConcentration target concentrations to be higher in master mix to
@@ -1462,7 +1472,8 @@ def master_mix(
         if isinstance(action, FixedConcentration):
             new_fixed_concentration_action = FixedConcentration(
                 components=action.components,
-                fixed_concentration=action.fixed_concentration * concentration_multiplier,
+                fixed_concentration=action.fixed_concentration
+                * concentration_multiplier,
                 set_name=action.set_name,
                 compact_display=action.compact_display,
             )
@@ -1484,7 +1495,9 @@ def master_mix(
 
     # create new mixes using master mix and unique actions of each mix
     new_mixes = []
-    master_mix_action = FixedVolume(components=[mas_mix], fixed_volume=volume_shared_actions)
+    master_mix_action = FixedVolume(
+        components=[mas_mix], fixed_volume=volume_shared_actions
+    )
     for orig_mix, unique_actions in zip(mixes, unique_actions_list):
         all_actions = [master_mix_action] + unique_actions
         new_mix = Mix(
