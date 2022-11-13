@@ -672,9 +672,9 @@ def test_master_mix_exclude_shared_components(master_mix_fixture):
 
     s12_ml, s34_ml, buffer_ml = mm_mixlines
 
-    print(mm.instructions() + "\n")
-    for mix in final_mixes:
-        print(mix.instructions() + "\n")
+    # print(mm.instructions() + "\n")
+    # for mix in final_mixes:
+    #     print(mix.instructions() + "\n")
 
     assert_close(s12_ml.each_tx_vol, ureg("20 uL"))
     assert_close(s34_ml.each_tx_vol, ureg("20 uL"))
