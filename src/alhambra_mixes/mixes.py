@@ -1600,7 +1600,9 @@ def master_mix(
         shared_action.tx_volume(total_small_mix_volume)
         for shared_action in shared_actions
     )
-    concentration_multiplier = total_small_mix_volume / volume_shared_actions
+    volume_buffer = first_mix.buffer_volume
+    volume_shared_actions_and_buffer = volume_shared_actions + volume_buffer
+    concentration_multiplier = total_small_mix_volume / volume_shared_actions_and_buffer
 
     # replace FixedConcentration actions in `large_mix` with larger concentrations
     # to account for subsequent dilution when pipetting master mix to final small mix
@@ -1624,7 +1626,7 @@ def master_mix(
     small_shared_mix = Mix(
         actions=shared_actions,
         name=name,
-        fixed_total_volume=volume_shared_actions,
+        fixed_total_volume=volume_shared_actions_and_buffer,
         buffer_name=first_mix.buffer_name,
         reference=first_mix.reference,
         min_volume=first_mix.min_volume,
@@ -1635,7 +1637,7 @@ def master_mix(
     # create new mixes using master mix and unique actions of each mix
     new_mixes = []
     master_mix_action = FixedVolume(
-        components=[mas_mix], fixed_volume=volume_shared_actions
+        components=[mas_mix], fixed_volume=volume_shared_actions_and_buffer
     )
     for orig_mix, unique_actions in zip(mixes, unique_actions_list):
         # `[master_mix] + unique_actions` causes mypy error here, so we get explicit about variable types

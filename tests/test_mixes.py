@@ -610,7 +610,7 @@ def test_master_mix(master_mix_fixture):
 
     mm, final_mixes = master_mix(mixes=mixes, name="master mix", excess=0)
 
-    assert mm.total_volume == ureg("120 uL")
+    assert mm.total_volume == ureg("180 uL")
 
     mm_mixlines = mm.mixlines()
     assert len(mm_mixlines) == 4  # 3 mixes shared plus buffer
@@ -627,10 +627,10 @@ def test_master_mix(master_mix_fixture):
     assert_close(s12_ml.total_tx_vol, ureg("40 uL"))
     assert_close(s34_ml.total_tx_vol, ureg("40 uL"))
     assert_close(s56_ml.total_tx_vol, ureg("40 uL"))
-    assert_close(s12_ml.dest_conc, ureg("16.66 nM"), atol=Decimal(0.01))
-    assert_close(s34_ml.dest_conc, ureg("16.66 nM"), atol=Decimal(0.01))
-    assert_close(s56_ml.dest_conc, ureg("16.66 nM"), atol=Decimal(0.01))
-    assert_close(buffer_ml.each_tx_vol, ureg("0 uL"))
+    assert_close(s12_ml.dest_conc, ureg("11.11 nM"), atol=Decimal(0.01))
+    assert_close(s34_ml.dest_conc, ureg("11.11 nM"), atol=Decimal(0.01))
+    assert_close(s56_ml.dest_conc, ureg("11.11 nM"), atol=Decimal(0.01))
+    assert_close(buffer_ml.each_tx_vol, ureg("60 uL"))
 
     assert len(final_mixes) == 2
     for i, mix in enumerate(final_mixes):
@@ -640,9 +640,9 @@ def test_master_mix(master_mix_fixture):
         assert len(mixlines) == 3
         mm_ml, strand_ml, buf_ml = mixlines
 
-        assert_close(mm_ml.each_tx_vol, ureg("60 uL"))
+        assert_close(mm_ml.each_tx_vol, ureg("90 uL"))
         assert_close(strand_ml.each_tx_vol, ureg("10 uL"))
-        assert_close(buf_ml.each_tx_vol, ureg("30 uL"))
+        assert_close(buf_ml.each_tx_vol, ureg("0 uL"))
 
         assert_close(strand_ml.total_tx_vol, ureg("10 uL"))
 
@@ -665,7 +665,7 @@ def test_master_mix_exclude_shared_components(master_mix_fixture):
     # now should only have [s1,s2] and [s3,s4] as shared components, with [s5,s6] "unique" though
     # appearing in both
 
-    assert mm.total_volume == ureg("80 uL")
+    assert mm.total_volume == ureg("140 uL")
 
     mm_mixlines = mm.mixlines()
     assert len(mm_mixlines) == 3  # 2 mixes shared plus buffer
@@ -680,9 +680,9 @@ def test_master_mix_exclude_shared_components(master_mix_fixture):
     assert_close(s34_ml.each_tx_vol, ureg("20 uL"))
     assert_close(s12_ml.total_tx_vol, ureg("40 uL"))
     assert_close(s34_ml.total_tx_vol, ureg("40 uL"))
-    assert_close(s12_ml.dest_conc, ureg("25 nM"), atol=Decimal(0.01))
-    assert_close(s34_ml.dest_conc, ureg("25 nM"), atol=Decimal(0.01))
-    assert_close(buffer_ml.each_tx_vol, ureg("0 uL"))
+    assert_close(s12_ml.dest_conc, ureg("14.29 nM"), atol=Decimal(0.01))
+    assert_close(s34_ml.dest_conc, ureg("14.29 nM"), atol=Decimal(0.01))
+    assert_close(buffer_ml.each_tx_vol, ureg("60 uL"))
 
     assert len(final_mixes) == 2
     for i, mix in enumerate(final_mixes):
@@ -692,10 +692,10 @@ def test_master_mix_exclude_shared_components(master_mix_fixture):
         assert len(mixlines) == 4
         mm_ml, s56_ml, strand_ml, buf_ml = mixlines
 
-        assert_close(mm_ml.each_tx_vol, ureg("40 uL"))
+        assert_close(mm_ml.each_tx_vol, ureg("70 uL"))
         assert_close(s56_ml.each_tx_vol, ureg("10 uL"))
         assert_close(strand_ml.each_tx_vol, ureg("10 uL"))
-        assert_close(buf_ml.each_tx_vol, ureg("30 uL"))
+        assert_close(buf_ml.each_tx_vol, ureg("0 uL"))
 
         assert_close(s56_ml.total_tx_vol, ureg("20 uL"))
         assert_close(strand_ml.total_tx_vol, ureg("10 uL"))
@@ -745,7 +745,7 @@ def test_master_mix_with_FixedVolume_action(master_mix_fixture):
 
     mm, final_mixes = master_mix(mixes=mixes, name="master mix", excess=0)
 
-    assert mm.total_volume == ureg("120 uL")
+    assert mm.total_volume == ureg("180 uL")
 
     mm_mixlines = mm.mixlines()
     assert len(mm_mixlines) == 4  # 3 mixes shared plus buffer
@@ -762,10 +762,10 @@ def test_master_mix_with_FixedVolume_action(master_mix_fixture):
     assert_close(s12_ml.total_tx_vol, ureg("40 uL"))
     assert_close(s34_ml.total_tx_vol, ureg("40 uL"))
     assert_close(s56_ml.total_tx_vol, ureg("40 uL"))
-    assert_close(s12_ml.dest_conc, ureg("16.66 nM"), atol=Decimal(0.01))
-    assert_close(s34_ml.dest_conc, ureg("16.66 nM"), atol=Decimal(0.01))
-    assert_close(s56_ml.dest_conc, ureg("16.66 nM"), atol=Decimal(0.01))
-    assert_close(buffer_ml.each_tx_vol, ureg("0 uL"))
+    assert_close(s12_ml.dest_conc, ureg("11.11 nM"), atol=Decimal(0.01))
+    assert_close(s34_ml.dest_conc, ureg("11.11 nM"), atol=Decimal(0.01))
+    assert_close(s56_ml.dest_conc, ureg("11.11 nM"), atol=Decimal(0.01))
+    assert_close(buffer_ml.each_tx_vol, ureg("60 uL"))
 
     assert len(final_mixes) == 2
     for i, mix in enumerate(final_mixes):
@@ -775,9 +775,9 @@ def test_master_mix_with_FixedVolume_action(master_mix_fixture):
         assert len(mixlines) == 3
         mm_ml, strand_ml, buf_ml = mixlines
 
-        assert_close(mm_ml.each_tx_vol, ureg("60 uL"))
+        assert_close(mm_ml.each_tx_vol, ureg("90 uL"))
         assert_close(strand_ml.each_tx_vol, ureg("10 uL"))
-        assert_close(buf_ml.each_tx_vol, ureg("30 uL"))
+        assert_close(buf_ml.each_tx_vol, ureg("0 uL"))
 
         assert_close(strand_ml.total_tx_vol, ureg("10 uL"))
 
