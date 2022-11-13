@@ -16,7 +16,8 @@ from typing import (
     Tuple,
     TypeVar,
     cast,
-    Iterable, List,
+    Iterable,
+    List,
 )
 
 import attrs
@@ -1163,11 +1164,11 @@ class _SplitMix(Mix):
         names = [f"*{name}*" for name in self.names] if self.names is not None else None
         # below is a bit redundant but prevents mypy error since names could be None
         if names is None:
-            names_of_tubes = '.'
+            names_of_tubes = "."
         elif isinstance(names, list):
-            names_of_tubes = ': ' + ', '.join(names)
+            names_of_tubes = ": " + ", ".join(names)
         else:
-            raise AssertionError('unreachable')
+            raise AssertionError("unreachable")
         super_instructions += (
             f"\n\nAliquot {self.small_mix_volume} from this mix "
             + f"into {self.num_tubes} different test tubes{names_of_tubes}"
@@ -1358,7 +1359,6 @@ def compute_shared_actions(
     for idx, component in enumerate(exclude_shared_components):
         if isinstance(component, Component):
             exclude_shared_components[idx] = component.name
-
     # now that we set them all to be strings, cast the variable so mypy doesn't complain below
     # for some reason cannot cast to list[str] (causes runtime error), but can cast to List[str]
     exclude_shared_components = cast(List[str], exclude_shared_components)
