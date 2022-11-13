@@ -1393,10 +1393,12 @@ def compute_shared_actions(
             at_least_one_unique_action = True
         unique_action_lists.append(unique_actions)
     if not at_least_one_unique_action:
-        raise ValueError('None of the mixes has any actions unique to it, so it does not make sense '
-                         'to create a master mix.\nSee the function `split_mix` for a simpler function '
-                         'that achieves the goal of making a large mix that can be split into identical '
-                         'test tubes.')
+        raise ValueError(
+            "None of the mixes has any actions unique to it, so it does not make sense "
+            "to create a master mix.\nSee the function `split_mix` for a simpler function "
+            "that achieves the goal of making a large mix that can be split into identical "
+            "test tubes."
+        )
 
     return shared_actions, unique_action_lists
 
