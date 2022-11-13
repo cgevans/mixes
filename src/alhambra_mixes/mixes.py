@@ -131,7 +131,7 @@ def _maybesequence_action(
 def remove_buffer_mixline_if_absent(mixlines: list[MixLine], buffer_name: str) -> None:
     idx_to_remove = -1
     for idx, mixline in enumerate(mixlines):
-        if mixline.names[0] == buffer_name and mixline.each_tx_vol == ureg('0 uL'):
+        if mixline.names[0] == buffer_name and mixline.each_tx_vol == ureg("0 uL"):
             idx_to_remove = idx
             break
 
