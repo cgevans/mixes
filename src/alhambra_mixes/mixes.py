@@ -1615,7 +1615,6 @@ def master_mix(
         )
 
     mixes = list(mixes)
-    num_tubes = len(mixes)
     first_mix = mixes[0]
     total_small_mix_volume = first_mix.total_volume
     volume_shared_actions = sum(
