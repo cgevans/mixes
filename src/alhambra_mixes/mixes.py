@@ -1654,7 +1654,8 @@ def master_mix(
         min_volume=first_mix.min_volume,
     )
 
-    mas_mix = split_mix(mix=small_shared_mix, num_tubes=num_tubes, excess=excess)
+    names = [mix.name for mix in mixes]
+    mas_mix = split_mix(mix=small_shared_mix, names=names, excess=excess)
 
     # create new mixes using master mix and unique actions of each mix
     new_mixes = []
