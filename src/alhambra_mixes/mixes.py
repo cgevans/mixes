@@ -41,6 +41,7 @@ from .printing import (
     emphasize,
     html_with_borders_tablefmt,
 )
+from .quantitate import normalize
 
 if TYPE_CHECKING:  # pragma: no cover
     from .references import Reference
@@ -1122,8 +1123,6 @@ class PlateMap:
                 if not well_pos.is_last():
                     well_pos = well_pos.advance()
 
-        from alhambra_mixes.quantitate import normalize
-
         raw_title = f'plate "{self.plate_name}"' + (
             f", {normalize(self.vol_each)} each" if self.vol_each is not None else ""
         )
@@ -1191,6 +1190,7 @@ class _SplitMix(Mix):
             names_of_tubes = ": " + ", ".join(names)
         else:
             raise AssertionError("unreachable")
+        self.small_mix_volume = normalize(self.small_mix_volume)
         super_instructions += (
             f"\n\nAliquot {self.small_mix_volume} from this mix "
             + f"into {self.num_tubes} different test tubes{names_of_tubes}"
