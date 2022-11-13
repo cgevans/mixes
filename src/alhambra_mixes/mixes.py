@@ -128,6 +128,17 @@ def _maybesequence_action(
     return [object_or_sequence]
 
 
+def remove_buffer_mixline_if_absent(mixlines: list[MixLine], buffer_name: str) -> None:
+    idx_to_remove = -1
+    for idx, mixline in enumerate(mixlines):
+        if mixline.names[0] == buffer_name and mixline.each_tx_vol == ureg('0 uL'):
+            idx_to_remove = idx
+            break
+
+    if idx_to_remove >= 0:
+        del mixlines[idx_to_remove]
+
+
 @attrs.define(eq=False)
 class Mix(AbstractComponent):
     """Class denoting a Mix, a collection of source components mixed to
@@ -261,6 +272,7 @@ class Mix(AbstractComponent):
         showindex="default",
         disable_numparse=False,
         colalign=None,
+        buffer_line_if_absent=False,
     ) -> str:
         """Generate a table describing the mix.
 
@@ -275,8 +287,14 @@ class Mix(AbstractComponent):
 
         buffer_name
             Name of the buffer to use. (Default="Buffer")
+
+        buffer_line_if_absent
+            If True and the buffer volume is 0, include an explicit line for buffer anyway that says 0 uL.
         """
         mixlines = list(self.mixlines(buffer_name=buffer_name, tablefmt=tablefmt))
+
+        if not buffer_line_if_absent:
+            remove_buffer_mixline_if_absent(mixlines, buffer_name)
 
         validation_errors = self.validate(mixlines=mixlines)
 
