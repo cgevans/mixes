@@ -1376,8 +1376,8 @@ def compute_shared_actions(
     shared_actions_excluded = []
     for action in shared_actions:
         contains_excluded_components = False
-        for component in action.components:
-            if component.name in exclude_shared_components:
+        for comp in action.components:
+            if comp.name in exclude_shared_components:
                 contains_excluded_components = True
                 break
         if not contains_excluded_components:
