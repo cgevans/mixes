@@ -719,7 +719,7 @@ class Mix(AbstractComponent):
         )
         return (
             table_title
-            + "\n\n"
+            + "\n"
             + table_str
             + ("\n\n" + "\n\n".join(plate_map_strs) if len(plate_map_strs) > 0 else "")
         )
@@ -1129,6 +1129,8 @@ class _SplitMix(Mix):
 
     small_mix_volume: Quantity[Decimal] = Q_(Decimal(0), "uL")
 
+    names: None | list[str] = None
+
     def __attrs_post_init__(self) -> None:
         if self.num_tubes < 1:
             raise ValueError("num_tubes must be positive")
@@ -1158,16 +1160,19 @@ class _SplitMix(Mix):
             tablefmt=tablefmt,
             include_plate_maps=include_plate_maps,
         )
+        names = [f"*{name}*" for name in self.names] if self.names is not None else None
         super_instructions += (
             f"\n\nAliquot {self.small_mix_volume} from this mix "
-            f"into {self.num_tubes} different test tubes."
+            + f"into {self.num_tubes} different test tubes"
+            + ("." if self.names is None else f" named {', '.join(names)}")
         )
         return super_instructions
 
 
 def split_mix(
     mix: Mix,
-    num_tubes: int,
+    num_tubes: int | None = None,
+    names: Iterable[str] | None = None,
     excess: int | float | Decimal = Decimal(0.05),
 ) -> Mix:
     """
@@ -1187,7 +1192,8 @@ def split_mix(
         individual smaller test tube should contain after the split.
 
     num_tubes
-        The number of test tubes into which to split the large mix.
+        The number of test tubes into which to split the large mix. Should not be specified if `names`
+        is specified; in that case `num_tubes` is assumed to be the number of strings in `names`.
 
     excess
         A fraction (between 0 and 1) indicating how much extra of the large mix to make. This is useful
@@ -1206,11 +1212,26 @@ def split_mix(
         Note: using `excess` > 0 means than the test tube with the large mix should *not* be
         reused as one of the final test tubes, since it will have too much volume at the end.
 
+    names
+        Names of smaller individual test tubes (will be printed in instructions).
+
     Returns
     -------
         A "large" mix, from which `num_tubes` aliquots can be made to create each of the identical
         "small" mixes.
     """
+    if (
+        names is None
+        and num_tubes is None
+        or names is not None
+        and num_tubes is not None
+    ):
+        raise ValueError("exactly one of `names` or `num_tubes` should be specified")
+
+    if names is not None:
+        names = list(names)
+        num_tubes = len(names)
+
     if isinstance(excess, (float, int)):
         excess = Decimal(excess)
     elif not isinstance(excess, Decimal):
@@ -1241,6 +1262,7 @@ def split_mix(
     large_mix = _SplitMix(
         num_tubes=num_tubes,
         small_mix_volume=mix.total_volume,
+        names=names,
         actions=actions,
         name=mix.name,
         test_tube_name=mix.test_tube_name,
@@ -1409,7 +1431,94 @@ def master_mix(
 
     Components are considered "shared" if they appear in *all* :any:`Mix`'s in `mixes`.
 
-    TODO: show example
+    To ensure sufficient volume for the last mix when the number of mixes is large (due to slight pipetting
+    error from the master mix adding up over many steps), the parameter `excess`
+    can be used to control how much of a slight excess of necessary volume is included in the master mix.
+
+    Shared Components may be excluded from the master mix by putting them or their names in the parameter
+    `exclude_shared_components`.
+
+    Example:
+
+    .. code-block:: python
+
+        # staple mix to be shared in all mixes
+        staples = [Strand(f"stap{i}", concentration="1uM") for i in range(5)]
+        staple_mix = Mix(
+            actions=[FixedConcentration(components=staples, fixed_concentration="100 nM")],
+            name="staple mix",
+        )
+
+        # "adapter" mixes that are different between mixes
+        num_variants = 3
+        adapter_mixes = {}
+        for adp_idx in range(num_variants):
+            adapters = [Strand(f'adp_{adp_idx}_{i}', concentration="1uM") for i in range(5)]
+            adapter_mix = Mix(
+                actions=[FixedConcentration(components=adapters, fixed_concentration="50 nM")],
+                name=f"adapters {adp_idx} mix",
+            )
+            adapter_mixes[adp_idx] = adapter_mix
+
+        m13 = Strand("m13 100nM", concentration="100 nM")
+        mixes = [Mix(
+            actions=[
+                FixedConcentration(components=[m13], fixed_concentration=f"1 nM"),
+                FixedConcentration(components=[staple_mix], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[adapter_mixes[adp_idx]], fixed_concentration=f"10 nM"),
+            ],
+            name="mm",
+            fixed_total_volume=f"100 uL",
+        ) for adp_idx, adapter_mix in adapter_mixes.items()]
+        mm, final_mixes = master_mix(mixes=mixes, name='origami master mix', excess=0.1)
+
+        print(mm.instructions())
+        for mix in final_mixes:
+            print(mix.instructions())
+
+    This should print the following. Note that only 63 uL of master mix are strictly required, but
+    the total master mix volume is 10% higher (69.3 uL) due to the parameter `excess` = 0.1.
+
+    .. code-block::
+
+        ## Mix "origami master mix":
+        | Component   | [Src]     | [Dest]     | #   | Ea Tx Vol   | Tot Tx Vol   | Location  | Note  |
+        |:------------|:----------|:-----------|:----|:------------|:-------------|:----------|:------|
+        | staple mix  | 100.00 nM | 47.62 nM   |     | 33.00 µl    | 33.00 µl     |           |       |
+        | m13 100nM   | 100.00 nM | 4.76 nM    |     | 3.30 µl     | 3.30 µl      |           |       |
+        | 10x buffer  | 100.00 mM | 47.62 mM   |     | 33.00 µl    | 33.00 µl     |           |       |
+        | Buffer      |           |            |     | 0.00 µl     | 0.00 µl      |           |       |
+        | *Total:*    |           | *47.62 nM* | *4* |             | *69.30 µl*   |           |       |
+
+        Aliquot 21.00 µl from this mix into 3 different test tubes.
+
+        ## Mix "mix0":
+        | Component          | [Src]     | [Dest]     | #   | Ea Tx Vol   | Tot Tx Vol   | Location  | Note  |
+        |:-------------------|:----------|:-----------|:----|:------------|:-------------|:----------|:------|
+        | origami master mix | 47.62 nM  | 10.00 nM   |     | 21.00 µl    | 21.00 µl     |           |       |
+        | Mg++               | 125.00 mM | 12.50 mM   |     | 10.00 µl    | 10.00 µl     |           |       |
+        | adapters 0 mix     | 50.00 nM  | 20.00 nM   |     | 40.00 µl    | 40.00 µl     |           |       |
+        | Buffer             |           |            |     | 29.00 µl    | 29.00 µl     |           |       |
+        | *Total:*           |           | *10.00 nM* | *4* |             | *100.00 µl*  |           |       |
+
+        ## Mix "mix1":
+        | Component          | [Src]     | [Dest]     | #   | Ea Tx Vol   | Tot Tx Vol   | Location  | Note  |
+        |:-------------------|:----------|:-----------|:----|:------------|:-------------|:----------|:------|
+        | origami master mix | 47.62 nM  | 10.00 nM   |     | 21.00 µl    | 21.00 µl     |           |       |
+        | Mg++               | 125.00 mM | 12.50 mM   |     | 10.00 µl    | 10.00 µl     |           |       |
+        | adapters 1 mix     | 55.00 nM  | 20.00 nM   |     | 36.36 µl    | 36.36 µl     |           |       |
+        | Buffer             |           |            |     | 32.64 µl    | 32.64 µl     |           |       |
+        | *Total:*           |           | *10.00 nM* | *4* |             | *100.00 µl*  |           |       |
+
+        ## Mix "mix2":
+        | Component          | [Src]     | [Dest]     | #   | Ea Tx Vol   | Tot Tx Vol   | Location  | Note  |
+        |:-------------------|:----------|:-----------|:----|:------------|:-------------|:----------|:------|
+        | origami master mix | 47.62 nM  | 10.00 nM   |     | 21.00 µl    | 21.00 µl     |           |       |
+        | Mg++               | 125.00 mM | 12.50 mM   |     | 10.00 µl    | 10.00 µl     |           |       |
+        | adapters 2 mix     | 60.00 nM  | 20.00 nM   |     | 33.33 µl    | 33.33 µl     |           |       |
+        | Buffer             |           |            |     | 35.67 µl    | 35.67 µl     |           |       |
+        | *Total:*           |           | *10.00 nM* | *4* |             | *100.00 µl*  |           |       |
+
 
     Parameters
     ----------
@@ -1437,6 +1546,13 @@ def master_mix(
         pipetting step from `master_mix` rather than individual pipetting steps for each shared component.
 
     """
+    if isinstance(exclude_shared_components, str):
+        raise TypeError(
+            f"parameter `exclude_shared_components` must be Iterable of strings or "
+            f"components, but cannot be a string itself: exclude_shared_components = "
+            f'"{exclude_shared_components}"'
+        )
+
     verify_mixes_for_master_mix(mixes)
 
     shared_actions, unique_actions_list = compute_shared_actions(
@@ -1463,10 +1579,9 @@ def master_mix(
     )
     concentration_multiplier = total_small_mix_volume / volume_shared_actions
 
-    # need to adjust FixedConcentration target concentrations to be higher in master mix to
-    # account for subsequent dilution when pipetting master mix to final small mix
-
-    # replace FixedVolume actions in `large_mix` with larger volumes
+    # replace FixedConcentration actions in `large_mix` with larger concentrations
+    # to account for subsequent dilution when pipetting master mix to final small mix
+    # FixedVolume actions that require larger volume are handled by the call to `split_mix` below
     new_fixed_concentration_actions = {}
     for i, action in enumerate(shared_actions):
         if isinstance(action, FixedConcentration):
@@ -1482,6 +1597,7 @@ def master_mix(
     for i, new_fixed_concentration_action in new_fixed_concentration_actions.items():
         shared_actions[i] = new_fixed_concentration_action
 
+    # `small_shared_mix` describes how much of the master mix will go into each smaller downstream mix
     small_shared_mix = Mix(
         actions=shared_actions,
         name=name,
