@@ -258,7 +258,7 @@ def test_multifixedconc_min_volume(reference: Reference):
     s2 = Strand("strand2", "200 nM")
 
     m = Mix(
-        [MultiFixedConcentration([s1, s2], "50 nM", min_volume="20 uL")],
+        [FixedConcentration([s1, s2], "50 nM", min_volume="20 uL")],
         name="test",
         fixed_total_volume="100 uL",
     )
@@ -486,7 +486,13 @@ def test_combine_plate_actions_false():
     assert pms[3].well_to_strand_name["B2"] == "s4"
 
 
-def assert_close(actual, expected, rtol=Decimal(1e-7), atol=Decimal(0), msg=None):
+def assert_close(
+    actual: Decimal,
+    expected: Decimal,
+    rtol: Decimal = Decimal(1e-7),
+    atol: Decimal = Decimal(0),
+    msg: str = None,
+) -> None:
     # This helps with comparing Decimal quantities, which cannot be multiplied by floats, which is
     # what happens with the default rtol parameter of pint.testing.assert_allclose.
     pint.testing.assert_allclose(actual, expected, rtol, atol, msg)
@@ -558,3 +564,226 @@ def test_split_mix_with_excess():
     assert_close(m13_mixline.total_tx_vol, ureg("5.5 uL"))
     assert_close(staple_mixline.total_tx_vol, ureg("55 uL"))
     assert_close(buffer_mixline.total_tx_vol, ureg("434.50 uL"))
+
+
+@pytest.fixture
+def master_mix_fixture():
+    from alhambra_mixes import Mix, FixedConcentration, Strand
+
+    s1 = Strand("s1", concentration="100 nM")
+    s2 = Strand("s2", concentration="100 nM")
+    s3 = Strand("s3", concentration="100 nM")
+    s4 = Strand("s4", concentration="100 nM")
+    s5 = Strand("s5", concentration="100 nM")
+    s6 = Strand("s6", concentration="100 nM")
+    s7 = Strand("s7", concentration="100 nM")
+    s8 = Strand("s8", concentration="100 nM")
+    mixes = [
+        Mix(
+            actions=[
+                FixedConcentration(components=[s1, s2], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s7], fixed_concentration=f"10 nM"),
+            ],
+            name="mix 0",
+            fixed_total_volume=f"100 uL",
+        ),
+        Mix(
+            actions=[
+                FixedConcentration(components=[s1, s2], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s8], fixed_concentration=f"10 nM"),
+            ],
+            name="mix 1",
+            fixed_total_volume=f"100 uL",
+        ),
+    ]
+    return mixes
+
+
+def test_master_mix(master_mix_fixture):
+    from alhambra_mixes import master_mix
+
+    mixes = master_mix_fixture
+
+    mm, final_mixes = master_mix(mixes=mixes, name="master mix", excess=0)
+
+    assert mm.total_volume == ureg("120 uL")
+
+    mm_mixlines = mm.mixlines()
+    assert len(mm_mixlines) == 4  # 3 mixes shared plus buffer
+
+    s12_ml, s34_ml, s56_ml, buffer_ml = mm_mixlines
+
+    # print(mm.instructions() + '\n')
+    # for mix in final_mixes:
+    #     print(mix.instructions() + '\n')
+
+    assert_close(s12_ml.each_tx_vol, ureg("20 uL"))
+    assert_close(s34_ml.each_tx_vol, ureg("20 uL"))
+    assert_close(s56_ml.each_tx_vol, ureg("20 uL"))
+    assert_close(s12_ml.total_tx_vol, ureg("40 uL"))
+    assert_close(s34_ml.total_tx_vol, ureg("40 uL"))
+    assert_close(s56_ml.total_tx_vol, ureg("40 uL"))
+    assert_close(s12_ml.dest_conc, ureg("16.66 nM"), atol=Decimal(0.01))
+    assert_close(s34_ml.dest_conc, ureg("16.66 nM"), atol=Decimal(0.01))
+    assert_close(s56_ml.dest_conc, ureg("16.66 nM"), atol=Decimal(0.01))
+    assert_close(buffer_ml.each_tx_vol, ureg("0 uL"))
+
+    assert len(final_mixes) == 2
+    for i, mix in enumerate(final_mixes):
+        assert mix.name == f"mix {i}"
+
+        mixlines = mix.mixlines()
+        assert len(mixlines) == 3
+        mm_ml, strand_ml, buf_ml = mixlines
+
+        assert_close(mm_ml.each_tx_vol, ureg("60 uL"))
+        assert_close(strand_ml.each_tx_vol, ureg("10 uL"))
+        assert_close(buf_ml.each_tx_vol, ureg("30 uL"))
+
+        assert_close(strand_ml.total_tx_vol, ureg("10 uL"))
+
+        assert_close(mm_ml.dest_conc, ureg("10 nM"))
+        assert_close(strand_ml.dest_conc, ureg("10 nM"))
+
+        strand_name = "s7" if i == 0 else "s8"
+        assert len(strand_ml.names) == 1
+        assert strand_ml.names[0] == strand_name
+
+
+def test_master_mix_exclude_shared_components(master_mix_fixture):
+    from alhambra_mixes import master_mix
+
+    mixes = master_mix_fixture
+
+    mm, final_mixes = master_mix(
+        mixes=mixes, name="master mix", excess=0, exclude_shared_components=["s5"]
+    )
+    # now should only have [s1,s2] and [s3,s4] as shared components, with [s5,s6] "unique" though
+    # appearing in both
+
+    assert mm.total_volume == ureg("80 uL")
+
+    mm_mixlines = mm.mixlines()
+    assert len(mm_mixlines) == 3  # 2 mixes shared plus buffer
+
+    s12_ml, s34_ml, buffer_ml = mm_mixlines
+
+    print(mm.instructions() + "\n")
+    for mix in final_mixes:
+        print(mix.instructions() + "\n")
+
+    assert_close(s12_ml.each_tx_vol, ureg("20 uL"))
+    assert_close(s34_ml.each_tx_vol, ureg("20 uL"))
+    assert_close(s12_ml.total_tx_vol, ureg("40 uL"))
+    assert_close(s34_ml.total_tx_vol, ureg("40 uL"))
+    assert_close(s12_ml.dest_conc, ureg("25 nM"), atol=Decimal(0.01))
+    assert_close(s34_ml.dest_conc, ureg("25 nM"), atol=Decimal(0.01))
+    assert_close(buffer_ml.each_tx_vol, ureg("0 uL"))
+
+    assert len(final_mixes) == 2
+    for i, mix in enumerate(final_mixes):
+        assert mix.name == f"mix {i}"
+
+        mixlines = mix.mixlines()
+        assert len(mixlines) == 4
+        mm_ml, s56_ml, strand_ml, buf_ml = mixlines
+
+        assert_close(mm_ml.each_tx_vol, ureg("40 uL"))
+        assert_close(s56_ml.each_tx_vol, ureg("10 uL"))
+        assert_close(strand_ml.each_tx_vol, ureg("10 uL"))
+        assert_close(buf_ml.each_tx_vol, ureg("30 uL"))
+
+        assert_close(s56_ml.total_tx_vol, ureg("20 uL"))
+        assert_close(strand_ml.total_tx_vol, ureg("10 uL"))
+
+        assert_close(mm_ml.dest_conc, ureg("10 nM"))
+        assert_close(s56_ml.dest_conc, ureg("10 nM"))
+        assert_close(strand_ml.dest_conc, ureg("10 nM"))
+
+        strand_name = "s7" if i == 0 else "s8"
+        assert len(strand_ml.names) == 1
+        assert strand_ml.names[0] == strand_name
+
+
+def test_master_mix_with_FixedVolume_action(master_mix_fixture):
+    from alhambra_mixes import Mix, FixedConcentration, FixedVolume, Strand, master_mix
+
+    s1 = Strand("s1", concentration="100 nM")
+    s2 = Strand("s2", concentration="100 nM")
+    s3 = Strand("s3", concentration="100 nM")
+    s4 = Strand("s4", concentration="100 nM")
+    s5 = Strand("s5", concentration="100 nM")
+    s6 = Strand("s6", concentration="100 nM")
+    s7 = Strand("s7", concentration="100 nM")
+    s8 = Strand("s8", concentration="100 nM")
+    mixes = [
+        Mix(
+            actions=[
+                FixedVolume(components=[s1, s2], fixed_volume=f"10 uL"),
+                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s7], fixed_concentration=f"10 nM"),
+            ],
+            name="mix 0",
+            fixed_total_volume=f"100 uL",
+        ),
+        Mix(
+            actions=[
+                FixedVolume(components=[s1, s2], fixed_volume=f"10 uL"),
+                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s8], fixed_concentration=f"10 nM"),
+            ],
+            name="mix 1",
+            fixed_total_volume=f"100 uL",
+        ),
+    ]
+
+    mm, final_mixes = master_mix(mixes=mixes, name="master mix", excess=0)
+
+    assert mm.total_volume == ureg("120 uL")
+
+    mm_mixlines = mm.mixlines()
+    assert len(mm_mixlines) == 4  # 3 mixes shared plus buffer
+
+    s12_ml, s34_ml, s56_ml, buffer_ml = mm_mixlines
+
+    # print(mm.instructions() + '\n')
+    # for mix in final_mixes:
+    #     print(mix.instructions() + '\n')
+
+    assert_close(s12_ml.each_tx_vol, ureg("20 uL"))
+    assert_close(s34_ml.each_tx_vol, ureg("20 uL"))
+    assert_close(s56_ml.each_tx_vol, ureg("20 uL"))
+    assert_close(s12_ml.total_tx_vol, ureg("40 uL"))
+    assert_close(s34_ml.total_tx_vol, ureg("40 uL"))
+    assert_close(s56_ml.total_tx_vol, ureg("40 uL"))
+    assert_close(s12_ml.dest_conc, ureg("16.66 nM"), atol=Decimal(0.01))
+    assert_close(s34_ml.dest_conc, ureg("16.66 nM"), atol=Decimal(0.01))
+    assert_close(s56_ml.dest_conc, ureg("16.66 nM"), atol=Decimal(0.01))
+    assert_close(buffer_ml.each_tx_vol, ureg("0 uL"))
+
+    assert len(final_mixes) == 2
+    for i, mix in enumerate(final_mixes):
+        assert mix.name == f"mix {i}"
+
+        mixlines = mix.mixlines()
+        assert len(mixlines) == 3
+        mm_ml, strand_ml, buf_ml = mixlines
+
+        assert_close(mm_ml.each_tx_vol, ureg("60 uL"))
+        assert_close(strand_ml.each_tx_vol, ureg("10 uL"))
+        assert_close(buf_ml.each_tx_vol, ureg("30 uL"))
+
+        assert_close(strand_ml.total_tx_vol, ureg("10 uL"))
+
+        assert_close(mm_ml.dest_conc, ureg("10 nM"))
+        assert_close(strand_ml.dest_conc, ureg("10 nM"))
+
+        strand_name = "s7" if i == 0 else "s8"
+        assert len(strand_ml.names) == 1
+        assert strand_ml.names[0] == strand_name
