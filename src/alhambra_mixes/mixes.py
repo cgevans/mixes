@@ -16,7 +16,7 @@ from typing import (
     Tuple,
     TypeVar,
     cast,
-    Iterable,
+    Iterable, List,
 )
 
 import attrs
@@ -1161,10 +1161,16 @@ class _SplitMix(Mix):
             include_plate_maps=include_plate_maps,
         )
         names = [f"*{name}*" for name in self.names] if self.names is not None else None
+        # below is a bit redundant but prevents mypy error since names could be None
+        if names is None:
+            names_of_tubes = '.'
+        elif isinstance(names, list):
+            names_of_tubes = ': ' + ', '.join(names)
+        else:
+            raise AssertionError('unreachable')
         super_instructions += (
             f"\n\nAliquot {self.small_mix_volume} from this mix "
-            + f"into {self.num_tubes} different test tubes"
-            + ("." if self.names is None else f" named {', '.join(names)}")
+            + f"into {self.num_tubes} different test tubes{names_of_tubes}"
         )
         return super_instructions
 
@@ -1231,6 +1237,9 @@ def split_mix(
     if names is not None:
         names = list(names)
         num_tubes = len(names)
+
+    # should be true because of checks above, but need explicit assertion to assure mypy num_tubes is int
+    assert isinstance(num_tubes, int)
 
     if isinstance(excess, (float, int)):
         excess = Decimal(excess)
@@ -1349,6 +1358,10 @@ def compute_shared_actions(
     for idx, component in enumerate(exclude_shared_components):
         if isinstance(component, Component):
             exclude_shared_components[idx] = component.name
+
+    # now that we set them all to be strings, cast the variable so mypy doesn't complain below
+    # for some reason cannot cast to list[str] (causes runtime error), but can cast to List[str]
+    exclude_shared_components = cast(List[str], exclude_shared_components)
 
     action_sets = [mix.actions for mix in mixes]
     if len(action_sets) == 0:
@@ -1615,7 +1628,9 @@ def master_mix(
         components=[mas_mix], fixed_volume=volume_shared_actions
     )
     for orig_mix, unique_actions in zip(mixes, unique_actions_list):
-        all_actions = [master_mix_action] + unique_actions
+        # `[master_mix] + unique_actions` causes mypy error here, so we get explicit about variable types
+        all_actions: list[AbstractAction] = [master_mix_action]
+        all_actions.extend(unique_actions)
         new_mix = Mix(
             actions=all_actions,
             name=orig_mix.name,
