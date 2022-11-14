@@ -1,5 +1,6 @@
 from decimal import Decimal
 import math
+from typing import cast
 from alhambra_mixes import *
 from alhambra_mixes.abbreviated import *
 import pytest
@@ -172,6 +173,44 @@ def test_unnamed_mix(experiment):
         experiment.add_mix(Mix(FC(["a"], "1 µM"), fixed_total_volume="10 µL"))
     with pytest.raises(ValueError):
         experiment.add_mix(FC(["a"], "1 µM"), fixed_total_volume="10 µL")
+
+
+def test_add_mix_already_present_no_check_existing(experiment: Experiment):
+    experiment.add_mix(
+        Mix(
+            FC(["mix1", "mix2", "c3"], "97 nM"),
+            "mixmix",
+            fixed_total_volume="10 µL",
+        ),
+        check_existing=False,
+    )
+    m = cast(Mix, experiment["mixmix"])
+    assert m.actions[0].fixed_concentration == Q_("97 nM")
+    # with pytest
+
+
+def test_add_mix_already_present_no_check_existing_weird_reference(
+    experiment: Experiment,
+):
+    # c1 = experiment['c1']  # A direct reference to something already in the experiment
+    # c4 will be a string reference to the experiment
+    c5 = Component("c5", "2 µM")  # Something new!
+
+    # Was 1 µM in the original experiment
+    new_mix2 = Mix(FC(["c1", "c4", c5], "900 nM"), fixed_total_volume="10 µL")
+
+    experiment.add_mix(
+        Mix(
+            FC(["mix1", new_mix2, "c3"], "97 nM"),
+            "mixmix",
+            fixed_total_volume="10 µL",
+        ),
+        check_existing=False,
+    )
+    m = cast(Mix, experiment["mixmix"])
+
+    assert m.actions[0].fixed_concentration == Q_("97 nM")
+    # FIXME: add more tests here
 
 
 def test_add_mix_already_present(experiment):

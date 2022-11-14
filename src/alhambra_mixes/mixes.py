@@ -41,7 +41,6 @@ from .printing import (
     emphasize,
     html_with_borders_tablefmt,
 )
-from .quantitate import normalize
 
 if TYPE_CHECKING:  # pragma: no cover
     from .references import Reference
@@ -49,7 +48,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from attrs import Attribute
 
 from .units import *
-from .units import VolumeError, _parse_vol_optional
+from .units import VolumeError, _parse_vol_optional, normalize
 
 warnings.filterwarnings(
     "ignore",
