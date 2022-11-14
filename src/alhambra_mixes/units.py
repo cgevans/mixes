@@ -41,7 +41,10 @@ def Q_(
     qty: int | str | Decimal | float, unit: str | pint.Unit | None = None
 ) -> DecimalQuantity:
     "Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`.  Ensures that the quantity is a Decimal."
-    return ureg.Quantity(Decimal(qty), unit)
+    if unit is not None:
+        return ureg.Quantity(Decimal(qty), unit)
+    else:
+        return ureg.Quantity(qty)
 
 
 class VolumeError(ValueError):
@@ -187,3 +190,28 @@ def _parse_vol_required(v: str | Quantity) -> DecimalQuantity:
         v = Q_(v.m, v.u)
         return v.to_compact()
     raise ValueError(f"{v} is not a valid quantity here (should be volume).")
+
+
+def normalize(quantity: Quantity) -> Quantity:
+    """
+    Normalize `quantity` so that it is "compact" (uses units within the correct "3 orders of magnitude":
+    https://pint.readthedocs.io/en/0.18/tutorial.html#simplifying-units)
+    and eliminate trailing zeros.
+
+    :param quantity:
+        a pint Quantity[Decimal]
+    :return:
+        `quantity` normalized to be compact and without trailing zeros.
+    """
+    quantity = quantity.to_compact()
+    mag_int = quantity.magnitude.to_integral()
+    if mag_int == quantity.magnitude:
+        # can be represented exactly as integer, so return that;
+        # quantity.magnitude.normalize() would use scientific notation in this case, which we don't want
+        quantity = Q_(mag_int, quantity.units)
+    else:
+        # is not exact integer, so normalize will return normal float literal such as 10.2
+        # and not scientific notation like it would for an integer
+        mag_norm = quantity.magnitude.normalize()
+        quantity = Q_(mag_norm, quantity.units)
+    return quantity

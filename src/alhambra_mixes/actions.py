@@ -371,7 +371,7 @@ class ActionWithComponents(AbstractAction):
         ]
 
 
-@attrs.define()
+@attrs.define(eq=True)
 class FixedVolume(ActionWithComponents):
     """An action adding one or multiple components, with a set transfer volume.
 
@@ -630,7 +630,7 @@ class EqualConcentration(FixedVolume):
         return ml
 
 
-@attrs.define()
+@attrs.define(eq=True)
 class FixedConcentration(ActionWithComponents):
     """An action adding one or multiple components, with a set destination concentration per component (adjusting volumes).
 
@@ -764,7 +764,7 @@ class FixedConcentration(ActionWithComponents):
             return self.set_name
 
 
-@attrs.define()
+@attrs.define(eq=True)
 class ToConcentration(ActionWithComponents):
     """Add an amount of (non-mix) components to result in a fixed total concentration of each in the mix.
 

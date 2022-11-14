@@ -69,6 +69,7 @@ class Experiment:
         min_volume: Quantity[Decimal] | str = Q_("0.5", uL),
         check_volumes: bool | None = None,
         apply_reference: bool = True,
+        check_existing: bool = True,
     ) -> Experiment:
         """
         Add a mix to the experiment, either as a Mix object, or by creating a new Mix.
@@ -79,6 +80,10 @@ class Experiment:
         If check_volumes is True (by default), the mix will be added to the experiment, and
         volumes checked.  If the mix causes a volume usage problem, it will not be added to
         the Experiment, and a VolumeError will be raised.
+
+        If check_existing is True (by default), then a exception is raised if the experiment
+        already contains a mix with the name `name`. Otherwise, the existing mix is replaced
+        with the new mix.
         """
         if check_volumes is None:
             check_volumes = self.volume_checks
@@ -97,7 +102,7 @@ class Experiment:
             )
         if not name:
             raise ValueError("Mix must have a name to be added to an experiment.")
-        elif mix.name in self.components:
+        elif check_existing and mix.name in self.components:
             raise ValueError(f"Mix {mix.name} already exists in experiment.")
 
         mix = mix.with_experiment(self, True)

@@ -16,6 +16,8 @@ from typing import (
     Tuple,
     TypeVar,
     cast,
+    Iterable,
+    List,
 )
 
 import attrs
@@ -46,7 +48,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from attrs import Attribute
 
 from .units import *
-from .units import VolumeError, _parse_vol_optional
+from .units import VolumeError, _parse_vol_optional, normalize
 
 warnings.filterwarnings(
     "ignore",
@@ -64,6 +66,7 @@ __all__ = (
     "Mix",
     "_format_title",
     "split_mix",
+    "master_mix",
 )
 
 MIXHEAD_EA = (
@@ -123,6 +126,21 @@ def _maybesequence_action(
     if isinstance(object_or_sequence, Sequence):
         return list(object_or_sequence)
     return [object_or_sequence]
+
+
+def remove_buffer_mixline_if_absent(mixlines: list[MixLine], buffer_name: str) -> None:
+    idx_to_remove = -1
+    for idx, mixline in enumerate(mixlines):
+        if (
+            len(mixline.names) == 1
+            and mixline.names[0] == buffer_name
+            and mixline.each_tx_vol == ureg("0 uL")
+        ):
+            idx_to_remove = idx
+            break
+
+    if idx_to_remove >= 0:
+        del mixlines[idx_to_remove]
 
 
 @attrs.define(eq=False)
@@ -258,6 +276,7 @@ class Mix(AbstractComponent):
         showindex="default",
         disable_numparse=False,
         colalign=None,
+        buffer_line_if_absent=False,
     ) -> str:
         """Generate a table describing the mix.
 
@@ -272,8 +291,14 @@ class Mix(AbstractComponent):
 
         buffer_name
             Name of the buffer to use. (Default="Buffer")
+
+        buffer_line_if_absent
+            If True and the buffer volume is 0, include an explicit line for buffer anyway that says 0 uL.
         """
         mixlines = list(self.mixlines(buffer_name=buffer_name, tablefmt=tablefmt))
+
+        if not buffer_line_if_absent:
+            remove_buffer_mixline_if_absent(mixlines, buffer_name)
 
         validation_errors = self.validate(mixlines=mixlines)
 
@@ -313,7 +338,7 @@ class Mix(AbstractComponent):
 
     def mixlines(
         self, tablefmt: str | TableFormat = "pipe", buffer_name: str = "Buffer"
-    ) -> Sequence[MixLine]:
+    ) -> list[MixLine]:
         mixlines: list[MixLine] = []
 
         for action in self.actions:
@@ -717,7 +742,7 @@ class Mix(AbstractComponent):
         )
         return (
             table_title
-            + "\n\n"
+            + "\n"
             + table_str
             + ("\n\n" + "\n\n".join(plate_map_strs) if len(plate_map_strs) > 0 else "")
         )
@@ -1097,8 +1122,6 @@ class PlateMap:
                 if not well_pos.is_last():
                     well_pos = well_pos.advance()
 
-        from alhambra_mixes.quantitate import normalize
-
         raw_title = f'plate "{self.plate_name}"' + (
             f", {normalize(self.vol_each)} each" if self.vol_each is not None else ""
         )
@@ -1120,9 +1143,64 @@ class PlateMap:
         return table_with_title
 
 
+# define subclass with overridden instructions method that prints final instruction for splitting.
+@attrs.define(eq=False)
+class _SplitMix(Mix):
+    num_tubes: int = -1
+
+    small_mix_volume: Quantity[Decimal] = Q_(Decimal(0), "uL")
+
+    names: None | list[str] = None
+
+    def __attrs_post_init__(self) -> None:
+        if self.num_tubes < 1:
+            raise ValueError("num_tubes must be positive")
+        if self.small_mix_volume == Q_(Decimal(0), "uL"):
+            raise ValueError("small_mix_volume must be positive")
+
+    def instructions(
+        self,
+        plate_type: PlateType = PlateType.wells96,
+        raise_failed_validation: bool = False,
+        combine_plate_actions: bool = True,
+        well_marker: None | str | Callable[[str], str] = None,
+        title_level: Literal[1, 2, 3, 4, 5, 6] = 3,
+        warn_unsupported_title_format: bool = True,
+        buffer_name: str = "Buffer",
+        tablefmt: str | TableFormat = "pipe",
+        include_plate_maps: bool = True,
+    ) -> str:
+        super_instructions = super().instructions(
+            plate_type=plate_type,
+            raise_failed_validation=raise_failed_validation,
+            combine_plate_actions=combine_plate_actions,
+            well_marker=well_marker,
+            title_level=title_level,
+            warn_unsupported_title_format=warn_unsupported_title_format,
+            buffer_name=buffer_name,
+            tablefmt=tablefmt,
+            include_plate_maps=include_plate_maps,
+        )
+        names = [f"*{name}*" for name in self.names] if self.names is not None else None
+        # below is a bit redundant but prevents mypy error since names could be None
+        if names is None:
+            names_of_tubes = "."
+        elif isinstance(names, list):
+            names_of_tubes = ": " + ", ".join(names)
+        else:
+            raise AssertionError("unreachable")
+        self.small_mix_volume = normalize(self.small_mix_volume)
+        super_instructions += (
+            f"\n\nAliquot {self.small_mix_volume} from this mix "
+            + f"into {self.num_tubes} different test tubes{names_of_tubes}"
+        )
+        return super_instructions
+
+
 def split_mix(
     mix: Mix,
-    num_tubes: int,
+    num_tubes: int | None = None,
+    names: Iterable[str] | None = None,
     excess: int | float | Decimal = Decimal(0.05),
 ) -> Mix:
     """
@@ -1142,7 +1220,8 @@ def split_mix(
         individual smaller test tube should contain after the split.
 
     num_tubes
-        The number of test tubes into which to split the large mix.
+        The number of test tubes into which to split the large mix. Should not be specified if `names`
+        is specified; in that case `num_tubes` is assumed to be the number of strings in `names`.
 
     excess
         A fraction (between 0 and 1) indicating how much extra of the large mix to make. This is useful
@@ -1161,11 +1240,29 @@ def split_mix(
         Note: using `excess` > 0 means than the test tube with the large mix should *not* be
         reused as one of the final test tubes, since it will have too much volume at the end.
 
+    names
+        Names of smaller individual test tubes (will be printed in instructions).
+
     Returns
     -------
         A "large" mix, from which `num_tubes` aliquots can be made to create each of the identical
         "small" mixes.
     """
+    if (
+        names is None
+        and num_tubes is None
+        or names is not None
+        and num_tubes is not None
+    ):
+        raise ValueError("exactly one of `names` or `num_tubes` should be specified")
+
+    if names is not None:
+        names = list(names)
+        num_tubes = len(names)
+
+    # should be true because of checks above, but need explicit assertion to assure mypy num_tubes is int
+    assert isinstance(num_tubes, int)
+
     if isinstance(excess, (float, int)):
         excess = Decimal(excess)
     elif not isinstance(excess, Decimal):
@@ -1177,38 +1274,6 @@ def split_mix(
     volume_multiplier = num_tubes * (1 + excess)
     large_volume = mix.total_volume * volume_multiplier
     actions = list(mix.actions)
-
-    # define subclass with overridden instructions method that prints final instruction for splitting.
-    @attrs.define(eq=False)
-    class SplitMix(Mix):
-        def instructions(
-            self,
-            plate_type: PlateType = PlateType.wells96,
-            raise_failed_validation: bool = False,
-            combine_plate_actions: bool = True,
-            well_marker: None | str | Callable[[str], str] = None,
-            title_level: Literal[1, 2, 3, 4, 5, 6] = 3,
-            warn_unsupported_title_format: bool = True,
-            buffer_name: str = "Buffer",
-            tablefmt: str | TableFormat = "pipe",
-            include_plate_maps: bool = True,
-        ) -> str:
-            super_instructions = super().instructions(
-                plate_type=plate_type,
-                raise_failed_validation=raise_failed_validation,
-                combine_plate_actions=combine_plate_actions,
-                well_marker=well_marker,
-                title_level=title_level,
-                warn_unsupported_title_format=warn_unsupported_title_format,
-                buffer_name=buffer_name,
-                tablefmt=tablefmt,
-                include_plate_maps=include_plate_maps,
-            )
-            super_instructions += (
-                f"\n\nAliquot {mix.total_volume} from this mix "
-                f"into {num_tubes} different test tubes."
-            )
-            return super_instructions
 
     # replace FixedVolume actions in `large_mix` with larger volumes
     new_fixed_volume_actions = {}
@@ -1225,7 +1290,10 @@ def split_mix(
     for i, large_fixed_volume_action in new_fixed_volume_actions.items():
         actions[i] = large_fixed_volume_action
 
-    large_mix = SplitMix(
+    large_mix = _SplitMix(
+        num_tubes=num_tubes,
+        small_mix_volume=mix.total_volume,
+        names=names,
         actions=actions,
         name=mix.name,
         test_tube_name=mix.test_tube_name,
@@ -1237,6 +1305,376 @@ def split_mix(
     )
 
     return large_mix
+
+
+def intersection(s1: Iterable[T], s2: Iterable[T]) -> list[T]:
+    """
+    Interprets s1 and s2 as "sets" (with unhashable elements that implement ==) and
+    computes a list of their intersection s1 \cap s2.
+
+    Parameters
+    ----------
+
+    s1
+        first set (as an iterable)
+
+    s2
+        second set (as an iterable)
+
+    Returns
+    -------
+       list of elements in both `s1` and `s2`
+    """
+    return [elt for elt in s1 if elt in s2]
+
+
+def difference(s1: Iterable[T], s2: Iterable[T]) -> list[T]:
+    """
+    Interprets s1 and s2 as "sets" (with unhashable elements that implement ==) and
+    computes a list of their difference s1 \ s2.
+
+    Parameters
+    ----------
+
+    s1
+        first set (as an iterable)
+
+    s2
+        second set (as an iterable)
+
+    Returns
+    -------
+        list of elements in `s1` but not `s2`
+    """
+    return [elt for elt in s1 if elt not in s2]
+
+
+def compute_shared_actions(
+    mixes: Iterable[Mix],
+    exclude_shared_components: Iterable[str | Component] = (),
+) -> tuple[list[AbstractAction], list[list[AbstractAction]]]:
+    """
+    Compute the components (identified by Actions) shared by every mix in `mixes`, as well as those
+    that are unique to each mix.
+
+    Parameters
+    ----------
+
+    mixes
+        the list of :any:`Mix`'s of which to determine shared and unique actions
+
+    exclude_shared_components
+        components appearing in actions to exclude from the return value `shared_actions`,
+        even if those actions appear in every mix in `mixes` (note if an action has many components,
+        if at least one of them is in `exclude_shared_components`, then the entire action will be excluded)
+
+    Returns
+    -------
+        pair `(shared_actions, unique_actions)`, where
+        `shared_actions` is a list of Actions shared by each :any:`Mix` in `mixes`,
+        `unique_actions` is a list of lists of Actions; `unique_actions[i]` are the actions of `mixes[i]`
+        that are not part of `shared_actions`.
+    """
+    exclude_shared_components = list(exclude_shared_components)
+    # normalize exclude_shared_components to have string names only
+    for idx, component in enumerate(exclude_shared_components):
+        if isinstance(component, Component):
+            exclude_shared_components[idx] = component.name
+    # now that we set them all to be strings, cast the variable so mypy doesn't complain below
+    # for some reason cannot cast to list[str] (causes runtime error), but can cast to List[str]
+    exclude_shared_components = cast(List[str], exclude_shared_components)
+
+    action_sets = [mix.actions for mix in mixes]
+    if len(action_sets) == 0:
+        raise ValueError("mixes cannot be empty")
+
+    # compute actions shared among ALL mixes
+    shared_actions = list(action_sets[0])
+    for action_set in action_sets[1:]:
+        shared_actions = intersection(shared_actions, action_set)
+
+    # exclude actions that contain components in exclude_shared_components
+    shared_actions_excluded = []
+    for action in shared_actions:
+        contains_excluded_components = False
+        for comp in action.components:
+            if comp.name in exclude_shared_components:
+                contains_excluded_components = True
+                break
+        if not contains_excluded_components:
+            shared_actions_excluded.append(action)
+    shared_actions = shared_actions_excluded
+
+    # for each mix, compute its actions that are not shared as found above
+    unique_action_lists = []
+    at_least_one_unique_action = False
+    for action_set in action_sets:
+        unique_actions = difference(action_set, shared_actions)
+        if len(unique_actions) > 0:
+            at_least_one_unique_action = True
+        unique_action_lists.append(unique_actions)
+    if not at_least_one_unique_action:
+        raise ValueError(
+            "None of the mixes has any actions unique to it, so it does not make sense "
+            "to create a master mix.\nSee the function `split_mix` for a simpler function "
+            "that achieves the goal of making a large mix that can be split into identical "
+            "test tubes."
+        )
+
+    return shared_actions, unique_action_lists
+
+
+def verify_mixes_for_master_mix(mixes: Iterable[Mix]) -> None:
+    # check that mixes satisfy constraints for using in a master mix
+
+    mixes = list(mixes)
+
+    # must have at least two mixes
+    if len(mixes) < 2:
+        raise ValueError(
+            f"must have at least two mixes, but found {len(mixes)}:\nmixes = {mixes}"
+        )
+
+    # all should have same total volume and buffer name
+    first_mix = mixes[0]
+    for mix in mixes[1:]:
+        if mix.total_volume != first_mix.total_volume:
+            raise ValueError(
+                f"must have same total volume in all mixes, but mix {mix.name} has "
+                f"total volume {mix.total_volume} whereas mix {first_mix.name} has "
+                f"total volume {first_mix.total_volume}"
+            )
+        if mix.buffer_name != first_mix.buffer_name:
+            raise ValueError(
+                f"must have same buffer name in all mixes, but mix {mix.name} has "
+                f'buffer name "{mix.buffer_name}" whereas mix {first_mix.name} has '
+                f"buffer name {first_mix.buffer_name}"
+            )
+
+    # only handling FixedVolume and FixedConcentration actions for now
+    for mix in mixes:
+        for action in mix.actions:
+            if not isinstance(action, (FixedVolume, FixedConcentration)):
+                raise ValueError(
+                    f"master_mix can only handle mixes with FixedVolume and FixedConcentration "
+                    f"actions, but mix {mix.name} contains a {type(action)} action: "
+                    f"{action}"
+                )
+
+
+def master_mix(
+    mixes: Iterable[Mix],
+    name: str = "master mix",
+    excess: float | int | Decimal = Decimal(0.05),
+    exclude_shared_components: Iterable[str | Component] = (),
+) -> tuple[Mix, list[Mix]]:
+    """
+    Create a "master mix" useful for saving pipetting steps when creating :any:`Mix`'s in `mixes`
+    by grouping components shared among each :any:`Mix`'s in `mixes` into a single large master mix
+    from which the shared components can be pipetted to create the downstream mixes.
+
+    Components are considered "shared" if they appear in *all* :any:`Mix`'s in `mixes`.
+
+    To ensure sufficient volume for the last mix when the number of mixes is large (due to slight pipetting
+    error from the master mix adding up over many steps), the parameter `excess`
+    can be used to control how much of a slight excess of necessary volume is included in the master mix.
+
+    Shared Components may be excluded from the master mix by putting them or their names in the parameter
+    `exclude_shared_components`.
+
+    Example:
+
+    .. code-block:: python
+
+        # staple mix to be shared in all mixes
+        staples = [Strand(f"stap{i}", concentration="1uM") for i in range(5)]
+        staple_mix = Mix(
+            actions=[FixedConcentration(components=staples, fixed_concentration="100 nM")],
+            name="staple mix",
+        )
+
+        # "adapter" mixes that are different between mixes
+        num_variants = 3
+        adapter_mixes = {}
+        for adp_idx in range(num_variants):
+            adapters = [Strand(f'adp_{adp_idx}_{i}', concentration="1uM") for i in range(5)]
+            adapter_mix = Mix(
+                actions=[FixedConcentration(components=adapters, fixed_concentration="50 nM")],
+                name=f"adapters {adp_idx} mix",
+            )
+            adapter_mixes[adp_idx] = adapter_mix
+
+        m13 = Strand("m13 100nM", concentration="100 nM")
+        mixes = [Mix(
+            actions=[
+                FixedConcentration(components=[m13], fixed_concentration=f"1 nM"),
+                FixedConcentration(components=[staple_mix], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[adapter_mixes[adp_idx]], fixed_concentration=f"10 nM"),
+            ],
+            name="mm",
+            fixed_total_volume=f"100 uL",
+        ) for adp_idx, adapter_mix in adapter_mixes.items()]
+        mm, final_mixes = master_mix(mixes=mixes, name='origami master mix', excess=0.1)
+
+        print(mm.instructions())
+        for mix in final_mixes:
+            print(mix.instructions())
+
+    This should print the following. Note that only 63 uL of master mix are strictly required, but
+    the total master mix volume is 10% higher (69.3 uL) due to the parameter `excess` = 0.1.
+
+    .. code-block::
+
+        ## Mix "origami master mix":
+        | Component   | [Src]     | [Dest]     | #   | Ea Tx Vol   | Tot Tx Vol   | Location  | Note  |
+        |:------------|:----------|:-----------|:----|:------------|:-------------|:----------|:------|
+        | staple mix  | 100.00 nM | 47.62 nM   |     | 33.00 µl    | 33.00 µl     |           |       |
+        | m13 100nM   | 100.00 nM | 4.76 nM    |     | 3.30 µl     | 3.30 µl      |           |       |
+        | 10x buffer  | 100.00 mM | 47.62 mM   |     | 33.00 µl    | 33.00 µl     |           |       |
+        | Buffer      |           |            |     | 0.00 µl     | 0.00 µl      |           |       |
+        | *Total:*    |           | *47.62 nM* | *4* |             | *69.30 µl*   |           |       |
+
+        Aliquot 21.00 µl from this mix into 3 different test tubes.
+
+        ## Mix "mix0":
+        | Component          | [Src]     | [Dest]     | #   | Ea Tx Vol   | Tot Tx Vol   | Location  | Note  |
+        |:-------------------|:----------|:-----------|:----|:------------|:-------------|:----------|:------|
+        | origami master mix | 47.62 nM  | 10.00 nM   |     | 21.00 µl    | 21.00 µl     |           |       |
+        | Mg++               | 125.00 mM | 12.50 mM   |     | 10.00 µl    | 10.00 µl     |           |       |
+        | adapters 0 mix     | 50.00 nM  | 20.00 nM   |     | 40.00 µl    | 40.00 µl     |           |       |
+        | Buffer             |           |            |     | 29.00 µl    | 29.00 µl     |           |       |
+        | *Total:*           |           | *10.00 nM* | *4* |             | *100.00 µl*  |           |       |
+
+        ## Mix "mix1":
+        | Component          | [Src]     | [Dest]     | #   | Ea Tx Vol   | Tot Tx Vol   | Location  | Note  |
+        |:-------------------|:----------|:-----------|:----|:------------|:-------------|:----------|:------|
+        | origami master mix | 47.62 nM  | 10.00 nM   |     | 21.00 µl    | 21.00 µl     |           |       |
+        | Mg++               | 125.00 mM | 12.50 mM   |     | 10.00 µl    | 10.00 µl     |           |       |
+        | adapters 1 mix     | 55.00 nM  | 20.00 nM   |     | 36.36 µl    | 36.36 µl     |           |       |
+        | Buffer             |           |            |     | 32.64 µl    | 32.64 µl     |           |       |
+        | *Total:*           |           | *10.00 nM* | *4* |             | *100.00 µl*  |           |       |
+
+        ## Mix "mix2":
+        | Component          | [Src]     | [Dest]     | #   | Ea Tx Vol   | Tot Tx Vol   | Location  | Note  |
+        |:-------------------|:----------|:-----------|:----|:------------|:-------------|:----------|:------|
+        | origami master mix | 47.62 nM  | 10.00 nM   |     | 21.00 µl    | 21.00 µl     |           |       |
+        | Mg++               | 125.00 mM | 12.50 mM   |     | 10.00 µl    | 10.00 µl     |           |       |
+        | adapters 2 mix     | 60.00 nM  | 20.00 nM   |     | 33.33 µl    | 33.33 µl     |           |       |
+        | Buffer             |           |            |     | 35.67 µl    | 35.67 µl     |           |       |
+        | *Total:*           |           | *10.00 nM* | *4* |             | *100.00 µl*  |           |       |
+
+
+    Parameters
+    ----------
+
+    mixes
+        the list of :any:`Mix`'s of which to calculate a shared master mix
+
+    name
+        name of the master mix
+
+    excess
+        fraction of "excess" volume to include in master mix to ensure sufficient volume in all downstream
+        mixes; see parameter `excess` of :func:`split_mix` for explanation
+
+    exclude_shared_components
+        names of shared components (or Components themselves) to exclude from master mix;
+        raises exception if any element of `exclude_shared_components` is not shared by all :any:`Mix`'s
+        in the parameter `mixes`
+
+    Returns
+    -------
+        pair `(master_mix, final_mixes)`, where `master_mix` is the master mix to use in
+        downstream `final_mixes`. Length of `final_mixes` is the same as parameter `mixes`, and
+        they use the same names, but each :any:`Mix` in `final_mixes` will be created by a single
+        pipetting step from `master_mix` rather than individual pipetting steps for each shared component.
+
+    """
+    if isinstance(exclude_shared_components, str):
+        raise TypeError(
+            f"parameter `exclude_shared_components` must be Iterable of strings or "
+            f"components, but cannot be a string itself: exclude_shared_components = "
+            f'"{exclude_shared_components}"'
+        )
+
+    verify_mixes_for_master_mix(mixes)
+
+    shared_actions, unique_actions_list = compute_shared_actions(
+        mixes, exclude_shared_components
+    )
+
+    num_shared_actions = len(shared_actions)
+    if num_shared_actions <= 1:
+        raise ValueError(
+            f"master_mix can only be used when mixes have at least two actions shared "
+            f"among all of them, but I only found {num_shared_actions}"
+            f", which is {shared_actions[0]}"
+            if num_shared_actions == 1
+            else ""
+        )
+
+    mixes = list(mixes)
+    first_mix = mixes[0]
+    total_small_mix_volume = first_mix.total_volume
+    volume_shared_actions = sum(
+        shared_action.tx_volume(total_small_mix_volume)
+        for shared_action in shared_actions
+    )
+    volume_buffer = first_mix.buffer_volume
+    volume_shared_actions_and_buffer = volume_shared_actions + volume_buffer
+    concentration_multiplier = total_small_mix_volume / volume_shared_actions_and_buffer
+
+    # replace FixedConcentration actions in `large_mix` with larger concentrations
+    # to account for subsequent dilution when pipetting master mix to final small mix
+    # FixedVolume actions that require larger volume are handled by the call to `split_mix` below
+    new_fixed_concentration_actions = {}
+    for i, action in enumerate(shared_actions):
+        if isinstance(action, FixedConcentration):
+            new_fixed_concentration_action = FixedConcentration(
+                components=action.components,
+                fixed_concentration=action.fixed_concentration
+                * concentration_multiplier,
+                set_name=action.set_name,
+                compact_display=action.compact_display,
+            )
+            new_fixed_concentration_actions[i] = new_fixed_concentration_action
+
+    for i, new_fixed_concentration_action in new_fixed_concentration_actions.items():
+        shared_actions[i] = new_fixed_concentration_action
+
+    # `small_shared_mix` describes how much of the master mix will go into each smaller downstream mix
+    small_shared_mix = Mix(
+        actions=shared_actions,
+        name=name,
+        fixed_total_volume=volume_shared_actions_and_buffer,
+        buffer_name=first_mix.buffer_name,
+        reference=first_mix.reference,
+        min_volume=first_mix.min_volume,
+    )
+
+    names = [mix.name for mix in mixes]
+    mas_mix = split_mix(mix=small_shared_mix, names=names, excess=excess)
+
+    # create new mixes using master mix and unique actions of each mix
+    new_mixes = []
+    master_mix_action = FixedVolume(
+        components=[mas_mix], fixed_volume=volume_shared_actions_and_buffer
+    )
+    for orig_mix, unique_actions in zip(mixes, unique_actions_list):
+        # `[master_mix] + unique_actions` causes mypy error here, so we get explicit about variable types
+        all_actions: list[AbstractAction] = [master_mix_action]
+        all_actions.extend(unique_actions)
+        new_mix = Mix(
+            actions=all_actions,
+            name=orig_mix.name,
+            fixed_total_volume=orig_mix.total_volume,
+            buffer_name=orig_mix.buffer_name,
+            reference=orig_mix.reference,
+            min_volume=orig_mix.min_volume,
+        )
+        new_mixes.append(new_mix)
+
+    return mas_mix, new_mixes
 
 
 _STRUCTURE_CLASSES["Mix"] = Mix

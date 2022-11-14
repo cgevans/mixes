@@ -50,7 +50,7 @@ import pandas
 import pint
 from pint import Quantity
 
-from .units import DNAN, Q_, _parse_vol_optional, nM, uL, uM, ureg
+from .units import DNAN, Q_, _parse_vol_optional, nM, uL, uM, ureg, normalize
 
 
 def parse_vol(vol: Union[float, int, str, Quantity[D]]) -> Quantity[D]:
@@ -82,31 +82,6 @@ warnings.filterwarnings(
     "pint-pandas does not support magnitudes of class <class 'int'>",
     RuntimeWarning,
 )
-
-
-def normalize(quantity: Quantity[D]) -> Quantity[D]:
-    """
-    Normalize `quantity` so that it is "compact" (uses units within the correct "3 orders of magnitude":
-    https://pint.readthedocs.io/en/0.18/tutorial.html#simplifying-units)
-    and eliminate trailing zeros.
-
-    :param quantity:
-        a pint Quantity[Decimal]
-    :return:
-        `quantity` normalized to be compact and without trailing zeros.
-    """
-    quantity = quantity.to_compact()
-    mag_int = quantity.magnitude.to_integral()
-    if mag_int == quantity.magnitude:
-        # can be represented exactly as integer, so return that;
-        # quantity.magnitude.normalize() would use scientific notation in this case, which we don't want
-        quantity = Q_(mag_int, quantity.units)
-    else:
-        # is not exact integer, so normalize will return normal float literal such as 10.2
-        # and not scientific notation like it would for an integer
-        mag_norm = quantity.magnitude.normalize()
-        quantity = Q_(mag_norm, quantity.units)
-    return quantity
 
 
 def parse_conc(conc: float | int | str | Quantity[D]) -> Quantity[D]:
