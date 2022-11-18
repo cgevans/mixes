@@ -259,7 +259,7 @@ class Mix(AbstractComponent):
             )
 
     @property
-    def buffer_volume(self) -> Quantity[Decimal]:
+    def buffer_volume(self) -> Quantity:
         """
         The volume of buffer to be added to the mix, in addition to the components.
         """
@@ -1614,13 +1614,17 @@ def master_mix(
         )
 
     mixes = list(mixes)
+    # We have already required total volumes be the same.
     first_mix = mixes[0]
     total_small_mix_volume = first_mix.total_volume
     volume_shared_actions = sum(
         shared_action.tx_volume(total_small_mix_volume)
         for shared_action in shared_actions
     )
-    volume_buffer = first_mix.buffer_volume
+
+    # We care about the *minimum* buffer volume; then mixes that have more buffer
+    # can have buffer added individually.
+    volume_buffer = min(x.buffer_volume for x in mixes)
     volume_shared_actions_and_buffer = volume_shared_actions + volume_buffer
     concentration_multiplier = total_small_mix_volume / volume_shared_actions_and_buffer
 
