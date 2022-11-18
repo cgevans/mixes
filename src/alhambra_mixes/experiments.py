@@ -271,7 +271,7 @@ class Experiment:
             s = filename_or_stream
             close = False
 
-        json.dump(self._unstructure(), s, indent=2, ensure_ascii=False)
+        json.dump(self._unstructure(), s, indent=2, ensure_ascii=True)
         if close:
             s.close()
 
