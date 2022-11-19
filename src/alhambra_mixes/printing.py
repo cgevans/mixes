@@ -284,14 +284,8 @@ class MixLine:
         elif len(self.wells) == 1:
             return f"{self.plate}: {self.wells[0]}", []
 
-        byrow = mixgaps(
-            sorted(list(self.wells), key=WellPos.key_byrow),
-            by="row",
-        )
-        bycol = mixgaps(
-            sorted(list(self.wells), key=WellPos.key_bycol),
-            by="col",
-        )
+        byrow = mixgaps(sorted(list(self.wells), key=WellPos.key_byrow), by="row")
+        bycol = mixgaps(sorted(list(self.wells), key=WellPos.key_bycol), by="col")
 
         sortnext = WellPos.next_bycol if bycol <= byrow else WellPos.next_byrow
 
@@ -353,11 +347,7 @@ class MixLine:
             ]
 
 
-def _format_title(
-    raw_title: str,
-    level: int,
-    tablefmt: str | TableFormat,
-) -> str:
+def _format_title(raw_title: str, level: int, tablefmt: str | TableFormat) -> str:
     # formats a title for a table produced using tabulate,
     # in the formats tabulate understands
     if tablefmt in ["html", "unsafehtml", html_with_borders_tablefmt]:
@@ -448,3 +438,44 @@ def _format_location(loc: tuple[str | None, WellPos | None]) -> str:
     elif (p is None) and (w is None):
         return ""
     raise ValueError
+
+
+def gel_table(
+    sample_names: Iterable[str],
+    num_lanes: int | None = None,
+    tablefmt: TableFormat | str = "pipe",
+) -> str:
+    """
+    Return Markdown table representing which lanes to put samples into for a gel.
+
+    Parameters
+    ----------
+
+    sample_names
+        names of samples to go into lanes of the gel
+
+    num_lanes
+        total number of lanes in the gel; if not specified, assumed to be number of elements in
+        `sample_names`
+
+    tablefmt
+        The output format for the table. (See documentation for table formats in tabulate package.)
+
+    Returns
+    -------
+        Markdown table representing which lanes to put samples into for a gel
+    """
+    sample_names = list(sample_names)
+    if num_lanes is None:
+        num_lanes = len(sample_names)
+
+    if num_lanes < len(sample_names):
+        raise ValueError(f'num_lanes = {num_lanes} must be at least the number of elements in '
+                         f'sample_names, which is {len(sample_names)}:\n'
+                         f'sample_names = {sample_names}')
+    elif num_lanes > len(sample_names):
+        sample_names += [""] * (num_lanes - len(sample_names))
+
+    gel_header = list(range(1, num_lanes + 1))
+    table = tabulate([sample_names], headers=gel_header, tablefmt=tablefmt)
+    return table
