@@ -479,5 +479,6 @@ def gel_table(
         sample_names += [""] * (num_lanes - len(sample_names))
 
     gel_header = list(range(1, num_lanes + 1))
-    table = tabulate([sample_names], headers=gel_header, tablefmt=tablefmt)
+    gel_header_strs = [str(entry) for entry in gel_header]
+    table = tabulate([sample_names], headers=gel_header_strs, tablefmt=tablefmt)
     return table
