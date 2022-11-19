@@ -470,9 +470,11 @@ def gel_table(
         num_lanes = len(sample_names)
 
     if num_lanes < len(sample_names):
-        raise ValueError(f'num_lanes = {num_lanes} must be at least the number of elements in '
-                         f'sample_names, which is {len(sample_names)}:\n'
-                         f'sample_names = {sample_names}')
+        raise ValueError(
+            f"num_lanes = {num_lanes} must be at least the number of elements in "
+            f"sample_names, which is {len(sample_names)}:\n"
+            f"sample_names = {sample_names}"
+        )
     elif num_lanes > len(sample_names):
         sample_names += [""] * (num_lanes - len(sample_names))
 
