@@ -1678,3 +1678,4 @@ def master_mix(
 
 
 _STRUCTURE_CLASSES["Mix"] = Mix
+_STRUCTURE_CLASSES["_SplitMix"] = _SplitMix
