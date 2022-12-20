@@ -17,8 +17,11 @@ from .units import (
     Decimal,
     Quantity,
     _parse_conc_optional,
+    _parse_vol_optional,
     nM,
     ureg,
+    NAN_VOL,
+    DecimalQuantity,
 )
 from .util import _none_as_empty_string
 from .dictstructure import _structure, _unstructure, _STRUCTURE_CLASSES
@@ -68,8 +71,12 @@ class AbstractComponent(ABC):
         return []
 
     @property
+    def volume(self) -> DecimalQuantity:
+        return NAN_VOL
+
+    @property
     @abstractmethod
-    def concentration(self) -> Quantity[Decimal]:  # pragma: no cover
+    def concentration(self) -> DecimalQuantity:  # pragma: no cover
         "(Source) concentration of the component as a pint Quantity.  NaN if undefined."
         ...
 
@@ -130,7 +137,7 @@ class Component(AbstractComponent):
     """
 
     name: str
-    concentration: Quantity[Decimal] = attrs.field(
+    concentration: DecimalQuantity = attrs.field(
         converter=_parse_conc_optional, default=None, on_setattr=attrs.setters.convert
     )
     # FIXME: this is not a great way to do this: should make code not give None
@@ -146,6 +153,9 @@ class Component(AbstractComponent):
         default=None,
         kw_only=True,
         on_setattr=attrs.setters.convert,
+    )
+    volume: DecimalQuantity = attrs.field(
+        converter=_parse_vol_optional, default=NAN_VOL, on_setattr=attrs.setters.convert
     )
 
     def __eq__(self, other: Any) -> bool:
