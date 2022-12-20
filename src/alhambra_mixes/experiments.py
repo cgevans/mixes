@@ -14,6 +14,7 @@ from typing import (
     TextIO,
     Tuple,
     cast,
+    Literal,
 )
 
 import attrs
@@ -57,6 +58,45 @@ class Experiment:
         default=None, on_setattr=_exp_attr_set_reference
     )
 
+    def add(
+        self,
+        component: AbstractComponent,
+        *,
+        check_volumes: bool | None = None,
+        apply_reference: bool = True,
+        check_existing: bool | Literal["equal"] = "equal",
+    ) -> Experiment:
+
+        if check_volumes is None:
+            check_volumes = self.volume_checks
+
+        if not component.name:
+            raise ValueError("Component must have a name to be added to an experiment.")
+
+        existing = self.get(component.name, None)
+        if check_existing and (existing is not None):
+            if check_existing == "equal" and existing != component:
+                raise ValueError(
+                    f"{component.name} already exists in experiment, and is different."
+                )
+            else:
+                raise ValueError(f"{component.name} already exists in experiment.")
+        self.components[component.name] = component
+
+        if isinstance(component, Mix):
+            component = component.with_experiment(self, True)
+            if apply_reference and self.reference:
+                component = component.with_reference(self.reference, inplace=True)
+
+        if check_volumes:
+            try:
+                self.check_volumes(display=False, raise_error=True)
+            except VolumeError as e:
+                del self.components[component.name]
+                raise e
+
+        return self
+
     def add_mix(
         self,
         mix_or_actions: Mix | Sequence[AbstractAction] | AbstractAction,
@@ -69,7 +109,7 @@ class Experiment:
         min_volume: Quantity[Decimal] | str = Q_("0.5", uL),
         check_volumes: bool | None = None,
         apply_reference: bool = True,
-        check_existing: bool = True,
+        check_existing: bool | Literal["equal"] = "equal",
     ) -> Experiment:
         """
         Add a mix to the experiment, either as a Mix object, or by creating a new Mix.
@@ -85,8 +125,6 @@ class Experiment:
         already contains a mix with the name `name`. Otherwise, the existing mix is replaced
         with the new mix.
         """
-        if check_volumes is None:
-            check_volumes = self.volume_checks
         if isinstance(mix_or_actions, Mix):
             mix = mix_or_actions
             name = mix.name
@@ -100,25 +138,13 @@ class Experiment:
                 buffer_name=buffer_name,
                 min_volume=min_volume,
             )
-        if not name:
-            raise ValueError("Mix must have a name to be added to an experiment.")
-        elif check_existing and mix.name in self.components:
-            raise ValueError(f"Mix {mix.name} already exists in experiment.")
 
-        mix = mix.with_experiment(self, True)
-        if apply_reference and self.reference:
-            mix = mix.with_reference(self.reference, inplace=True)
-
-        self.components[mix.name] = mix
-
-        if check_volumes:
-            try:
-                self.check_volumes(display=False, raise_error=True)
-            except VolumeError as e:
-                del self.components[mix.name]
-                raise e
-
-        return self
+        return self.add(
+            mix,
+            check_volumes=check_volumes,
+            apply_reference=apply_reference,
+            check_existing=check_existing,
+        )
 
     def __setitem__(self, name: str, mix: AbstractComponent) -> None:
         if not mix.name:
@@ -142,6 +168,9 @@ class Experiment:
                 del self.components[name]
                 raise e
 
+    def get(self, key: str, default=None):
+        return self.components.get(key, default)
+
     def __getitem__(self, name: str) -> AbstractComponent:
         return self.components[name]
 
@@ -152,6 +181,12 @@ class Experiment:
         return name in self.components
 
     def remove_mix(self, name: str) -> None:
+        """
+        Remove a mix from the experiment, referenced by name,
+        """
+        self.remove(name)
+
+    def remove(self, name: str) -> None:
         """
         Remove a mix from the experiment, referenced by name,
         """
