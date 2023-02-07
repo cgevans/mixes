@@ -55,7 +55,7 @@ class AbstractAction(ABC):
         mix_vol
             The mix volume.  Does not accept strings.
         """
-        return sum(self.each_volumes(mix_vol, actions), Q_("0", "uL"))
+        return sum(self.each_volumes(mix_vol, actions), ZERO_VOL)
 
     @abstractmethod
     def _mixlines(
@@ -148,6 +148,7 @@ class ActionWithComponents(AbstractAction):
     components: list[AbstractComponent] = attrs.field(
         converter=_maybesequence_comps, on_setattr=attrs.setters.convert
     )
+    compact_display: bool = True
 
     @property
     def number(self) -> int:
@@ -370,6 +371,37 @@ class ActionWithComponents(AbstractAction):
             )
         ]
 
+    def _mixlines(
+        self,
+        tablefmt: str | TableFormat,
+        mix_vol: Quantity[Decimal],
+        actions: Sequence[AbstractAction] = tuple(),
+    ) -> list[MixLine]:
+        dconcs = self.dest_concentrations(mix_vol, actions)
+        eavols = self.each_volumes(mix_vol, actions)
+        if not self.compact_display:
+            ml = [
+                MixLine(
+                    [comp.printed_name(tablefmt=tablefmt)],
+                    comp.concentration,
+                    dc,
+                    ev,
+                    plate=comp.plate,
+                    wells=comp._well_list,
+                )
+                for dc, ev, comp in zip(
+                    dconcs,
+                    eavols,
+                    self.components,
+                )
+            ]
+        else:
+            ml = list(
+                self._compactstrs(tablefmt=tablefmt, dconcs=dconcs, eavols=eavols)
+            )
+
+        return ml
+
 
 @attrs.define(eq=True)
 class FixedVolume(ActionWithComponents):
@@ -455,37 +487,6 @@ class FixedVolume(ActionWithComponents):
         else:
             return self.set_name
 
-    def _mixlines(
-        self,
-        tablefmt: str | TableFormat,
-        mix_vol: Quantity[Decimal],
-        actions: Sequence[AbstractAction] = tuple(),
-    ) -> list[MixLine]:
-        dconcs = self.dest_concentrations(mix_vol)
-        eavols = self.each_volumes(mix_vol)
-        if not self.compact_display:
-            ml = [
-                MixLine(
-                    [comp.printed_name(tablefmt=tablefmt)],
-                    comp.concentration,
-                    dc,
-                    ev,
-                    plate=comp.plate,
-                    wells=comp._well_list,
-                )
-                for dc, ev, comp in zip(
-                    dconcs,
-                    eavols,
-                    self.components,
-                )
-            ]
-        else:
-            ml = list(
-                self._compactstrs(tablefmt=tablefmt, dconcs=dconcs, eavols=eavols)
-            )
-
-        return ml
-
 
 @attrs.define(init=False)
 class EqualConcentration(FixedVolume):
@@ -558,7 +559,6 @@ class EqualConcentration(FixedVolume):
         | tuple[Literal["max_fill"], str] = "min_volume",
         equal_conc: bool | str | None = None,
     ):
-
         if equal_conc is not None:
             warn(
                 "The equal_conc parameter for FixedVolume is no longer supported.  Use EqualConcentration and method instead.",
@@ -625,8 +625,76 @@ class EqualConcentration(FixedVolume):
         ml = super()._mixlines(tablefmt, mix_vol)
         if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
             fv = self.fixed_volume * len(self.components) - sum(self.each_volumes())
-            if not fv == Q_("0.0", uL):
+            if not fv == ZERO_VOL:
                 ml.append(MixLine([self.method[1]], None, None, fv))
+        return ml
+
+
+@attrs.define(eq=True)
+class FillVolume(ActionWithComponents):
+    compact_display: bool = False
+
+    def each_volumes(
+        self,
+        total_volume: Quantity[Decimal],
+        actions: Sequence[AbstractAction] = tuple(),
+    ) -> list[Quantity[Decimal]]:
+        return [self.tx_volume(total_volume, actions) / len(self.components)] * len(
+            self.components
+        )
+
+    def tx_volume(
+        self,
+        mix_vol: Quantity[Decimal] = NAN_VOL,
+        actions: Sequence[AbstractAction] = tuple(),
+    ) -> Quantity[Decimal]:
+        tot_nonbufvol = sum(
+            (c.tx_volume(mix_vol, actions) for c in actions if c is not self), ZERO_VOL
+        )
+        return mix_vol - tot_nonbufvol
+
+    def dest_concentrations(
+        self,
+        mix_vol: Quantity[Decimal] = NAN_VOL,
+        actions: Sequence[AbstractAction] = tuple(),
+    ) -> list[Quantity[Decimal]]:
+        return [
+            x * y
+            for x, y in zip(
+                self.source_concentrations,
+                _ratio(self.each_volumes(mix_vol, actions), mix_vol),
+            )
+        ]
+
+    def _mixlines(
+        self,
+        tablefmt: str | TableFormat,
+        mix_vol: Quantity[Decimal],
+        actions: Sequence[AbstractAction] = tuple(),
+    ) -> list[MixLine]:
+        dconcs = self.dest_concentrations(mix_vol, actions)
+        eavols = self.each_volumes(mix_vol, actions)
+        if not self.compact_display:
+            ml = [
+                MixLine(
+                    [comp.printed_name(tablefmt=tablefmt)],
+                    None,  # FIXME
+                    None,
+                    ev,
+                    plate=comp.plate,
+                    wells=comp._well_list,
+                )
+                for dc, ev, comp in zip(
+                    dconcs,
+                    eavols,
+                    self.components,
+                )
+            ]
+        else:
+            ml = list(
+                self._compactstrs(tablefmt=tablefmt, dconcs=dconcs, eavols=eavols)
+            )
+
         return ml
 
 
@@ -725,37 +793,6 @@ class FixedConcentration(ActionWithComponents):
                 )
         return ea_vols
 
-    def _mixlines(
-        self,
-        tablefmt: str | TableFormat,
-        mix_vol: Quantity[Decimal],
-        actions: Sequence[AbstractAction] = tuple(),
-    ) -> list[MixLine]:
-        dconcs = self.dest_concentrations(mix_vol)
-        eavols = self.each_volumes(mix_vol)
-        if not self.compact_display:
-            ml = [
-                MixLine(
-                    [comp.printed_name(tablefmt=tablefmt)],
-                    comp.concentration,
-                    dc,
-                    ev,
-                    plate=comp.plate,
-                    wells=comp._well_list,
-                )
-                for dc, ev, comp in zip(
-                    dconcs,
-                    eavols,
-                    self.components,
-                )
-            ]
-        else:
-            ml = list(
-                self._compactstrs(tablefmt=tablefmt, dconcs=dconcs, eavols=eavols)
-            )
-
-        return ml
-
     @property
     def name(self) -> str:
         if self.set_name is None:
@@ -774,12 +811,13 @@ class ToConcentration(ActionWithComponents):
     concentration."""
 
     fixed_concentration: Quantity[Decimal] = attrs.field(
-        converter=_parse_conc_required, on_setattr=attrs.setters.convert
+        converter=_parse_conc_required,
+        on_setattr=attrs.setters.convert,
+        default=NAN_CONC,
     )
-    compact_display: bool = True
     min_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_optional,
-        default=Q_(DNAN, uL),
+        default=NAN_VOL,
         on_setattr=attrs.setters.convert,
     )
 

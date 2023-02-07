@@ -21,6 +21,7 @@ __all__ = [
     "DNAN",
     "ZERO_VOL",
     "NAN_VOL",
+    "NAN_CONC",
     "Decimal",
     "Quantity",
     "DecimalQuantity",
@@ -54,6 +55,8 @@ class VolumeError(ValueError):
 DNAN = Decimal("nan")
 ZERO_VOL = Q_("0.0", "µL")
 NAN_VOL = Q_("nan", "µL")
+
+NAN_CONC = Q_("nan", "µM")
 
 T = TypeVar("T", bound=Union[float, Decimal])
 

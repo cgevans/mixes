@@ -25,7 +25,7 @@ import pandas as pd
 import pint
 from tabulate import TableFormat, tabulate
 
-from .actions import AbstractAction  # Fixme: should not need special cases
+from .actions import AbstractAction, FillVolume  # Fixme: should not need special cases
 from .actions import FixedConcentration, FixedVolume
 from .components import AbstractComponent, Component, Strand, _empty_components
 from .dictstructure import _STRUCTURE_CLASSES, _structure, _unstructure
@@ -128,21 +128,6 @@ def _maybesequence_action(
     return [object_or_sequence]
 
 
-def remove_buffer_mixline_if_absent(mixlines: list[MixLine], buffer_name: str) -> None:
-    idx_to_remove = -1
-    for idx, mixline in enumerate(mixlines):
-        if (
-            len(mixline.names) == 1
-            and mixline.names[0] == buffer_name
-            and mixline.each_tx_vol == ureg("0 uL")
-        ):
-            idx_to_remove = idx
-            break
-
-    if idx_to_remove >= 0:
-        del mixlines[idx_to_remove]
-
-
 @attrs.define(eq=False)
 class Mix(AbstractComponent):
     """Class denoting a Mix, a collection of source components mixed to
@@ -164,7 +149,7 @@ class Mix(AbstractComponent):
     fixed_concentration: str | Quantity[Decimal] | None = attrs.field(
         default=None, kw_only=True, on_setattr=attrs.setters.convert
     )
-    buffer_name: str = "Buffer"
+    buffer_name: str | AbstractComponent = "Buffer"
     reference: Reference | None = None
     min_volume: Quantity[Decimal] = attrs.field(
         converter=_parse_vol_optional,
@@ -263,20 +248,20 @@ class Mix(AbstractComponent):
         """
         The volume of buffer to be added to the mix, in addition to the components.
         """
-        mvol = sum(c.tx_volume(self.total_volume, self.actions) for c in self.actions)
-        return self.total_volume - mvol
+        for a in self.actions:
+            if isinstance(a, FillVolume):
+                return a.tx_volume(self.total_volume, self.actions)
+        return ZERO_VOL
 
     def table(
         self,
         tablefmt: TableFormat | str = "pipe",
         raise_failed_validation: bool = False,
-        buffer_name: str = "Buffer",
         stralign="default",
         missingval="",
         showindex="default",
         disable_numparse=False,
         colalign=None,
-        buffer_line_if_absent=False,
     ) -> str:
         """Generate a table describing the mix.
 
@@ -291,14 +276,8 @@ class Mix(AbstractComponent):
 
         buffer_name
             Name of the buffer to use. (Default="Buffer")
-
-        buffer_line_if_absent
-            If True and the buffer volume is 0, include an explicit line for buffer anyway that says 0 uL.
         """
-        mixlines = list(self.mixlines(buffer_name=buffer_name, tablefmt=tablefmt))
-
-        if not buffer_line_if_absent:
-            remove_buffer_mixline_if_absent(mixlines, buffer_name)
+        mixlines = list(self.mixlines(tablefmt=tablefmt))
 
         validation_errors = self.validate(mixlines=mixlines)
 

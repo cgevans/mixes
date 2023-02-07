@@ -14,8 +14,8 @@ norecursedirs = [
     ".tox"]
 testpaths = ["tests"]
 
-[project]
-name = "alhambra_mixes"
+#[project]
+#name = "alhambra_mixes"
 
 [tool.black]
 target_version = ["py39"]
