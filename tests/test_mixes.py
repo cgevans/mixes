@@ -104,7 +104,6 @@ def test_all_wellref_96():
 
 
 def test_component():
-
     assert Component("test1") != Component("test2")
 
     assert Component("test3") == Component("test3")
@@ -187,12 +186,12 @@ def test_with_reference_get_first(
         [("P 2", "D7"), ("P 2", "D5"), ("P 3", "D7"), ("P 4", "D7")],
     )
 
-    assert s == Strand("strand3", Q_(1000, nM), "GGTG", plate="P 2", well="D7")
+    assert s == Strand("strand3", Q_(1000, nM), sequence="GGTG", plate="P 2", well="D7")
 
 
 def test_with_reference_constraints_match_plate(reference: Reference, caplog):
     s = Strand("strand3", plate="P 3").with_reference(reference)
-    assert s == Strand("strand3", Q_(2000, nM), "GGTG", plate="P 3", well="D7")
+    assert s == Strand("strand3", Q_(2000, nM), sequence="GGTG", plate="P 3", well="D7")
 
     c = Component("strand3", plate="P 3").with_reference(reference)
     assert c == Component("strand3", Q_(2000, nM), plate="P 3", well="D7")
@@ -200,7 +199,7 @@ def test_with_reference_constraints_match_plate(reference: Reference, caplog):
 
 def test_with_reference_constraints_match_well(reference: Reference, caplog):
     s = Strand("strand3", well="D5").with_reference(reference)
-    assert s == Strand("strand3", Q_(1000, nM), "GGTG", plate="P 2", well="D5")
+    assert s == Strand("strand3", Q_(1000, nM), sequence="GGTG", plate="P 2", well="D5")
 
     c = Component("strand3", well="D5").with_reference(reference)
     assert c == Component("strand3", Q_(1000, nM), plate="P 2", well="D5")
@@ -208,14 +207,16 @@ def test_with_reference_constraints_match_well(reference: Reference, caplog):
 
 def test_with_reference_constraints_match_seq(reference: Reference, caplog):
     s = Strand("strand3", sequence="GGTGAGG").with_reference(reference)
-    assert s == Strand("strand3", Q_(2000, nM), "GGTG AGG", plate="P 4", well="D7")
+    assert s == Strand(
+        "strand3", Q_(2000, nM), sequence="GGTG AGG", plate="P 4", well="D7"
+    )
 
 
 def test_a_mix(reference: Reference):
     c1 = Component("comp1")
     s1 = Strand("strand1")
     s2 = Strand("strand2")
-    s3 = Strand("strand3", ureg("1000 nM"), "GGTG")
+    s3 = Strand("strand3", ureg("1000 nM"), sequence="GGTG")
 
     m = Mix(
         [
@@ -370,7 +371,6 @@ def test_intermediate_mix_sufficient_volume():
 
 
 def test_toconcentration():
-
     ca = Component("A", "1 µM")
     cb = Component("B", "1 µM")
     cc = Component("C", "1 µM")

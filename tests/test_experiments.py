@@ -140,7 +140,6 @@ def test_consumed_and_produced_volumes(experiment):
 
 
 def test_check_volumes(experiment, capsys):
-
     # First, try adding a mix that will cause a problem
     with pytest.raises(VolumeError):
         experiment.add_mix(
