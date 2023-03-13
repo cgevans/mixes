@@ -558,7 +558,6 @@ class EqualConcentration(FixedVolume):
         | tuple[Literal["max_fill"], str] = "min_volume",
         equal_conc: bool | str | None = None,
     ):
-
         if equal_conc is not None:
             warn(
                 "The equal_conc parameter for FixedVolume is no longer supported.  Use EqualConcentration and method instead.",
