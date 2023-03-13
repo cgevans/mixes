@@ -1,7 +1,7 @@
 import itertools
 import re
 from decimal import Decimal
-from typing import cast
+from typing import cast, Optional
 
 import numpy as np
 import pandas as pd
@@ -491,7 +491,7 @@ def assert_close(
     expected: Decimal,
     rtol: Decimal = Decimal(1e-7),
     atol: Decimal = Decimal(0),
-    msg: str = None,
+    msg: Optional[str] = None,
 ) -> None:
     # This helps with comparing Decimal quantities, which cannot be multiplied by floats, which is
     # what happens with the default rtol parameter of pint.testing.assert_allclose.
