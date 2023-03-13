@@ -654,6 +654,59 @@ def test_master_mix(master_mix_fixture):
         assert strand_ml.names[0] == strand_name
 
 
+def test_master_mix_different_buffer_volumes():
+    from alhambra_mixes import master_mix
+
+    s1 = Component("s1", concentration="100 nM")
+    s2 = Component("s2", concentration="100 nM")
+    s3 = Component("s3", concentration="100 nM")
+    s4 = Component("s4", concentration="100 nM")
+    s5 = Component("s5", concentration="100 nM")
+    s6 = Strand("s6", concentration="100 nM")
+    s7 = Strand("s7", concentration="100 nM")
+    s8 = Strand("s8", concentration="100 nM")
+
+    mixes = [
+        Mix(
+            actions=[
+                FixedConcentration(components=[s1, s2], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
+            ],
+            name="mix 0",
+            fixed_total_volume=f"100 uL",
+        ),
+        Mix(
+            actions=[
+                FixedConcentration(components=[s1, s2], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s8], fixed_concentration=f"10 nM"),
+            ],
+            name="mix 1",
+            fixed_total_volume=f"100 uL",
+        ),
+        Mix(
+            actions=[
+                FixedConcentration(components=[s1, s2], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s7], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s8], fixed_concentration=f"20 nM"),
+            ],
+            name="mix 1",
+            fixed_total_volume=f"100 uL",
+        ),
+    ]
+    mm, final_mixes = master_mix(mixes=mixes, name="master mix")
+
+    mm.validate(tablefmt="pipe", raise_errors=True)
+
+    for mix in final_mixes:
+        assert mix.total_volume == ureg("100 µL")
+        mix.validate(tablefmt="pipe", raise_errors=True)
+
+
 def test_master_mix_exclude_shared_components(master_mix_fixture):
     from alhambra_mixes import master_mix
 
