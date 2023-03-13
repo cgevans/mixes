@@ -128,6 +128,12 @@ class AbstractComponent(ABC):
         return consumed_volumes, made_volumes
 
 
+def norm_nan_for_eq(v1: DecimalQuantity) -> DecimalQuantity:
+    if isnan(v1.m):
+        return Q_(-1, v1.u)
+    return v1
+
+
 @attrs.define()
 class Component(AbstractComponent):
     """A single named component, potentially with a concentration and location.
@@ -138,7 +144,10 @@ class Component(AbstractComponent):
 
     name: str
     concentration: DecimalQuantity = attrs.field(
-        converter=_parse_conc_optional, default=None, on_setattr=attrs.setters.convert
+        converter=_parse_conc_optional,
+        default=None,
+        on_setattr=attrs.setters.convert,
+        eq=norm_nan_for_eq,
     )
     # FIXME: this is not a great way to do this: should make code not give None
     # Fortuitously, mypy doesn't support this converter, so problems should give type errors.
@@ -155,23 +164,11 @@ class Component(AbstractComponent):
         on_setattr=attrs.setters.convert,
     )
     volume: DecimalQuantity = attrs.field(
-        converter=_parse_vol_optional, default=NAN_VOL, on_setattr=attrs.setters.convert
+        converter=_parse_vol_optional,
+        default=NAN_VOL,
+        on_setattr=attrs.setters.convert,
+        eq=norm_nan_for_eq,
     )
-
-    def __eq__(self, other: Any) -> bool:
-        if not other.__class__ == Component:
-            return False
-        if self.name != other.name:
-            return False
-        if isinstance(self.concentration, ureg.Quantity) and isinstance(
-            other.concentration, ureg.Quantity
-        ):
-            if isnan(self.concentration.m) and isnan(other.concentration.m):
-                return True
-            return self.concentration == other.concentration
-        elif hasattr(self, "concentration") and hasattr(other, "concentration"):
-            return bool(self.concentration == other.concentration)
-        return False
 
     @property
     def location(self) -> tuple[str, WellPos | None]:
