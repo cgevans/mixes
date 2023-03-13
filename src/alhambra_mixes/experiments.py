@@ -66,7 +66,6 @@ class Experiment:
         apply_reference: bool = True,
         check_existing: bool | Literal["equal"] = "equal",
     ) -> Experiment:
-
         if check_volumes is None:
             check_volumes = self.volume_checks
 
