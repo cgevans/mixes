@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=46.1.0", "setuptools_scm[toml]>=5", "wheel"]
+requires = ["setuptools>=60", "setuptools_scm[toml]>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
@@ -16,6 +16,51 @@ testpaths = ["tests"]
 
 [project]
 name = "alhambra_mixes"
+dynamic = ["version"]
+description = "Many-component mix library for molecular programming"
+authors = [{name = "Constantine Evans", email="mixes@mb.costi.net"}]
+license = { file = "LICENCE.txt" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: BSD License",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed"]
+dependencies = [
+    "attrs >= 22.1",
+    "numpy",
+    "pandas",
+    "openpyxl",
+    "pint >= 0.20",
+    "tabulate",
+    "toml",
+    "typing_extensions >= 4.2"
+]
+readme = "README.md"
+
+[project.optional-dependencies]
+docs = [
+    "numpydoc",
+    "matplotlib",
+    "sphinx-book-theme",
+    "sphinx-autoapi",
+    "myst-parser"
+    ]
+testing = [
+    "setuptools",
+    "pytest",
+    "pytest-cov"
+]
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
 
 [tool.black]
 target_version = ["py39"]
