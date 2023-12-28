@@ -155,18 +155,18 @@ class Mix(AbstractComponent):
     name: str = ""
     test_tube_name: str | None = attrs.field(kw_only=True, default=None)
     "A short name, eg, for labelling a test tube."
-    fixed_total_volume: Quantity[Decimal] = attrs.field(
+    fixed_total_volume: DecimalQuantity = attrs.field(
         converter=_parse_vol_optional,
         default=Q_(DNAN, uL),
         kw_only=True,
         on_setattr=attrs.setters.convert,
     )
-    fixed_concentration: str | Quantity[Decimal] | None = attrs.field(
+    fixed_concentration: str | DecimalQuantity | None = attrs.field(
         default=None, kw_only=True, on_setattr=attrs.setters.convert
     )
     buffer_name: str = "Buffer"
     reference: Reference | None = None
-    min_volume: Quantity[Decimal] = attrs.field(
+    min_volume: DecimalQuantity = attrs.field(
         converter=_parse_vol_optional,
         default=Q_("0.5", uL),
         kw_only=True,
@@ -213,7 +213,7 @@ class Mix(AbstractComponent):
         )
 
     @property
-    def concentration(self) -> Quantity[Decimal]:
+    def concentration(self) -> DecimalQuantity:
         """
         Effective concentration of the mix.  Calculated in order:
 
@@ -228,7 +228,7 @@ class Mix(AbstractComponent):
         elif isinstance(self.fixed_concentration, str):
             ac = self.all_components()
             return ureg.Quantity(
-                Decimal(ac.loc[self.fixed_concentration, "concentration_nM"]), ureg.nM
+                Decimal(ac.loc[self.fixed_concentration, "concentration_nM"]), nM
             )
         elif self.fixed_concentration is None:
             return self.actions[0].dest_concentrations(self.total_volume, self.actions)[
@@ -238,7 +238,7 @@ class Mix(AbstractComponent):
             raise NotImplemented
 
     @property
-    def total_volume(self) -> Quantity[Decimal]:
+    def total_volume(self) -> DecimalQuantity:
         """
         Total volume of the mix.  If the mix has a fixed total volume, then that,
         otherwise, the sum of the transfer volumes of each component.
@@ -540,7 +540,7 @@ class Mix(AbstractComponent):
         self,
         tablefmt: str | TableFormat = "pipe",
         validate: bool = True,
-    ) -> dict[Quantity[Decimal], list[str]]:
+    ) -> dict[DecimalQuantity, list[str]]:
         """
         :return:
              dict mapping a volume `vol` to a list of names of strands in this mix that should be pipetted
@@ -557,7 +557,7 @@ class Mix(AbstractComponent):
                 )
                 raise e
 
-        result: dict[Quantity[Decimal], list[str]] = {}
+        result: dict[DecimalQuantity, list[str]] = {}
         for mixline in mixlines:
             if len(mixline.names) == 0 or (
                 len(mixline.names) == 1 and mixline.names[0].lower() == "buffer"
@@ -857,7 +857,7 @@ class Mix(AbstractComponent):
                 raise e
 
         # not used if combine_plate_actions is False
-        plate_maps_dict: dict[Tuple[str, Quantity[Decimal]], PlateMap] = {}
+        plate_maps_dict: dict[Tuple[str, DecimalQuantity], PlateMap] = {}
         plate_maps = []
         # each MixLine but the last is a (plate, volume) pair
         for mixline in mixlines:
@@ -1001,7 +1001,7 @@ class PlateMap:
 
     Wells with no strand in the PlateMap are not keys in the dictionary."""
 
-    vol_each: Quantity[Decimal] | None = None
+    vol_each: DecimalQuantity | None = None
     """Volume to pipette of each strand listed in this plate. (optional in case you simply want
     to create a plate map listing the strand names without instructions to pipette)"""
 
@@ -1148,7 +1148,7 @@ class PlateMap:
 class _SplitMix(Mix):
     num_tubes: int = -1
 
-    small_mix_volume: Quantity[Decimal] = Q_(Decimal(0), "uL")
+    small_mix_volume: DecimalQuantity = Q_(Decimal(0), "uL")
 
     names: None | list[str] = None
 

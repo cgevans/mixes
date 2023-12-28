@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import decimal
 from decimal import Decimal
-from typing import Sequence, TypeVar, Union, overload
+from typing import Sequence, TypeVar, Union, cast, overload
 from typing_extensions import TypeAlias
 import pint
 from pint import Quantity
-from pint.facets.plain import PlainQuantity
+from pint.facets.plain import PlainQuantity, PlainUnit
 
 # This needs to be here to make Decimal NaNs behave the way that NaNs
 # *everywhere else in the standard library* behave.
@@ -17,6 +17,7 @@ __all__ = [
     "uL",
     "nM",
     "uM",
+    "nmol",
     "Q_",
     "DNAN",
     "ZERO_VOL",
@@ -29,19 +30,22 @@ __all__ = [
 ureg = pint.UnitRegistry(non_int_type=Decimal)
 ureg.default_format = "~P"
 
-uL = ureg.uL
+uL = ureg.Unit("uL")
 # µL = ureg.uL
-uM = ureg.uM
-nM = ureg.nM
+uM = ureg.Unit("uM")
+nM = ureg.Unit("nM")
+nmol = ureg.Unit("nmol")
 
-DecimalQuantity: TypeAlias = "Quantity[Decimal]"
+DecimalQuantity: TypeAlias = Quantity # "PlainQuantity[Decimal]"
 
 
 def Q_(
-    qty: int | str | Decimal | float, unit: str | pint.Unit | None = None
+    qty: int | str | Decimal | float, unit: str | pint.Unit | PlainUnit | Quantity | None = None
 ) -> DecimalQuantity:
     "Convenient constructor for units, eg, :code:`Q_(5.0, 'nM')`.  Ensures that the quantity is a Decimal."
     if unit is not None:
+        if isinstance(unit, Quantity):
+            unit = unit.u
         return ureg.Quantity(Decimal(qty), unit)
     else:
         return ureg.Quantity(qty)
@@ -60,33 +64,33 @@ T = TypeVar("T", bound=Union[float, Decimal])
 
 @overload
 def _ratio(
-    top: Sequence[PlainQuantity[T]], bottom: Sequence[Quantity[Union[float, Decimal]]]
-) -> Sequence[T]:
-    ...
-
-
-@overload
-def _ratio(
-    top: PlainQuantity[T], bottom: Sequence[PlainQuantity[T]]
+    top: Sequence[PlainQuantity[T]] | Sequence[DecimalQuantity], bottom: Sequence[PlainQuantity[T]] | Sequence[DecimalQuantity]
 ) -> Sequence[Union[float, Decimal]]:
     ...
 
 
 @overload
 def _ratio(
-    top: Sequence[PlainQuantity[T]], bottom: PlainQuantity[T]
+    top: PlainQuantity[T] | DecimalQuantity, bottom: Sequence[PlainQuantity[T]] | Sequence[DecimalQuantity]
 ) -> Sequence[Union[float, Decimal]]:
     ...
 
 
 @overload
-def _ratio(top: PlainQuantity[T], bottom: PlainQuantity[T]) -> Union[float, Decimal]:
+def _ratio(
+    top: Sequence[PlainQuantity[T]] | Sequence[DecimalQuantity], bottom: PlainQuantity[T] | DecimalQuantity
+) -> Sequence[Union[float, Decimal]]:
+    ...
+
+
+@overload
+def _ratio(top: PlainQuantity[T] | DecimalQuantity, bottom: PlainQuantity[T] | DecimalQuantity) -> Union[float, Decimal]: 
     ...
 
 
 def _ratio(
-    top: PlainQuantity[T] | Sequence[PlainQuantity[T]],
-    bottom: PlainQuantity[T] | Sequence[PlainQuantity[T]],
+    top: PlainQuantity[T] | Sequence[PlainQuantity[T]] | DecimalQuantity | Sequence[DecimalQuantity],
+    bottom: PlainQuantity[T] | Sequence[PlainQuantity[T]] | DecimalQuantity | Sequence[DecimalQuantity],
 ) -> Union[float, Decimal] | Sequence[Union[float, Decimal]]:
     if isinstance(top, Sequence) and isinstance(bottom, Sequence):
         return [(x / y).m_as("") for x, y in zip(top, bottom)]
@@ -109,7 +113,7 @@ def _parse_conc_optional(v: str | Quantity | None) -> DecimalQuantity:
         if not v.check(nM):
             raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
         v = Q_(v.m, v.u)
-        return v.to_compact()
+        return cast(DecimalQuantity, v.to_compact())
     elif v is None:
         return Q_(DNAN, nM)
     raise ValueError
@@ -127,7 +131,7 @@ def _parse_conc_required(v: str | Quantity) -> DecimalQuantity:
         if not v.check(nM):
             raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
         v = Q_(v.m, v.u)
-        return v.to_compact()
+        return cast(DecimalQuantity, v.to_compact())
     raise ValueError(f"{v} is not a valid quantity here (should be molarity).")
 
 
@@ -146,7 +150,7 @@ def _parse_vol_optional(v: str | Quantity) -> DecimalQuantity:
         if not v.check(uL):
             raise ValueError(f"{v} is not a valid quantity here (should be volume).")
         v = Q_(v.m, v.u)
-        return v.to_compact()
+        return cast(DecimalQuantity, v.to_compact())
     elif v is None:
         return Q_(DNAN, uL)
     raise ValueError
@@ -167,7 +171,7 @@ def _parse_vol_optional_none_zero(v: str | Quantity) -> DecimalQuantity:
         if not v.check(uL):
             raise ValueError(f"{v} is not a valid quantity here (should be volume).")
         v = Q_(v.m, v.u)
-        return v.to_compact()
+        return cast(DecimalQuantity, v.to_compact())
     elif v is None:
         return ZERO_VOL
     raise ValueError
@@ -188,22 +192,22 @@ def _parse_vol_required(v: str | Quantity) -> DecimalQuantity:
         if not v.check(uL):
             raise ValueError(f"{v} is not a valid quantity here (should be volume).")
         v = Q_(v.m, v.u)
-        return v.to_compact()
+        return cast(DecimalQuantity, v.to_compact())
     raise ValueError(f"{v} is not a valid quantity here (should be volume).")
 
 
-def normalize(quantity: Quantity) -> Quantity:
+def normalize(quantity: DecimalQuantity) -> DecimalQuantity:
     """
     Normalize `quantity` so that it is "compact" (uses units within the correct "3 orders of magnitude":
     https://pint.readthedocs.io/en/0.18/tutorial.html#simplifying-units)
     and eliminate trailing zeros.
 
     :param quantity:
-        a pint Quantity[Decimal]
+        a pint DecimalQuantity
     :return:
         `quantity` normalized to be compact and without trailing zeros.
     """
-    quantity = quantity.to_compact()
+    quantity = cast(DecimalQuantity, quantity.to_compact())
     mag_int = quantity.magnitude.to_integral()
     if mag_int == quantity.magnitude:
         # can be represented exactly as integer, so return that;

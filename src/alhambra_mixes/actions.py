@@ -44,9 +44,9 @@ class AbstractAction(ABC):
 
     def tx_volume(
         self,
-        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        mix_vol: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
-    ) -> Quantity[Decimal]:  # pragma: no cover
+    ) -> DecimalQuantity:  # pragma: no cover
         """The total volume transferred by the action to the sample.  May depend on the total mix volume.
 
         Parameters
@@ -61,14 +61,14 @@ class AbstractAction(ABC):
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
-        mix_vol: Quantity[Decimal],
+        mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = tuple(),
     ) -> Sequence[MixLine]:  # pragma: no cover
         ...
 
     @abstractmethod
     def all_components(
-        self, mix_vol: Quantity[Decimal], actions: Sequence[AbstractAction] = tuple()
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = tuple()
     ) -> pd.DataFrame:  # pragma: no cover
         """A dataframe containing all base components added by the action.
 
@@ -95,8 +95,8 @@ class AbstractAction(ABC):
         ...
 
     def dest_concentration(
-        self, mix_vol: Quantity[Decimal], actions: Sequence[AbstractAction] = tuple()
-    ) -> Quantity[Decimal]:
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = tuple()
+    ) -> DecimalQuantity:
         """The destination concentration added to the mix by the action.
 
         Raises
@@ -109,8 +109,8 @@ class AbstractAction(ABC):
         raise ValueError("Single destination concentration not defined.")
 
     def dest_concentrations(
-        self, mix_vol: Quantity[Decimal], actions: Sequence[AbstractAction] = tuple()
-    ) -> Sequence[Quantity[Decimal]]:
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = tuple()
+    ) -> Sequence[DecimalQuantity]:
         raise ValueError
 
     @property
@@ -121,9 +121,9 @@ class AbstractAction(ABC):
     @abstractmethod
     def each_volumes(
         self,
-        total_volume: Quantity[Decimal],
+        total_volume: DecimalQuantity,
         actions: Sequence[AbstractAction] = tuple(),
-    ) -> list[Quantity[Decimal]]:
+    ) -> list[DecimalQuantity]:
         ...
 
     @classmethod
@@ -200,7 +200,7 @@ class ActionWithComponents(AbstractAction):
             )
 
     @property
-    def source_concentrations(self) -> list[Quantity[Decimal]]:
+    def source_concentrations(self) -> list[DecimalQuantity]:
         concs = [c.concentration for c in self.components]
         return concs
 
@@ -242,7 +242,7 @@ class ActionWithComponents(AbstractAction):
         return cls(**d)
 
     def all_components(
-        self, mix_vol: Quantity[Decimal], actions: Sequence[AbstractAction] = tuple()
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = tuple()
     ) -> pd.DataFrame:
         newdf = _empty_components()
 
@@ -267,8 +267,8 @@ class ActionWithComponents(AbstractAction):
     def _compactstrs(
         self,
         tablefmt: str | TableFormat,
-        dconcs: Sequence[Quantity[Decimal]],
-        eavols: Sequence[Quantity[Decimal]],
+        dconcs: Sequence[DecimalQuantity],
+        eavols: Sequence[DecimalQuantity],
     ) -> Sequence[MixLine]:
         # locs = [(c.name,) + c.location for c in self.components]
         # names = [c.name for c in self.components]
@@ -296,18 +296,18 @@ class ActionWithComponents(AbstractAction):
         )
 
         names: list[list[str]] = []
-        source_concs: list[Quantity[Decimal]] = []
-        dest_concs: list[Quantity[Decimal]] = []
+        source_concs: list[DecimalQuantity] = []
+        dest_concs: list[DecimalQuantity] = []
         numbers: list[int] = []
-        ea_vols: list[Quantity[Decimal]] = []
-        tot_vols: list[Quantity[Decimal]] = []
+        ea_vols: list[DecimalQuantity] = []
+        tot_vols: list[DecimalQuantity] = []
         plates: list[str] = []
         wells_list: list[list[WellPos]] = []
 
         for plate, plate_comps in locdf.groupby("plate"):  # type: str, pd.DataFrame
             for vol, plate_vol_comps in plate_comps.groupby(
                 "ea_vols"
-            ):  # type: Quantity[Decimal], pd.DataFrame
+            ):  # type: DecimalQuantity, pd.DataFrame
                 if pd.isna(plate_vol_comps["well"].iloc[0]):
                     if not pd.isna(plate_vol_comps["well"]).all():
                         raise ValueError
@@ -410,7 +410,7 @@ class FixedVolume(ActionWithComponents):
     | c1, c2, c3 | 200.00 nM | 66.67 nM  |   3 | 5.00 µl     | 15.00 µl     |       |        |
     """
 
-    fixed_volume: Quantity[Decimal] = attrs.field(
+    fixed_volume: DecimalQuantity = attrs.field(
         converter=_parse_vol_required, on_setattr=attrs.setters.convert
     )
     set_name: str | None = None
@@ -431,9 +431,9 @@ class FixedVolume(ActionWithComponents):
 
     def dest_concentrations(
         self,
-        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        mix_vol: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
-    ) -> list[Quantity[Decimal]]:
+    ) -> list[DecimalQuantity]:
         return [
             x * y
             for x, y in zip(
@@ -443,10 +443,10 @@ class FixedVolume(ActionWithComponents):
 
     def each_volumes(
         self,
-        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        mix_vol: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
-    ) -> list[Quantity[Decimal]]:
-        return [self.fixed_volume.to(uL)] * len(self.components)
+    ) -> list[DecimalQuantity]:
+        return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(self.components)
 
     @property
     def name(self) -> str:
@@ -458,7 +458,7 @@ class FixedVolume(ActionWithComponents):
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
-        mix_vol: Quantity[Decimal],
+        mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[MixLine]:
         dconcs = self.dest_concentrations(mix_vol)
@@ -551,7 +551,7 @@ class EqualConcentration(FixedVolume):
     def __init__(
         self,
         components: Sequence[AbstractComponent | str] | AbstractComponent | str,
-        fixed_volume: str | Quantity[Decimal],
+        fixed_volume: str | DecimalQuantity,
         set_name: str | None = None,
         compact_display: bool = True,
         method: Literal["max_volume", "min_volume", "check"]
@@ -577,7 +577,7 @@ class EqualConcentration(FixedVolume):
     ] = "min_volume"
 
     @property
-    def source_concentrations(self) -> List[Quantity[Decimal]]:
+    def source_concentrations(self) -> List[DecimalQuantity]:
         concs = super().source_concentrations
         if any(x != concs[0] for x in concs) and (self.method == "check"):
             raise ValueError("Not all components have equal concentration.")
@@ -585,9 +585,9 @@ class EqualConcentration(FixedVolume):
 
     def each_volumes(
         self,
-        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        mix_vol: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
-    ) -> list[Quantity[Decimal]]:
+    ) -> list[DecimalQuantity]:
         # match self.equal_conc:
         if self.method == "min_volume":
             sc = self.source_concentrations
@@ -603,14 +603,14 @@ class EqualConcentration(FixedVolume):
             sc = self.source_concentrations
             if any(x != sc[0] for x in sc):
                 raise ValueError("Concentrations")
-            return [self.fixed_volume.to(uL)] * len(self.components)
+            return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(self.components)
         raise ValueError(f"equal_conc={repr(self.method)} not understood")
 
     def tx_volume(
         self,
-        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        mix_vol: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
-    ) -> Quantity[Decimal]:
+    ) -> DecimalQuantity:
         if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
             return self.fixed_volume * len(self.components)
         return sum(self.each_volumes(mix_vol), ureg("0.0 uL"))
@@ -618,7 +618,7 @@ class EqualConcentration(FixedVolume):
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
-        mix_vol: Quantity[Decimal],
+        mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[MixLine]:
         ml = super()._mixlines(tablefmt, mix_vol)
@@ -683,12 +683,12 @@ class FixedConcentration(ActionWithComponents):
     | *Total:*   |           | 40.00 nM  |     |             | 25.00 µl     |       |        |
     """
 
-    fixed_concentration: Quantity[Decimal] = attrs.field(
+    fixed_concentration: DecimalQuantity = attrs.field(
         converter=_parse_conc_required, on_setattr=attrs.setters.convert
     )
     set_name: str | None = None
     compact_display: bool = True
-    min_volume: Quantity[Decimal] = attrs.field(
+    min_volume: DecimalQuantity = attrs.field(
         converter=_parse_vol_optional_none_zero,
         default=ZERO_VOL,
         on_setattr=attrs.setters.convert,
@@ -696,16 +696,16 @@ class FixedConcentration(ActionWithComponents):
 
     def dest_concentrations(
         self,
-        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        mix_vol: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
-    ) -> list[Quantity[Decimal]]:
+    ) -> list[DecimalQuantity]:
         return [self.fixed_concentration] * len(self.components)
 
     def each_volumes(
         self,
-        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        mix_vol: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
-    ) -> list[Quantity[Decimal]]:
+    ) -> list[DecimalQuantity]:
         ea_vols = [
             mix_vol * r
             for r in _ratio(self.fixed_concentration, self.source_concentrations)
@@ -727,7 +727,7 @@ class FixedConcentration(ActionWithComponents):
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
-        mix_vol: Quantity[Decimal],
+        mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[MixLine]:
         dconcs = self.dest_concentrations(mix_vol)
@@ -772,18 +772,18 @@ class ToConcentration(ActionWithComponents):
     takes into account other contents of the mix, and only adds enough to reach a particular final
     concentration."""
 
-    fixed_concentration: Quantity[Decimal] = attrs.field(
+    fixed_concentration: DecimalQuantity = attrs.field(
         converter=_parse_conc_required, on_setattr=attrs.setters.convert
     )
     compact_display: bool = True
-    min_volume: Quantity[Decimal] = attrs.field(
+    min_volume: DecimalQuantity = attrs.field(
         converter=_parse_vol_optional,
         default=Q_(DNAN, uL),
         on_setattr=attrs.setters.convert,
     )
 
     def _othercomps(
-        self, mix_vol: Quantity[Decimal], actions: Sequence[AbstractAction] = tuple()
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = tuple()
     ):
         cps = _empty_components()
 
@@ -820,10 +820,10 @@ class ToConcentration(ActionWithComponents):
 
     def dest_concentrations(
         self,
-        mix_vol: Quantity[Decimal],
+        mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = tuple(),
         _othercomps: pd.DataFrame | None = None,
-    ) -> Sequence[Quantity[Decimal]]:
+    ) -> Sequence[DecimalQuantity]:
         if _othercomps is None and actions:
             _othercomps = self._othercomps(mix_vol, actions)
         if _othercomps is not None:
@@ -839,10 +839,10 @@ class ToConcentration(ActionWithComponents):
 
     def each_volumes(
         self,
-        mix_vol: Quantity[Decimal] = Q_(DNAN, uL),
+        mix_vol: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
         _othercomps: pd.DataFrame | None = None,
-    ) -> list[Quantity[Decimal]]:
+    ) -> list[DecimalQuantity]:
         ea_vols = [
             mix_vol * r
             for r in _ratio(
@@ -867,7 +867,7 @@ class ToConcentration(ActionWithComponents):
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
-        mix_vol: Quantity[Decimal],
+        mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[MixLine]:
         othercomps = self._othercomps(mix_vol, actions)

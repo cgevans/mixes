@@ -113,9 +113,9 @@ class AbstractComponent(ABC):
 
     def _update_volumes(
         self,
-        consumed_volumes: Dict[str, Quantity[Decimal]] = {},
-        made_volumes: Dict[str, Quantity[Decimal]] = {},
-    ) -> Tuple[Dict[str, Quantity[Decimal]], Dict[str, Quantity[Decimal]]]:
+        consumed_volumes: Dict[str, DecimalQuantity] = {},
+        made_volumes: Dict[str, DecimalQuantity] = {},
+    ) -> Tuple[Dict[str, DecimalQuantity], Dict[str, DecimalQuantity]]:
         """
         Given a
         """

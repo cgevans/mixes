@@ -167,7 +167,7 @@ _NL: dict[Union[str, TableFormat], str] = {
 
 
 def _formatter(
-    x: int | float | str | list[str] | Quantity[Decimal] | None,
+    x: int | float | str | list[str] | DecimalQuantity | None,
     italic: bool = False,
     tablefmt: str | TableFormat = "pipe",
     splits: list = [],
@@ -247,11 +247,11 @@ class MixLine:
     """
 
     names: list[str] = attrs.field(factory=list)
-    source_conc: Quantity[Decimal] | str | None = None
-    dest_conc: Quantity[Decimal] | str | None = None
-    total_tx_vol: Quantity[Decimal] = NAN_VOL
+    source_conc: DecimalQuantity | str | None = None
+    dest_conc: DecimalQuantity | str | None = None
+    total_tx_vol: DecimalQuantity = NAN_VOL
     number: int = 1
-    each_tx_vol: Quantity[Decimal] = NAN_VOL  # | str | None = None
+    each_tx_vol: DecimalQuantity = NAN_VOL  # | str | None = None
     plate: str = ""
     wells: list[WellPos] = attrs.field(factory=list)
     note: str | None = None

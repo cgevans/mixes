@@ -20,7 +20,7 @@ from typing import (
 import attrs
 
 from .dictstructure import _structure, _unstructure
-from .units import DNAN, Q_, ZERO_VOL, Decimal, uL, Quantity
+from .units import DNAN, Q_, ZERO_VOL, Decimal, uL, Quantity, DecimalQuantity
 from .mixes import Mix
 from .mixes import VolumeError
 
@@ -102,10 +102,10 @@ class Experiment:
         name: str = "",
         test_tube_name: str | None = None,
         *,
-        fixed_total_volume: Quantity[Decimal] | str = Q_(DNAN, uL),
-        fixed_concentration: str | Quantity[Decimal] | None = None,
+        fixed_total_volume: DecimalQuantity | str = Q_(DNAN, uL),
+        fixed_concentration: str | DecimalQuantity | None = None,
         buffer_name: str = "Buffer",
-        min_volume: Quantity[Decimal] | str = Q_("0.5", uL),
+        min_volume: DecimalQuantity | str = Q_("0.5", uL),
         check_volumes: bool | None = None,
         apply_reference: bool = True,
         check_existing: bool | Literal["equal"] = "equal",
@@ -199,9 +199,9 @@ class Experiment:
 
     def consumed_and_produced_volumes(
         self,
-    ) -> Mapping[str, Tuple[Quantity[Decimal], Quantity[Decimal]]]:
-        consumed_volume: Dict[str, Quantity[Decimal]] = {}
-        produced_volume: Dict[str, Quantity[Decimal]] = {}
+    ) -> Mapping[str, Tuple[DecimalQuantity, DecimalQuantity]]:
+        consumed_volume: Dict[str, DecimalQuantity] = {}
+        produced_volume: Dict[str, DecimalQuantity] = {}
         for component in self.components.values():
             component._update_volumes(consumed_volume, produced_volume)
         return {
