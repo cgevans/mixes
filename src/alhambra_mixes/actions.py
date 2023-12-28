@@ -19,7 +19,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from .references import Reference
     from .experiments import Experiment
     from attrs import Attribute
-
+import polars as pl
 from .units import *
 from .units import (
     VolumeError,
@@ -69,7 +69,7 @@ class AbstractAction(ABC):
     @abstractmethod
     def all_components(
         self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = tuple()
-    ) -> pd.DataFrame:  # pragma: no cover
+    ) -> pl.DataFrame:  # pragma: no cover
         """A dataframe containing all base components added by the action.
 
         Parameters
@@ -243,7 +243,7 @@ class ActionWithComponents(AbstractAction):
 
     def all_components(
         self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = tuple()
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         newdf = _empty_components()
 
         for comp, dc, sc in zip(
@@ -252,15 +252,21 @@ class ActionWithComponents(AbstractAction):
             self.source_concentrations,
         ):
             comps = comp.all_components()
-            comps.concentration_nM *= _ratio(dc, sc)
+            comps = comps.with_columns(concentration=(pl.col("concentration")*float(_ratio(dc, sc))).cast(pl.Int64)) # FIXME
 
-            newdf, _ = newdf.align(comps)
+            newdf.vstack(comps, in_place=True)
 
-            # FIXME: add checks
-            newdf.loc[comps.index, "concentration_nM"] = newdf.loc[
-                comps.index, "concentration_nM"
-            ].add(comps.concentration_nM, fill_value=Decimal("0.0"))
-            newdf.loc[comps.index, "component"] = comps.component
+        newdf = newdf.group_by("name").agg(
+            pl.sum("concentration"),
+            pl.first("concentration_unit"),
+            pl.first("component"), # FIXME
+            num_conc_units = pl.col("concentration_unit").unique(),
+        )
+
+        if (newdf.get_column("num_conc_units").list.len() > 1).any():
+            raise ValueError("Multiple concentration units in mix.")
+        
+        newdf.drop_in_place("num_conc_units")
 
         return newdf
 
@@ -785,7 +791,7 @@ class ToConcentration(ActionWithComponents):
     def _othercomps(
         self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = tuple()
     ):
-        cps = _empty_components()
+        newdf = _empty_components()
 
         mixcomps = [comp.name for comp in self.components if comp.is_mix]
 
@@ -799,7 +805,7 @@ class ToConcentration(ActionWithComponents):
                 # This action.
                 continue
             elif not any(
-                x in self.components for x in action.all_components(mix_vol).component
+                x in self.components for x in action.all_components(mix_vol).get_column("component").to_list() # FIXME: name?
             ):
                 # Action has no shared components, so doesn't matter.
                 continue
@@ -811,28 +817,43 @@ class ToConcentration(ActionWithComponents):
                     action,
                 )
             mcomp = action.all_components(mix_vol)
-            cps, _ = cps.align(mcomp)
-            cps.loc[:, "concentration_nM"].fillna(Decimal("0.0"), inplace=True)
-            cps.loc[mcomp.index, "concentration_nM"] += mcomp.concentration_nM
-            cps.loc[mcomp.index, "component"] = mcomp.component
+            newdf.vstack(mcomp, in_place=True)
 
-        return cps
+        newdf = newdf.group_by("name").agg(
+            pl.sum("concentration"),
+            pl.first("concentration_unit"),
+            pl.first("component"), # FIXME
+            num_conc_units = pl.col("concentration_unit").unique(),
+        )
+
+        if (newdf.get_column("num_conc_units").list.len() > 1).any():
+            raise ValueError("Multiple concentration units in mix.")
+        
+        newdf.drop_in_place("num_conc_units")
+
+
+        return newdf
 
     def dest_concentrations(
         self,
         mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = tuple(),
-        _othercomps: pd.DataFrame | None = None,
+        _othercomps: pl.DataFrame | None = None,
     ) -> Sequence[DecimalQuantity]:
         if _othercomps is None and actions:
             _othercomps = self._othercomps(mix_vol, actions)
         if _othercomps is not None:
-            otherconcs = [
-                Q_(_othercomps.loc[comp.name, "concentration_nM"], nM)
-                if comp.name in _othercomps.index
-                else Q_("0.0", nM)
-                for comp in self.components
-            ]
+            otherconcs = []
+            for comp in self.components:
+                v = _othercomps.filter(name=comp.name)
+                if len(v) == 0:
+                    otherconcs.append(Q_("0.0", nM))
+                elif len(v) == 1:
+                    otherconcs.append(Q_(v["concentration"][0], v["concentration_unit"][0]))
+                else:
+                    raise ValueError(
+                        f"Multiple concentrations for component {comp.name} in other components: {v}."
+                    )
         else:
             otherconcs = [Q_("0.0", nM) for _ in self.components]
         return [self.fixed_concentration - other for other in otherconcs]

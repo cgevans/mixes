@@ -24,7 +24,7 @@ import attrs
 import pandas as pd
 import pint
 from tabulate import TableFormat, tabulate
-
+import polars as pl
 from .actions import AbstractAction  # Fixme: should not need special cases
 from .actions import FixedConcentration, FixedVolume
 from .components import AbstractComponent, Component, Strand, _empty_components
@@ -227,8 +227,9 @@ class Mix(AbstractComponent):
             return self.fixed_concentration
         elif isinstance(self.fixed_concentration, str):
             ac = self.all_components()
+            v = ac.filter(name=self.fixed_concentration) # FIXME
             return ureg.Quantity(
-                Decimal(ac.loc[self.fixed_concentration, "concentration_nM"]), nM
+                Decimal(v.get_column("concentration")[0]), v.get_column("concentration_unit")[0]
             )
         elif self.fixed_concentration is None:
             return self.actions[0].dest_concentrations(self.total_volume, self.actions)[
@@ -471,19 +472,29 @@ class Mix(AbstractComponent):
 
         return error_list
 
-    def all_components(self) -> pd.DataFrame:
+    def all_components(self) -> pl.DataFrame:
         """
         Return a Series of all component names, and their concentrations (as pint nM).
         """
-        cps = _empty_components()
+        newdf = _empty_components()
 
         for action in self.actions:
             mcomp = action.all_components(self.total_volume, self.actions)
-            cps, _ = cps.align(mcomp)
-            cps.loc[:, "concentration_nM"].fillna(Decimal("0.0"), inplace=True)
-            cps.loc[mcomp.index, "concentration_nM"] += mcomp.concentration_nM
-            cps.loc[mcomp.index, "component"] = mcomp.component
-        return cps
+            newdf.vstack(mcomp, in_place=True)
+
+        newdf = newdf.group_by("name").agg(
+            pl.sum("concentration"),
+            pl.first("concentration_unit"),
+            pl.first("component"), # FIXME
+            num_conc_units = pl.col("concentration_unit").unique(),
+        )
+
+        if (newdf.get_column("num_conc_units").list.len() > 1).any():
+            raise ValueError("Multiple concentration units in mix.")
+        
+        newdf.drop_in_place("num_conc_units")
+
+        return newdf
 
     def _repr_markdown_(self) -> str:
         return f"Table: {self.infoline()}\n" + self.table(tablefmt="pipe")

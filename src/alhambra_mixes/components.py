@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Dict, Sequence, Tuple, TypeVar, cast
 from typing_extensions import Self
 
 import attrs
-import pandas as pd
+import polars as pl
 
 from .locations import WellPos, _parse_wellpos_optional
 from .logging import log
@@ -81,7 +81,7 @@ class AbstractComponent(ABC):
         ...
 
     @abstractmethod
-    def all_components(self) -> pd.DataFrame:  # pragma: no cover
+    def all_components(self) -> pl.DataFrame:  # pragma: no cover
         "A dataframe of all components."
         ...
 
@@ -174,14 +174,15 @@ class Component(AbstractComponent):
     def location(self) -> tuple[str, WellPos | None]:
         return (self.plate, self.well)
 
-    def all_components(self) -> pd.DataFrame:
-        df = pd.DataFrame(
+    def all_components(self) -> pl.DataFrame:
+        df = pl.DataFrame(
             {
-                "concentration_nM": [self.concentration.to(nM).magnitude],
+                "name": [self.name],
+                "concentration": [int(self.concentration.to("fM").magnitude)],
+                "concentration_unit": ["fM"],
                 "component": [self],
-            },
-            index=pd.Index([self.name], name="name"),
-        )
+            }
+            )
         return df
 
     def _unstructure(self, experiment: "Experiment" | None = None) -> dict[str, Any]:
@@ -382,12 +383,13 @@ def _maybesequence_comps(
     return [object_or_sequence]
 
 
-def _empty_components() -> pd.DataFrame:
-    cps = pd.DataFrame(
-        index=pd.Index([], name="name"),
-    )
-    cps["concentration_nM"] = pd.Series([], dtype=object)
-    cps["component"] = pd.Series([], dtype=object)
+def _empty_components() -> pl.DataFrame:
+    cps = pl.DataFrame({ 
+        "name": [],
+        "concentration": [],
+        "concentration_unit": [],
+        "component": []
+    }, schema={"name": str, "concentration": int, "concentration_unit": str, "component": object})
     return cps
 
 
