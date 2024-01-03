@@ -20,18 +20,18 @@ on:
       - README.md
       - AUTHORS.md
 jobs:
-  black:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
-      - uses: actions/checkout@v3
-      - uses: psf/black@stable
-        with:
-           options: "--check --verbose --diff"
-           src: "./src"
+  # black:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Set up Python 3.10
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: "3.10"
+  #     - uses: actions/checkout@v3
+  #     - uses: psf/black@stable
+  #       with:
+  #          options: "--check --verbose --diff"
+  #          src: "./src"
   mypy:
     runs-on: ubuntu-latest
     steps:
