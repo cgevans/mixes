@@ -1,7 +1,7 @@
 [![Documentation Status](https://readthedocs.org/projects/alhambra-mixes/badge/?version=latest)](https://alhambra-mixes.readthedocs.io/en/latest/?badge=latest)
 [![Codecov](https://img.shields.io/codecov/c/github/cgevans/mixes)](https://pypi.org/project/alhambra-mixes/)
 [![GitHub Workflow
-Status](https://img.shields.io/github/workflow/status/cgevans/mixes/Python%20tests)]((https://pypi.org/project/alhambra-mixes/))
+Status](https://img.shields.io/github/workflow/status/cgevans/mixes/python-package.yml?branch=main)](https://github.com/cgevans/mixes/actions/workflows/python-package.yml)
 [![PyPI](https://img.shields.io/pypi/v/alhambra-mixes)](https://pypi.org/project/alhambra-mixes/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/alhambra-mixes)](https://pypi.org/project/alhambra-mixes/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6861213.svg)](https://doi.org/10.5281/zenodo.6861213)
