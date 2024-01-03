@@ -31,3 +31,14 @@ components at different concentrations spread across several plates.
 [docsstable]: https://alhambra-mixes.readthedocs.io/en/stable
 [docslatest]: https://alhambra-mixes.readthedocs.io/en/latest
 [tutorial]: https://github.com/cgevans/mixes/blob/main/tutorial.ipynb
+
+# Changelog
+
+## v0.5.0
+
+An interim version release while larger changes are being made, so that users can make use of several important new features, and the pypi-available version fits well with the latest documentation.
+
+- Adds an `Experiment` class that can hold mixes and components, and keep track of volumes, etc.
+- Adds volume/consumption tracking.
+- Adds master/split mix functions.
+- Fixes numerous minor bugs.
