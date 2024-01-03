@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import cast, Optional
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pint.testing
 import pytest
 
@@ -406,9 +406,9 @@ def test_toconcentration():
 
     ac = mix.all_components()
 
-    assert ac.filter(name="A").get_column("concentration")[0] == 150_000_000
-    assert ac.filter(name="B").get_column("concentration")[0] == 140_000_000
-    assert ac.filter(name="C").get_column("concentration")[0] == 140_000_000
+    assert ac.row(by_predicate=pl.col("name")=="A", named=True)["concentration"] == 150_000_000
+    assert ac.row(by_predicate=pl.col("name")=="B", named=True)["concentration"] == 140_000_000
+    assert ac.row(by_predicate=pl.col("name")=="C", named=True)["concentration"] == 140_000_000
 
     ml = mix.mixlines("pipe")
 
