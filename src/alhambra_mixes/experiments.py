@@ -10,17 +10,15 @@ from typing import (
     Iterator,
     Mapping,
     Sequence,
-    Set,
     TextIO,
     Tuple,
-    cast,
     Literal,
 )
 
 import attrs
 
-from .dictstructure import _structure, _unstructure
-from .units import DNAN, Q_, ZERO_VOL, Decimal, uL, Quantity, DecimalQuantity
+from .dictstructure import _structure
+from .units import DNAN, Q_, uL, DecimalQuantity
 from .mixes import Mix
 from .mixes import VolumeError
 

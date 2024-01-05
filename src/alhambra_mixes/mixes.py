@@ -3,6 +3,7 @@ A module for handling mixes.
 """
 
 from __future__ import annotations
+from decimal import Decimal
 
 import warnings
 from math import isnan
@@ -27,7 +28,7 @@ from tabulate import TableFormat, tabulate
 import polars as pl
 from .actions import AbstractAction  # Fixme: should not need special cases
 from .actions import FixedConcentration, FixedVolume
-from .components import AbstractComponent, Component, Strand, _empty_components
+from .components import AbstractComponent, Component, _empty_components
 from .dictstructure import _STRUCTURE_CLASSES, _structure, _unstructure
 from .locations import PlateType, WellPos
 from .logging import log
@@ -39,7 +40,6 @@ from .printing import (
     _format_errors,
     _format_title,
     emphasize,
-    html_with_borders_tablefmt,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -47,8 +47,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from .experiments import Experiment
     from attrs import Attribute
 
-from .units import *
-from .units import VolumeError, _parse_vol_optional, normalize
+from .units import VolumeError, _parse_vol_optional, normalize, ureg, Q_, ZERO_VOL, DecimalQuantity, uL, DNAN
 
 warnings.filterwarnings(
     "ignore",
@@ -184,7 +183,7 @@ class Mix(AbstractComponent):
             a = cast("Attribute", a)
             v1 = getattr(self, a.name)
             v2 = getattr(other, a.name)
-            if isinstance(v1, Quantity):
+            if isinstance(v1, DecimalQuantity):
                 if isnan(v1.m) and isnan(v2.m) and (v1.units == v2.units):
                     continue
             if v1 != v2:
@@ -198,11 +197,11 @@ class Mix(AbstractComponent):
             ]
         if self.actions is None:
             raise ValueError(
-                f"Mix.actions must contain at least one action, but it was not specified"
+                "Mix.actions must contain at least one action, but it was not specified"
             )
         elif len(self.actions) == 0:
             raise ValueError(
-                f"Mix.actions must contain at least one action, but it is empty"
+                "Mix.actions must contain at least one action, but it is empty"
             )
 
     def printed_name(self, tablefmt: str | TableFormat) -> str:
@@ -236,7 +235,7 @@ class Mix(AbstractComponent):
                 0
             ]
         else:
-            raise NotImplemented
+            raise NotImplementedError
 
     @property
     def total_volume(self) -> DecimalQuantity:
@@ -260,7 +259,7 @@ class Mix(AbstractComponent):
             )
 
     @property
-    def buffer_volume(self) -> Quantity:
+    def buffer_volume(self) -> DecimalQuantity:
         """
         The volume of buffer to be added to the mix, in addition to the components.
         """
@@ -933,9 +932,9 @@ class Mix(AbstractComponent):
 
     def _update_volumes(
         self,
-        consumed_volumes: Dict[str, Quantity] = {},
-        made_volumes: Dict[str, Quantity] = {},
-    ) -> Tuple[Dict[str, Quantity], Dict[str, Quantity]]:
+        consumed_volumes: Dict[str, DecimalQuantity] = {},
+        made_volumes: Dict[str, DecimalQuantity] = {},
+    ) -> Tuple[Dict[str, DecimalQuantity], Dict[str, DecimalQuantity]]:
         """
         Given a
         """
@@ -979,7 +978,7 @@ class Mix(AbstractComponent):
                 if val == a.default:
                     continue
                 # FIXME: nan quantities are always default, and pint handles them poorly
-                if isinstance(val, Quantity) and isnan(val.m):
+                if isinstance(val, DecimalQuantity) and isnan(val.m):
                     continue
                 d[a.name] = _unstructure(val)
         return d

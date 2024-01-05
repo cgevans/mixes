@@ -270,11 +270,11 @@ def _parse_wellpos_optional(v: str | WellPos | None) -> WellPos | None:
     try:
         if v.isnan():  # type: ignore
             return None
-    except:
+    except TypeError:
         pass
     try:
         if isnan(v):  # type: ignore
             return None
-    except:
+    except TypeError:
         pass
     raise ValueError(f"Can't interpret {v} as well position or None.")

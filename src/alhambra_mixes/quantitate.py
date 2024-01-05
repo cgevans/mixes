@@ -45,13 +45,13 @@ import decimal
 import warnings
 from decimal import Decimal as D
 from .units import DecimalQuantity, nmol
-from typing import Any, Iterable, Sequence, Type, Union, cast
+from typing import Any, Iterable, Sequence, Union, cast
 
 import pandas
 import pint
 from pint import Quantity
 
-from .units import DNAN, Q_, _parse_vol_optional, nM, uL, uM, ureg, normalize
+from .units import DNAN, Q_, _parse_vol_optional, uL, uM, ureg, normalize
 
 
 def parse_vol(vol: Union[float, int, str, DecimalQuantity]) -> DecimalQuantity:
@@ -211,7 +211,7 @@ def measure_conc(
         ave_absorbance = absorbance
     elif _has_length(absorbance):
         if len(absorbance) == 0:
-            raise ValueError(f"absorbance cannot be an empty sequence")
+            raise ValueError("absorbance cannot be an empty sequence")
         if not isinstance(absorbance[0], (int, float)):
             raise TypeError(
                 f"absorbance sequence must contain ints or floats, "
@@ -725,11 +725,11 @@ def hydrate_from_specs(
 
     names_list = [names_series[row] for row in rows]
 
-    for nmol, name in zip(nmols, names_list):
-        if isinstance(nmol, str) and "RNase-Free Water" in nmol:
+    for nmol_entry, name in zip(nmols, names_list):
+        if isinstance(nmol_entry, str) and "RNase-Free Water" in nmol_entry:
             raise ValueError(
                 f"cannot hydrate strand {name}: according to IDT, it is already hydrated.\n"
-                f'Here is its "nmoles" entry in the file {filename}: "{nmol}"'
+                f'Here is its "nmoles" entry in the file {filename}: "{nmol_entry}"'
             )
 
     vols = [hydrate(target_conc, nmol) for nmol in nmols]

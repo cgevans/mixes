@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from math import isnan
-from typing import Any, Iterable, Literal, Sequence, Union, cast
+from typing import Any, Iterable, Sequence, Union, cast
+from functools import partial
 
 import attrs
 import numpy as np
@@ -9,7 +10,7 @@ import pandas as pd
 from tabulate import Line, TableFormat, tabulate
 
 from .locations import WellPos, mixgaps
-from .units import *
+from .units import DecimalQuantity, NAN_VOL, ureg
 from .units import VolumeError
 
 
@@ -50,8 +51,6 @@ def _format_error_span(out, tablefmt):
     else:
         return f"**{out}**"
 
-
-from functools import partial
 
 cell_with_border_css_class = "cell-with-border"
 

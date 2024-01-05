@@ -3,7 +3,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from math import isnan
 from typing import TYPE_CHECKING, Any, Dict, Sequence, Tuple, TypeVar, cast
-from typing_extensions import Self
 
 import attrs
 import polars as pl
@@ -14,8 +13,6 @@ from .printing import TableFormat
 from .units import (
     Q_,
     ZERO_VOL,
-    Decimal,
-    Quantity,
     _parse_conc_optional,
     _parse_vol_optional,
     nM,

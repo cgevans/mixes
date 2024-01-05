@@ -3,12 +3,12 @@ from __future__ import annotations
 from math import isnan
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Sequence, TextIO, cast
+from typing import TYPE_CHECKING, Any, Sequence, TextIO, cast
 
 import attrs
 from typing_extensions import TypeAlias
 
-from .components import Component, Strand
+from .components import Strand
 from .locations import PlateType, WellPos, _parse_wellpos_optional
 from .mixes import PlateMap
 from .units import (
@@ -17,15 +17,12 @@ from .units import (
     Decimal,
     _parse_conc_optional,
     _parse_conc_required,
-    Quantity,
-    PlainQuantity,
     DecimalQuantity,
     nM,
     ureg,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .mixes import PlateMap
     from pandas.core.indexing import _LocIndexer
 
 import numpy as np

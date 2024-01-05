@@ -3,11 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .locations import WellPos
-from .units import ureg, Quantity
+from .units import ureg
 
 if TYPE_CHECKING:  # pragma: no cover
-    from attrs import Attribute
-
     from .experiments import Experiment
 
 __all__ = (
