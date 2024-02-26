@@ -28,6 +28,8 @@ if TYPE_CHECKING:  # pragma: no cover
     from alhambra_mixes.actions import AbstractAction
     from .components import AbstractComponent
     from .references import Reference
+    
+from kithairon.picklists import PickList
 
 
 def _exp_attr_set_reference(
@@ -57,6 +59,15 @@ class Experiment:
     reference: Reference | None = attrs.field(
         default=None, on_setattr=_exp_attr_set_reference
     )
+
+    def generate_picklist(self) -> PickList:
+        pls: list[PickList] = []
+        for c in self.components.values():
+            if hasattr(c, "generate_picklist"):
+                p = c.generate_picklist(self)
+                if p is not None:
+                    pls.append(p)
+        return PickList.concat(pls)
 
     def add(
         self,

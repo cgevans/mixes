@@ -50,6 +50,8 @@ if TYPE_CHECKING:  # pragma: no cover
 from .units import *
 from .units import VolumeError, _parse_vol_optional, normalize
 
+from kithairon.picklists import PickList
+
 warnings.filterwarnings(
     "ignore",
     "The unit of the quantity is " "stripped when downcasting to ndarray",
@@ -172,6 +174,8 @@ class Mix(AbstractComponent):
         kw_only=True,
         on_setattr=attrs.setters.convert,
     )
+    plate: str = ""
+    well: WellPos | None = None
 
     @property
     def is_mix(self) -> bool:
@@ -656,6 +660,22 @@ class Mix(AbstractComponent):
             include_plate_maps=include_plate_maps,
         )
         display(HTML(ins_str))
+
+    def generate_picklist(self, experiment: Experiment | None) -> PickList | None:
+        """
+        :param experiment:
+            experiment to use for generating picklist
+        :return:
+            picklist for the mix
+        """
+        pls: list[PickList] = []
+        for action in self.actions:
+            if hasattr(action, "to_picklist"):
+                pls.append(action.to_picklist(self, experiment))
+        if len(pls) > 0:
+            return PickList.concat(pls)
+        else:
+            return None
 
     def instructions(
         self,
