@@ -23,60 +23,6 @@ from typing import Any, Literal
 from kithairon.picklists import PickList
 
 
-class AbstractLocationType(metaclass=ABCMeta):
-    __slots__ = ()
-    @property
-    @abstractmethod
-    def name(self):
-        ...
-    
-    @property
-    @abstractmethod
-    def is_echo_source_compatible(self) -> bool:
-        return False
-    
-class LocationType(AbstractLocationType):
-    __slots__ = ("name", "loc_type", "is_echo_source_compatible")
-    name: str
-    loc_type: Literal["plate96", "plate384", "tube"]
-    is_echo_source_compatible: bool
-    
-    def __init__(self, name: str, loc_type: Literal["plate96", "plate384", "tube"], is_echo_source_compatible: bool = False):
-        self.name = name
-        self.loc_type = loc_type
-        self.is_echo_source_compatible = is_echo_source_compatible
-        
-    def __str__(self):
-        return self.name
-    
-    def __repr__(self):
-        return f"LocationType({self.name}, {self.loc_type}, {self.is_echo_source_compatible})"
-    
-    def __eq__(self, other):
-        return self.name == other.name and self.loc_type == other.loc_type and self.is_echo_source_compatible == other.is_echo_source_compatible
-    
-    def __hash__(self):
-        return hash((self.name, self.loc_type, self.is_echo_source_compatible))
-    
-LOCATION_TYPE_MAP = {
-    '384PP_AQ_BP': LocationType('384PP_AQ_BP', 'plate384', True),
-}    
-
-def _location_type_converter(value: AbstractLocationType | str) -> AbstractLocationType:
-    if isinstance(value, AbstractLocationType):
-        return value
-    elif isinstance(value, str):
-        return LOCATION_TYPE_MAP[value]
-    else:
-        raise ValueError(f"Invalid location type: {value}")
-    
-@attrs.define()
-class LocationInfo:
-    name: str
-    location_type: AbstractLocationType = attrs.field(converter=_location_type_converter)
-    full_location: tuple[str, ...] = ()
-    info: dict[str, Any] = attrs.field(factory=dict)
-
 class AbstractEchoAction(AbstractAction, metaclass=ABCMeta):
     """Abstract base class for Echo actions."""
 
@@ -110,11 +56,15 @@ class EchoFixedVolume(ActionWithComponents, AbstractEchoAction):
                 "Concentration Units": "nM",
                 "Transfer Volume": [float(v.m_as("nL")) for v in eavols],
                 "Source Plate Name": [c.plate for c in self.components],
+                "Source Plate Type": [getattr(experiment.locations.get(c.plate, None), 'echo_source_type', None) for c in self.components],
                 "Source Well": [str(c.well) for c in self.components],
                 "Destination Plate Name": mix.plate,
+                "Destination Plate Type": getattr(experiment.locations.get(mix.plate, None), 'echo_dest_type', None),
                 "Destination Well": str(mix.well),
                 "Destination Sample Name": mix.name,
-            } # , schema_overrides={"Source Concentration": pl.Decimal(scale=6), "Destination Concentration": pl.Decimal(scale=6), "Transfer Volume": pl.Decimal(scale=6)} # FIXME: when new polars is released
+            },
+            schema_overrides={"Destination Plate Type": pl.String, "Source Plate Type": pl.String}
+            # , schema_overrides={"Source Concentration": pl.Decimal(scale=6), "Destination Concentration": pl.Decimal(scale=6), "Transfer Volume": pl.Decimal(scale=6)} # FIXME: when new polars is released
         ))
         return locdf
         

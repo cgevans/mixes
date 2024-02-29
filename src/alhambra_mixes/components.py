@@ -53,8 +53,8 @@ class AbstractComponent(ABC):
         return ("", None)
 
     @property
-    def plate(self) -> str:
-        return ""
+    def plate(self) -> str | None:
+        return None
 
     @property
     def is_mix(self) -> bool:
@@ -149,13 +149,9 @@ class Component(AbstractComponent):
         on_setattr=attrs.setters.convert,
         eq=norm_nan_for_eq,
     )
-    # FIXME: this is not a great way to do this: should make code not give None
-    # Fortuitously, mypy doesn't support this converter, so problems should give type errors.
-    plate: str = attrs.field(
-        default="",
-        kw_only=True,
-        converter=_none_as_empty_string,
-        on_setattr=attrs.setters.convert,
+    plate: str | None = attrs.field(
+        default=None,
+        kw_only=True
     )
     well: WellPos | None = attrs.field(
         converter=_parse_wellpos_optional,
