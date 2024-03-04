@@ -437,7 +437,7 @@ class FixedVolume(ActionWithComponents):
         return [
             x * y
             for x, y in zip(
-                self.source_concentrations, _ratio(self.each_volumes(mix_vol), mix_vol)
+                self.source_concentrations, _ratio(self.each_volumes(mix_vol, actions), mix_vol)
             )
         ]
 
@@ -461,8 +461,8 @@ class FixedVolume(ActionWithComponents):
         mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[MixLine]:
-        dconcs = self.dest_concentrations(mix_vol)
-        eavols = self.each_volumes(mix_vol)
+        dconcs = self.dest_concentrations(mix_vol, actions)
+        eavols = self.each_volumes(mix_vol, actions)
         if not self.compact_display:
             ml = [
                 MixLine(
@@ -613,7 +613,7 @@ class EqualConcentration(FixedVolume):
     ) -> DecimalQuantity:
         if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
             return self.fixed_volume * len(self.components)
-        return sum(self.each_volumes(mix_vol), ureg("0.0 uL"))
+        return sum(self.each_volumes(mix_vol, actions), ureg("0.0 uL"))
 
     def _mixlines(
         self,
@@ -623,7 +623,7 @@ class EqualConcentration(FixedVolume):
     ) -> list[MixLine]:
         ml = super()._mixlines(tablefmt, mix_vol)
         if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
-            fv = self.fixed_volume * len(self.components) - sum(self.each_volumes())
+            fv = self.fixed_volume * len(self.components) - sum(self.each_volumes(mix_vol, actions=actions))
             if not fv == Q_("0.0", uL):
                 ml.append(MixLine([self.method[1]], None, None, fv))
         return ml
@@ -730,8 +730,8 @@ class FixedConcentration(ActionWithComponents):
         mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[MixLine]:
-        dconcs = self.dest_concentrations(mix_vol)
-        eavols = self.each_volumes(mix_vol)
+        dconcs = self.dest_concentrations(mix_vol, actions)
+        eavols = self.each_volumes(mix_vol, actions)
         if not self.compact_display:
             ml = [
                 MixLine(
