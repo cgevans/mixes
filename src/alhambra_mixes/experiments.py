@@ -189,7 +189,31 @@ class Experiment:
                 p = c.generate_picklist(self)
                 if p is not None:
                     pls.append(p)
-        return PickList.concat(pls)
+        p = PickList.concat(pls)
+        
+        import networkx as nx
+        import polars as pl
+        
+        g = p.well_transfer_multigraph()
+
+        a = list(enumerate(nx.topological_generations(g)))
+
+        topogen = sum(([x[0]] * len(x[1]) for x in a), [])
+        plate = [y[0] for x in a for y in x[1]]
+        well = [y[1] for x in a for y in x[1]]
+
+        tgl = pl.DataFrame({
+            'plate': plate,
+            'well': well,
+            'topogen': topogen
+        }).lazy()
+
+        return PickList(p.data.lazy().join(
+            tgl,
+            left_on=["Destination Plate Name", "Destination Well"],
+            right_on=["plate", "well"],
+            how="inner",
+        ).sort(by=["topogen", "Destination Plate Name", "Source Plate Name"]).drop('topogen').collect())
 
     def add(
         self,
