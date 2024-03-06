@@ -2,8 +2,8 @@ import math
 import attrs
 from tabulate import TableFormat
 from .actions import ActionWithComponents, AbstractAction
-from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING, Sequence, cast
+from abc import ABCMeta
+from typing import Sequence, cast
 import polars as pl
 
 from .printing import MixLine
@@ -11,11 +11,8 @@ from .printing import MixLine
 from .experiments import Experiment
 from .mixes import Mix
 
-
-import attrs
-from abc import ABCMeta
-
 from kithairon.picklists import PickList
+from typing import Literal
 
 
 from .units import (
@@ -88,7 +85,7 @@ class EchoFixedVolume(ActionWithComponents, AbstractEchoAction):
     fixed_volume: DecimalQuantity = attrs.field(converter=_parse_vol_required)
     set_name: str | None = None
     droplet_volume: DecimalQuantity = DEFAULT_DROPLET_VOL
-    compact_display: bool = False
+    compact_display: bool = True
 
     def _check_volume(self) -> None:
         fv = self.fixed_volume.m_as("nL")
@@ -150,42 +147,151 @@ class EchoFixedVolume(ActionWithComponents, AbstractEchoAction):
             },
         )
 
-        vs = locdf.group_by(("source_conc", "dest_conc"), maintain_order=True).agg(
-            pl.col("name"), pl.col("plate")
-        )
+        vs = locdf.group_by(
+            ("source_conc", "dest_conc", "ea_vols"), maintain_order=True
+        ).agg(pl.col("name"), pl.col("plate").unique())
 
-        if not self.compact_display:
-            ml = [
-                MixLine(
-                    q["name"],
-                    q["source_conc"],
-                    q["dest_conc"],
-                    self.fixed_volume,
-                    plate=q["plate"],
-                    wells=[],
-                    note="ECHO",
-                )
-                for q in vs.iter_rows(named=True)
-            ]
-        else:
-            ml = [
-                MixLine(
-                    f"{len(q['name'])} components",
-                    q["source_conc"],
-                    q["dest_conc"],
-                    self.fixed_volume,
-                    plate=q["plate"],
-                    wells=[],
-                    note="ECHO",
-                )
-                for q in vs.iter_rows(named=True)
-            ]
+        ml = [
+            MixLine(
+                [f"{len(q['name'])} comps: {q['name'][0]}, ..."]
+                if len(q["name"]) > 5
+                else [", ".join(q["name"])],
+                q["source_conc"],
+                q["dest_conc"],
+                len(q["name"]) * self.fixed_volume,
+                each_tx_vol=self.fixed_volume,
+                plate=", ".join(x for x in q["plate"] if x),
+                wells=[],
+                note="ECHO",
+            )
+            for q in vs.iter_rows(named=True)
+        ]
 
         return ml
 
 
 @attrs.define(eq=True)
-class EchoTargetConcentration(ActionWithComponents):
+class EchoEqualTargetConcentration(ActionWithComponents, AbstractEchoAction):
+    """Transfer a fixed volume of liquid to a target mix."""
+
+    fixed_volume: DecimalQuantity = attrs.field(converter=_parse_vol_required)
+    set_name: str | None = None
+    droplet_volume: DecimalQuantity = DEFAULT_DROPLET_VOL
+    compact_display: bool = False
+    method: Literal["max_volume", "min_volume", "check"] | tuple[
+        Literal["max_fill"], str
+    ] = "min_volume"
+
+    def _check_volume(self) -> None:
+        fv = self.fixed_volume.m_as("nL")
+        dv = self.droplet_volume.m_as("nL")
+        # ensure that fv is an integer multiple of dv
+        if fv % dv != 0:
+            raise ValueError(
+                f"Fixed volume {fv} is not an integer multiple of droplet volume {dv}."
+            )
+
+    def dest_concentrations(
+        self,
+        mix_vol: DecimalQuantity = Q_(DNAN, uL),
+        actions: Sequence[AbstractAction] = tuple(),
+    ) -> list[DecimalQuantity]:
+        return [
+            x * y
+            for x, y in zip(
+                self.source_concentrations, _ratio(self.each_volumes(mix_vol), mix_vol)
+            )
+        ]
+
+    def each_volumes(
+        self,
+        mix_vol: DecimalQuantity = Q_(DNAN, uL),
+        actions: Sequence[AbstractAction] = tuple(),
+    ) -> list[DecimalQuantity]:
+        if self.method == "min_volume":
+            sc = self.source_concentrations
+            scmax = max(sc)
+            return [
+                round((self.fixed_volume * x / self.droplet_volume).m_as(""))
+                * self.droplet_volume
+                for x in _ratio(scmax, sc)
+            ]
+        elif (self.method == "max_volume") | (
+            isinstance(self.method, Sequence) and self.method[0] == "max_fill"
+        ):
+            sc = self.source_concentrations
+            scmin = min(sc)
+            return [
+                round((self.fixed_volume * x / self.droplet_volume).m_as(""))
+                * self.droplet_volume
+                for x in _ratio(scmin, sc)
+            ]
+        elif self.method == "check":
+            sc = self.source_concentrations
+            if any(x != sc[0] for x in sc):
+                raise ValueError("Concentrations")
+            return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(
+                self.components
+            )
+        raise ValueError(f"equal_conc={repr(self.method)} not understood")
+
+    @property
+    def name(self) -> str:
+        if self.set_name is None:
+            return super().name
+        else:
+            return self.set_name
+
+    def _mixlines(
+        self,
+        tablefmt: str | TableFormat,
+        mix_vol: DecimalQuantity,
+        actions: Sequence[AbstractAction] = tuple(),
+    ) -> list[MixLine]:
+        dconcs = self.dest_concentrations(mix_vol, actions)
+        eavols = self.each_volumes(mix_vol, actions)
+
+        locdf = pl.DataFrame(
+            {
+                "name": [c.printed_name(tablefmt=tablefmt) for c in self.components],
+                "source_conc": list(self.source_concentrations),
+                "dest_conc": list(dconcs),
+                "ea_vols": list(eavols),
+                "plate": [c.plate for c in self.components],
+                "well": [c.well for c in self.components],
+            },
+            schema_overrides={
+                "source_conc": pl.Object,
+                "dest_conc": pl.Object,
+                "ea_vols": pl.Object,
+            },
+        )
+
+        vs = locdf.group_by(
+            ("source_conc", "dest_conc", "ea_vols"), maintain_order=True
+        ).agg(pl.col("name"), pl.col("plate").unique())
+
+        ml = [
+            MixLine(
+                [f"{len(q['name'])} comps: {q['name'][0]}, ..."]
+                if len(q["name"]) > 5
+                else [", ".join(q["name"])],
+                q["source_conc"],
+                q["dest_conc"],
+                len(q["name"]) * q["ea_vols"],
+                each_tx_vol=q["ea_vols"],
+                plate=", ".join(x for x in q["plate"] if x),
+                wells=[],
+                note="ECHO",
+            )
+            for q in vs.iter_rows(named=True)
+        ]
+
+        return ml
+
+
+@attrs.define(eq=True)
+class EchoTargetConcentration(ActionWithComponents, AbstractEchoAction):
     """Get as close as possible (using direct transfers) to a target concentration, possibly varying mix volume."""
 
     target_concentration: DecimalQuantity = attrs.field(
@@ -227,33 +333,42 @@ class EchoTargetConcentration(ActionWithComponents):
     ) -> list[MixLine]:
         dconcs = self.dest_concentrations(mix_vol, actions)
         eavols = self.each_volumes(mix_vol, actions)
-        if not self.compact_display:
-            ml = [
-                MixLine(
-                    [comp.printed_name(tablefmt=tablefmt)],
-                    comp.concentration,
-                    dc,
-                    ev,
-                    plate=comp.plate,
-                    wells=comp._well_list,
-                    note=f"ECHO, target {self.target_concentration}",
-                )
-                for dc, ev, comp in zip(
-                    dconcs,
-                    eavols,
-                    self.components,
-                )
-            ]
-        else:
-            ml = list(
-                self._compactstrs(
-                    tablefmt=tablefmt,
-                    dconcs=dconcs,
-                    eavols=eavols,
-                ))
-            for m in ml:
-                m.note = f"ECHO, target {self.target_concentration}"
-            
+
+        locdf = pl.DataFrame(
+            {
+                "name": [c.printed_name(tablefmt=tablefmt) for c in self.components],
+                "source_conc": list(self.source_concentrations),
+                "dest_conc": list(dconcs),
+                "ea_vols": list(eavols),
+                "plate": [c.plate for c in self.components],
+                "well": [c.well for c in self.components],
+            },
+            schema_overrides={
+                "source_conc": pl.Object,
+                "dest_conc": pl.Object,
+                "ea_vols": pl.Object,
+            },
+        )
+
+        vs = locdf.group_by(
+            ("source_conc", "dest_conc", "ea_vols"), maintain_order=True
+        ).agg(pl.col("name"), pl.col("plate").unique())
+
+        ml = [
+            MixLine(
+                [f"{len(q['name'])} comps: {q['name'][0]}, ..."]
+                if len(q["name"]) > 5
+                else [", ".join(q["name"])],
+                q["source_conc"],
+                q["dest_conc"],
+                len(q["name"]) * q["ea_vols"],
+                each_tx_vol=q["ea_vols"],
+                plate=", ".join(x for x in q["plate"] if x),
+                wells=[],
+                note=f"ECHO, target {self.target_concentration}",
+            )
+            for q in vs.iter_rows(named=True)
+        ]
 
         return ml
 
@@ -321,8 +436,10 @@ class EchoFillToVolume(ActionWithComponents, AbstractEchoAction):
         return [
             MixLine(
                 [comp.printed_name(tablefmt=tablefmt)],
-                comp.concentration,
-                dc,
+                comp.concentration
+                if not math.isnan(comp.concentration.m)
+                else None,  # FIXME: should be better handled
+                dc if not math.isnan(dc.m) else None,
                 ev,
                 plate=comp.plate,
                 wells=comp._well_list,

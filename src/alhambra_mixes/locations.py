@@ -95,7 +95,7 @@ class WellPos:
 
     row: int = attrs.field()
     col: int = attrs.field()
-    platesize: Literal[96, 384] = 96
+    platesize: Literal[96, 384] = 384 # FIXME
 
     @row.validator
     def _validate_row(self, v: int) -> None:
@@ -115,13 +115,13 @@ class WellPos:
 
     @overload
     def __init__(
-        self, ref_or_row: int, col: int, /, *, platesize: Literal[96, 384] = 96
+        self, ref_or_row: int, col: int, /, *, platesize: Literal[96, 384] = 384
     ) -> None:  # pragma: no cover
         ...
 
     @overload
     def __init__(
-        self, ref_or_row: str, col: None = None, /, *, platesize: Literal[96, 384] = 96
+        self, ref_or_row: str, col: None = None, /, *, platesize: Literal[96, 384] = 384
     ) -> None:  # pragma: no cover
         ...
 
@@ -131,7 +131,7 @@ class WellPos:
         col: int | None = None,
         /,
         *,
-        platesize: Literal[96, 384] = 96,
+        platesize: Literal[96, 384] = 384,
     ) -> None:
         if isinstance(ref_or_row, str) and (col is None):
             row: int = ROW_ALPHABET.index(ref_or_row[0]) + 1
