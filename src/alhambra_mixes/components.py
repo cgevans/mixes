@@ -153,7 +153,7 @@ class Component(AbstractComponent):
         default=None,
         kw_only=True
     )
-    well: WellPos | None = attrs.field(
+    well: str | WellPos | None = attrs.field(
         converter=_parse_wellpos_optional,
         default=None,
         kw_only=True,

@@ -29,7 +29,6 @@ if TYPE_CHECKING:  # pragma: no cover
     from .components import AbstractComponent
     from .references import Reference
     
-from kithairon.picklists import PickList
 
 from abc import ABCMeta, abstractmethod
 
@@ -183,6 +182,8 @@ class Experiment:
     locations: LocationDict = attrs.field(factory=dict, converter=LocationDict.from_obj)
 
     def generate_picklist(self) -> PickList:
+        from kithairon.picklists import PickList
+
         pls: list[PickList] = []
         for c in self.components.values():
             if hasattr(c, "generate_picklist"):

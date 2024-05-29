@@ -46,11 +46,10 @@ if TYPE_CHECKING:  # pragma: no cover
     from .references import Reference
     from .experiments import Experiment
     from attrs import Attribute
+    from kithairon.picklists import PickList
 
 from .units import *
 from .units import VolumeError, _parse_vol_optional, normalize
-
-from kithairon.picklists import PickList
 
 warnings.filterwarnings(
     "ignore",
@@ -411,31 +410,30 @@ class Mix(AbstractComponent):
 
         # ensure we pipette at least self.min_volume from each source
 
-        for mixline in mixlines:
-            if (
-                not isnan(mixline.each_tx_vol.m)
-                and mixline.each_tx_vol != ZERO_VOL
-                and mixline.each_tx_vol < self.min_volume
-            ):
-                if mixline.names == [self.buffer_name]:
-                    # This is the line for the buffer
-                    # TODO: tell them what is the maximum source concentration they can have
-                    msg = (
-                        f'Negative buffer volume of mix "{self.name}"; '
-                        f"this is typically caused by requesting too large a target concentration in a "
-                        f"FixedConcentration action,"
-                        f"since the source concentrations are too low. "
-                        f"Try lowering the target concentration."
-                    )
-                else:
-                    # FIXME: why do these need :f?
-                    msg = (
-                        f"Some items have lower transfer volume than {self.min_volume}\n"
-                        f'This is in creating mix "{self.name}", '
-                        f"attempting to pipette {mixline.each_tx_vol} of these components:\n"
-                        f"{mixline.names}"
-                    )
-                error_list.append(VolumeError(msg))
+        # for mixline in mixlines:
+        #     if (
+        #         not isnan(mixline.each_tx_vol.m)
+        #         and mixline.each_tx_vol != ZERO_VOL
+        #         and mixline.each_tx_vol < self.min_volume
+        #     ):
+        #         if mixline.names == [self.buffer_name]:
+        #             # This is the line for the buffer
+        #             # TODO: tell them what is the maximum source concentration they can have
+        #             msg = (
+        #                 f'Negative buffer volume of mix "{self.name}"; '
+        #                 f"this is typically caused by requesting too large a target concentration in a "
+        #                 f"FixedConcentration action,"
+        #                 f"since the source concentrations are too low. "
+        #                 f"Try lowering the target concentration."
+        #             )
+        #         else: # FIXME: reimplement
+        #             msg = (
+        #                 f"Some items have lower transfer volume than {self.min_volume}\n"
+        #                 f'This is in creating mix "{self.name}", '
+        #                 f"attempting to pipette {mixline.each_tx_vol} of these components:\n"
+        #                 f"{mixline.names}"
+        #             )
+        #         error_list.append(VolumeError(msg))
 
         # We'll check the last tx_vol first, because it is usually buffer.
         if ntx[-1][1] < ZERO_VOL:
@@ -484,7 +482,7 @@ class Mix(AbstractComponent):
         for action in self.actions:
             mcomp = action.all_components(self.total_volume, self.actions)
             cps, _ = cps.align(mcomp)
-            cps.loc[:, "concentration_nM"].fillna(Decimal("0.0"), inplace=True)
+            cps.fillna({"concentration_nM": Decimal("0.0")}, inplace=True)
             cps.loc[mcomp.index, "concentration_nM"] += mcomp.concentration_nM
             cps.loc[mcomp.index, "component"] = mcomp.component
         return cps
@@ -504,6 +502,8 @@ class Mix(AbstractComponent):
         ]
         if self.test_tube_name:
             elems.append(f"Test tube name: {self.test_tube_name}")
+        if self.plate:
+            elems.append(f"Plate: {self.plate}, Well: {self.well}")
         return ", ".join(elems)
 
     def __repr__(self) -> str:
@@ -661,13 +661,14 @@ class Mix(AbstractComponent):
         )
         display(HTML(ins_str))
 
-    def generate_picklist(self, experiment: Experiment | None) -> PickList | None:
+    def generate_picklist(self, experiment: Experiment | None) -> 'PickList | None':
         """
         :param experiment:
             experiment to use for generating picklist
         :return:
             picklist for the mix
         """
+        from kithairon.picklists import PickList
         pls: list[PickList] = []
         for action in self.actions:
             if hasattr(action, "to_picklist"):
