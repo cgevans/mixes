@@ -170,7 +170,7 @@ class EchoFixedVolume(ActionWithComponents, AbstractEchoAction):
                 q["dest_conc"],
                 len(q["name"]) * self.fixed_volume,
                 each_tx_vol=self.fixed_volume,
-                plate=", ".join(x for x in q["plate"] if x),
+                plate=(", ".join(x for x in q["plate"] if x) if q["plate"] else "?"),
                 wells=[],
                 note="ECHO",
             )
@@ -290,7 +290,7 @@ class EchoEqualTargetConcentration(ActionWithComponents, AbstractEchoAction):
                 q["dest_conc"],
                 len(q["name"]) * q["ea_vols"],
                 each_tx_vol=q["ea_vols"],
-                plate=", ".join(x for x in q["plate"] if x),
+                plate=(", ".join(x for x in q["plate"] if x) if q["plate"] else "?"),
                 wells=[],
                 note="ECHO",
             )
@@ -373,7 +373,7 @@ class EchoTargetConcentration(ActionWithComponents, AbstractEchoAction):
                 q["dest_conc"],
                 len(q["name"]) * q["ea_vols"],
                 each_tx_vol=q["ea_vols"],
-                plate=", ".join(x for x in q["plate"] if x),
+                plate=(", ".join(x for x in q["plate"] if x) if q["plate"] else "?"),
                 wells=[],
                 note=f"ECHO, target {self.target_concentration}",
             )
@@ -451,7 +451,7 @@ class EchoFillToVolume(ActionWithComponents, AbstractEchoAction):
                 else None,  # FIXME: should be better handled
                 dc if not math.isnan(dc.m) else None,
                 ev,
-                plate=comp.plate,
+                plate=comp.plate if comp.plate else "?",
                 wells=comp._well_list,
                 note="ECHO",
             )
