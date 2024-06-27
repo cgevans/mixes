@@ -18,8 +18,6 @@ if TYPE_CHECKING:
 
 from .util import _require_kithairon
 
-_require_kithairon()
-
 from .units import (
     DNAN,
     DecimalQuantity,
@@ -28,17 +26,23 @@ from .units import (
     Q_,
     _parse_vol_required,
     _ratio,
-    nM,
     uL,
 )
+
+_require_kithairon()
 
 DEFAULT_DROPLET_VOL = Q_(25, "nL")
 
 
-class AbstractEchoAction(AbstractAction, metaclass=ABCMeta):
+class AbstractEchoAction(ActionWithComponents, metaclass=ABCMeta):
     """Abstract base class for Echo actions."""
 
     def to_picklist(self, mix: Mix, experiment: Experiment | None = None) -> "PickList":
+        def el_get(key):
+            if experiment is None:
+                return None
+            return experiment.locations.get(key, None)
+
         mix_vol = mix.total_volume
         dconcs = self.dest_concentrations(mix_vol, mix.actions)
         eavols = self.each_volumes(mix_vol, mix.actions)
@@ -57,7 +61,7 @@ class AbstractEchoAction(AbstractAction, metaclass=ABCMeta):
                     "Source Plate Name": [c.plate for c in self.components],
                     "Source Plate Type": [
                         getattr(
-                            experiment.locations.get(c.plate, None),
+                            el_get(c.plate),
                             "echo_source_type",
                             None,
                         )
@@ -66,7 +70,7 @@ class AbstractEchoAction(AbstractAction, metaclass=ABCMeta):
                     "Source Well": [str(c.well) for c in self.components],
                     "Destination Plate Name": mix.plate,
                     "Destination Plate Type": getattr(
-                        experiment.locations.get(mix.plate, None),
+                        el_get(mix.plate),
                         "echo_dest_type",
                         None,
                     ),
@@ -94,7 +98,7 @@ class AbstractEchoAction(AbstractAction, metaclass=ABCMeta):
 
 
 @attrs.define(eq=True)
-class EchoFixedVolume(ActionWithComponents, AbstractEchoAction):
+class EchoFixedVolume(AbstractEchoAction):
     """Transfer a fixed volume of liquid to a target mix."""
 
     fixed_volume: DecimalQuantity = attrs.field(converter=_parse_vol_required)
@@ -125,7 +129,7 @@ class EchoFixedVolume(ActionWithComponents, AbstractEchoAction):
 
     def each_volumes(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
+        mix_volume: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[DecimalQuantity]:
         return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(self.components)
@@ -186,16 +190,16 @@ class EchoFixedVolume(ActionWithComponents, AbstractEchoAction):
 
 
 @attrs.define(eq=True)
-class EchoEqualTargetConcentration(ActionWithComponents, AbstractEchoAction):
+class EchoEqualTargetConcentration(AbstractEchoAction):
     """Transfer a fixed volume of liquid to a target mix."""
 
     fixed_volume: DecimalQuantity = attrs.field(converter=_parse_vol_required)
     set_name: str | None = None
     droplet_volume: DecimalQuantity = DEFAULT_DROPLET_VOL
     compact_display: bool = False
-    method: Literal["max_volume", "min_volume", "check"] | tuple[
-        Literal["max_fill"], str
-    ] = "min_volume"
+    method: (
+        Literal["max_volume", "min_volume", "check"] | tuple[Literal["max_fill"], str]
+    ) = "min_volume"
 
     def _check_volume(self) -> None:
         fv = self.fixed_volume.m_as("nL")
@@ -220,7 +224,7 @@ class EchoEqualTargetConcentration(ActionWithComponents, AbstractEchoAction):
 
     def each_volumes(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
+        mix_volume: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[DecimalQuantity]:
         if self.method == "min_volume":
@@ -306,7 +310,7 @@ class EchoEqualTargetConcentration(ActionWithComponents, AbstractEchoAction):
 
 
 @attrs.define(eq=True)
-class EchoTargetConcentration(ActionWithComponents, AbstractEchoAction):
+class EchoTargetConcentration(AbstractEchoAction):
     """Get as close as possible (using direct transfers) to a target concentration, possibly varying mix volume."""
 
     target_concentration: DecimalQuantity = attrs.field(
@@ -331,11 +335,13 @@ class EchoTargetConcentration(ActionWithComponents, AbstractEchoAction):
 
     def each_volumes(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
+        mix_volume: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[DecimalQuantity]:
         ea_vols = [
-            (round((mix_vol * r / self.droplet_volume).m_as("")) * self.droplet_volume) if not math.isnan(mix_vol.m) and not math.isnan(r) else Q_(DNAN, uL)
+            (round((mix_volume * r / self.droplet_volume).m_as("")) * self.droplet_volume)
+            if not math.isnan(mix_volume.m) and not math.isnan(r)
+            else Q_(DNAN, uL)
             for r in _ratio(self.target_concentration, self.source_concentrations)
         ]
         return ea_vols
@@ -396,7 +402,7 @@ class EchoTargetConcentration(ActionWithComponents, AbstractEchoAction):
 
 
 @attrs.define(eq=True)
-class EchoFillToVolume(ActionWithComponents, AbstractEchoAction):
+class EchoFillToVolume(AbstractEchoAction):
     target_total_volume: DecimalQuantity = attrs.field(
         converter=_parse_vol_optional, default=None
     )
@@ -417,11 +423,11 @@ class EchoFillToVolume(ActionWithComponents, AbstractEchoAction):
 
     def each_volumes(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
+        mix_volume: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[DecimalQuantity]:
         othervol = sum(
-            [a.tx_volume(mix_vol, actions) for a in actions if a is not self]
+            [a.tx_volume(mix_volume, actions) for a in actions if a is not self]
         )
 
         if len(self.components) > 1:
@@ -430,7 +436,7 @@ class EchoFillToVolume(ActionWithComponents, AbstractEchoAction):
             )
 
         if math.isnan(self.target_total_volume.m):
-            tvol = mix_vol
+            tvol = mix_volume
         else:
             tvol = self.target_total_volume
 
@@ -467,12 +473,7 @@ class EchoFillToVolume(ActionWithComponents, AbstractEchoAction):
             )
         ]
 
-    @property
-    def name(self) -> str:
-        if self.set_name is None:
-            return super().name
-        else:
-            return self.set_name
+
 
 
 # class EchoTwoStepConcentration(ActionWithComponents):

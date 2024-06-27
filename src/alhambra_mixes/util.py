@@ -21,4 +21,3 @@ def _require_kithairon():
         if err.name != "kithairon":
             raise err
         raise ImportError("kithairon is required for Echo support, but it is not installed.", name="kithairon")
-

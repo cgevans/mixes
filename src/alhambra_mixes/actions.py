@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from abc import ABC, abstractmethod
+from abc import abstractmethod, ABCMeta
 from math import isnan
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Sequence, TypeVar, cast
 from warnings import warn
@@ -27,12 +27,19 @@ from .units import (
     _parse_vol_optional,
     _parse_vol_required,
     _ratio,
+    DecimalQuantity,
+    Decimal,
+    DNAN,
+    uL,
+    Q_,
+    ureg,
+    nM
 )
 
 T = TypeVar("T")
 
 
-class AbstractAction(ABC):
+class AbstractAction(metaclass=ABCMeta):
     """
     Abstract class defining an action in a mix recipe.
     """
@@ -116,12 +123,17 @@ class AbstractAction(ABC):
     @property
     @abstractmethod
     def components(self) -> list[AbstractComponent]:
-        ...
+        pass
 
+    @property
+    @abstractmethod
+    def source_concentrations(self) -> list[DecimalQuantity]:
+        pass
+    
     @abstractmethod
     def each_volumes(
         self,
-        total_volume: DecimalQuantity,
+        mix_volume: DecimalQuantity,
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[DecimalQuantity]:
         ...
@@ -135,7 +147,7 @@ class AbstractAction(ABC):
 
     @abstractmethod
     def _unstructure(
-        self, experiment: "Experiment" | None
+        self, experiment: "Experiment | None"
     ) -> dict[str, Any]:  # pragma: no cover
         ...
 
@@ -145,6 +157,7 @@ T_AWC = TypeVar("T_AWC", bound="ActionWithComponents")
 
 @attrs.define(eq=False)
 class ActionWithComponents(AbstractAction):
+    
     components: list[AbstractComponent] = attrs.field(
         converter=_maybesequence_comps, on_setattr=attrs.setters.convert
     )
@@ -160,7 +173,7 @@ class ActionWithComponents(AbstractAction):
     def __eq__(self, other: Any) -> bool:
         if type(self) != type(other):
             return False
-        for a in self.__attrs_attrs__:  # type: Attribute
+        for a in self.__attrs_attrs__: # type: ignore
             v1 = getattr(self, a.name)
             v2 = getattr(other, a.name)
             if isinstance(v1, ureg.Quantity):
@@ -190,7 +203,7 @@ class ActionWithComponents(AbstractAction):
         self: T_AWC, reference: Reference, inplace: bool = False
     ) -> T_AWC:
         if inplace:
-            self.components = [
+            self.components = [ # type: ignore
                 c.with_reference(reference, inplace=True) for c in self.components
             ]
             return self
@@ -204,11 +217,11 @@ class ActionWithComponents(AbstractAction):
         concs = [c.concentration for c in self.components]
         return concs
 
-    def _unstructure(self, experiment: "Experiment" | None) -> dict[str, Any]:
+    def _unstructure(self, experiment: "Experiment | None") -> dict[str, Any]:
         d: dict[str, Any] = {}
         d["class"] = self.__class__.__name__
         d["components"] = [c._unstructure(experiment) for c in self.components]
-        for a in self.__attrs_attrs__:
+        for a in self.__attrs_attrs__: # type: ignore
             if a.name == "components":
                 continue
             val = getattr(self, a.name)
@@ -222,7 +235,7 @@ class ActionWithComponents(AbstractAction):
 
     @classmethod
     def _structure(
-        cls, d: dict[str, Any], experiment: "Experiment" | None = None
+        cls, d: dict[str, Any], experiment: "Experiment | None" = None
     ) -> "ActionWithComponents":
         scomps: List[AbstractComponent] = []
         for cd in d["components"]:
@@ -252,14 +265,14 @@ class ActionWithComponents(AbstractAction):
             self.source_concentrations,
         ):
             comps = comp.all_components()
-            comps.concentration_nM *= _ratio(dc, sc)
+            comps.concentration_nM *= _ratio(dc, sc)  # type: ignore
 
             newdf, _ = newdf.align(comps)
 
             # FIXME: add checks
             newdf.loc[comps.index, "concentration_nM"] = newdf.loc[
                 comps.index, "concentration_nM"
-            ].add(comps.concentration_nM, fill_value=Decimal("0.0"))
+            ].add(comps.concentration_nM, fill_value=Decimal("0.0")) # type: ignore
             newdf.loc[comps.index, "component"] = comps.component
 
         return newdf
@@ -304,20 +317,20 @@ class ActionWithComponents(AbstractAction):
         plates: list[str] = []
         wells_list: list[list[WellPos]] = []
 
-        for plate, plate_comps in locdf.groupby("plate"):  # type: str, pd.DataFrame
+        for plate, plate_comps in locdf.groupby("plate"): 
             for vol, plate_vol_comps in plate_comps.groupby(
                 "ea_vols"
-            ):  # type: DecimalQuantity, pd.DataFrame
+            ): 
                 if pd.isna(plate_vol_comps["well"].iloc[0]):
                     if not pd.isna(plate_vol_comps["well"]).all():
                         raise ValueError
                     names.append(list(plate_vol_comps["names"]))
-                    ea_vols.append((vol))
-                    tot_vols.append((vol * len(plate_vol_comps)))
+                    ea_vols.append(vol) # type: ignore
+                    tot_vols.append(vol * len(plate_vol_comps)) # type: ignore
                     numbers.append((len(plate_vol_comps)))
                     source_concs.append((plate_vol_comps["source_concs"].iloc[0]))
                     dest_concs.append((plate_vol_comps["dest_concs"].iloc[0]))
-                    plates.append(plate)
+                    plates.append(plate) # type: ignore
                     wells_list.append([])
                     continue
 
@@ -443,7 +456,7 @@ class FixedVolume(ActionWithComponents):
 
     def each_volumes(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
+        mix_volume: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[DecimalQuantity]:
         return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(self.components)
@@ -470,7 +483,7 @@ class FixedVolume(ActionWithComponents):
                     comp.concentration,
                     dc,
                     ev,
-                    plate=comp.plate,
+                    plate=comp.plate if comp.plate is not None else "",
                     wells=comp._well_list,
                 )
                 for dc, ev, comp in zip(
@@ -585,7 +598,7 @@ class EqualConcentration(FixedVolume):
 
     def each_volumes(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
+        mix_volume: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[DecimalQuantity]:
         # match self.equal_conc:
@@ -703,11 +716,11 @@ class FixedConcentration(ActionWithComponents):
 
     def each_volumes(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
+        mix_volume: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[DecimalQuantity]:
         ea_vols = [
-            mix_vol * r
+            mix_volume * r
             for r in _ratio(self.fixed_concentration, self.source_concentrations)
         ]
         if not math.isnan(self.min_volume.m):
@@ -739,7 +752,7 @@ class FixedConcentration(ActionWithComponents):
                     comp.concentration,
                     dc,
                     ev,
-                    plate=comp.plate,
+                    plate=comp.plate if comp.plate is not None else "",
                     wells=comp._well_list,
                 )
                 for dc, ev, comp in zip(
@@ -812,7 +825,7 @@ class ToConcentration(ActionWithComponents):
                 )
             mcomp = action.all_components(mix_vol)
             cps, _ = cps.align(mcomp)
-            cps.loc[:, "concentration_nM"].fillna(Decimal("0.0"), inplace=True)
+            cps.loc[:, "concentration_nM"].fillna(Decimal("0.0"), inplace=True) # type:  ignore
             cps.loc[mcomp.index, "concentration_nM"] += mcomp.concentration_nM
             cps.loc[mcomp.index, "component"] = mcomp.component
 
@@ -828,7 +841,7 @@ class ToConcentration(ActionWithComponents):
             _othercomps = self._othercomps(mix_vol, actions)
         if _othercomps is not None:
             otherconcs = [
-                Q_(_othercomps.loc[comp.name, "concentration_nM"], nM)
+                Q_(_othercomps.loc[comp.name, "concentration_nM"], nM) # type: ignore
                 if comp.name in _othercomps.index
                 else Q_("0.0", nM)
                 for comp in self.components
@@ -839,14 +852,14 @@ class ToConcentration(ActionWithComponents):
 
     def each_volumes(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
+        mix_volume: DecimalQuantity = Q_(DNAN, uL),
         actions: Sequence[AbstractAction] = tuple(),
         _othercomps: pd.DataFrame | None = None,
     ) -> list[DecimalQuantity]:
         ea_vols = [
-            mix_vol * r
+            mix_volume * r
             for r in _ratio(
-                self.dest_concentrations(mix_vol, actions, _othercomps),
+                self.dest_concentrations(mix_volume, actions, _othercomps),
                 self.source_concentrations,
             )
         ]
@@ -880,7 +893,7 @@ class ToConcentration(ActionWithComponents):
                     comp.concentration,
                     dc,
                     ev,
-                    plate=comp.plate,
+                    plate=comp.plate if comp.plate is not None else "",
                     wells=comp._well_list,
                 )
                 for dc, ev, comp in zip(dconcs, eavols, self.components)
