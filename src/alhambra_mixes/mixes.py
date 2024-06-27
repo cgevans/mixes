@@ -414,7 +414,9 @@ class Mix(AbstractComponent):
             if (
                 not isnan(mixline.each_tx_vol.m)
                 and mixline.each_tx_vol != ZERO_VOL
-                and (mixline.each_tx_vol < self.min_volume) if "ECHO" not in mixline.names else False # FIXME
+                and (mixline.each_tx_vol < self.min_volume)
+                if ((mixline.note is None) or ("ECHO" not in mixline.note))
+                else False  # FIXME
             ):
                 if mixline.names == [self.buffer_name]:
                     # This is the line for the buffer
@@ -426,7 +428,7 @@ class Mix(AbstractComponent):
                         f"since the source concentrations are too low. "
                         f"Try lowering the target concentration."
                     )
-                else: # FIXME: reimplement
+                else:  # FIXME: reimplement
                     msg = (
                         f"Some items have lower transfer volume than {self.min_volume}\n"
                         f'This is in creating mix "{self.name}", '
@@ -661,14 +663,14 @@ class Mix(AbstractComponent):
         )
         display(HTML(ins_str))
 
-    def generate_picklist(self, experiment: Experiment | None) -> 'PickList | None':
+    def generate_picklist(self, experiment: Experiment | None) -> "PickList | None":
         """
         :param experiment:
             experiment to use for generating picklist
         :return:
             picklist for the mix
         """
-        
+
         _require_kithairon()
         pls: list[PickList] = []
         for action in self.actions:
