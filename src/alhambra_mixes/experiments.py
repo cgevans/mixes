@@ -24,10 +24,13 @@ from .units import DNAN, Q_, ZERO_VOL, Decimal, uL, Quantity, DecimalQuantity
 from .mixes import Mix
 from .mixes import VolumeError
 
+from .util import _require_kithairon
+
 if TYPE_CHECKING:  # pragma: no cover
     from alhambra_mixes.actions import AbstractAction
     from .components import AbstractComponent
     from .references import Reference
+    from kithairon import PickList
     
 
 from abc import ABCMeta, abstractmethod
@@ -182,7 +185,7 @@ class Experiment:
     locations: LocationDict = attrs.field(factory=dict, converter=LocationDict.from_obj)
 
     def generate_picklist(self) -> PickList:
-        from kithairon.picklists import PickList
+        _require_kithairon()
 
         pls: list[PickList] = []
         for c in self.components.values():

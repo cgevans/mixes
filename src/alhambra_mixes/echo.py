@@ -3,7 +3,7 @@ import attrs
 from tabulate import TableFormat
 from .actions import ActionWithComponents, AbstractAction
 from abc import ABCMeta
-from typing import Sequence, cast
+from typing import Sequence, cast, TYPE_CHECKING
 import polars as pl
 
 from .printing import MixLine
@@ -11,9 +11,14 @@ from .printing import MixLine
 from .experiments import Experiment
 from .mixes import Mix
 
-from kithairon.picklists import PickList
 from typing import Literal
 
+if TYPE_CHECKING:
+    from kithairon.picklists import PickList
+
+from .util import _require_kithairon
+
+_require_kithairon()
 
 from .units import (
     DNAN,
@@ -330,7 +335,7 @@ class EchoTargetConcentration(ActionWithComponents, AbstractEchoAction):
         actions: Sequence[AbstractAction] = tuple(),
     ) -> list[DecimalQuantity]:
         ea_vols = [
-            round((mix_vol * r / self.droplet_volume).m_as("")) * self.droplet_volume
+            (round((mix_vol * r / self.droplet_volume).m_as("")) * self.droplet_volume) if not math.isnan(mix_vol.m) and not math.isnan(r) else Q_(DNAN, uL)
             for r in _ratio(self.target_concentration, self.source_concentrations)
         ]
         return ea_vols

@@ -13,3 +13,12 @@ T = TypeVar("T")
 
 def _none_as_empty_string(v: str | None) -> str:
     return "" if v is None else v
+
+def _require_kithairon():
+    try:
+        from kithairon.picklists import PickList
+    except ImportError as err:
+        if err.name != "kithairon":
+            raise err
+        raise ImportError("kithairon is required for Echo support, but it is not installed.", name="kithairon")
+

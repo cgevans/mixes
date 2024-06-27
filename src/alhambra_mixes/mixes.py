@@ -51,6 +51,8 @@ if TYPE_CHECKING:  # pragma: no cover
 from .units import *
 from .units import VolumeError, _parse_vol_optional, normalize
 
+from .util import _require_kithairon
+
 warnings.filterwarnings(
     "ignore",
     "The unit of the quantity is " "stripped when downcasting to ndarray",
@@ -668,7 +670,8 @@ class Mix(AbstractComponent):
         :return:
             picklist for the mix
         """
-        from kithairon.picklists import PickList
+        
+        _require_kithairon()
         pls: list[PickList] = []
         for action in self.actions:
             if hasattr(action, "to_picklist"):
