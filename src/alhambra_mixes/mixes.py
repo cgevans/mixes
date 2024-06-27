@@ -410,32 +410,30 @@ class Mix(AbstractComponent):
                 )
             )
 
-        # ensure we pipette at least self.min_volume from each source
-
-        # for mixline in mixlines:
-        #     if (
-        #         not isnan(mixline.each_tx_vol.m)
-        #         and mixline.each_tx_vol != ZERO_VOL
-        #         and mixline.each_tx_vol < self.min_volume
-        #     ):
-        #         if mixline.names == [self.buffer_name]:
-        #             # This is the line for the buffer
-        #             # TODO: tell them what is the maximum source concentration they can have
-        #             msg = (
-        #                 f'Negative buffer volume of mix "{self.name}"; '
-        #                 f"this is typically caused by requesting too large a target concentration in a "
-        #                 f"FixedConcentration action,"
-        #                 f"since the source concentrations are too low. "
-        #                 f"Try lowering the target concentration."
-        #             )
-        #         else: # FIXME: reimplement
-        #             msg = (
-        #                 f"Some items have lower transfer volume than {self.min_volume}\n"
-        #                 f'This is in creating mix "{self.name}", '
-        #                 f"attempting to pipette {mixline.each_tx_vol} of these components:\n"
-        #                 f"{mixline.names}"
-        #             )
-        #         error_list.append(VolumeError(msg))
+        for mixline in mixlines:
+            if (
+                not isnan(mixline.each_tx_vol.m)
+                and mixline.each_tx_vol != ZERO_VOL
+                and (mixline.each_tx_vol < self.min_volume) if "ECHO" not in mixline.names else False # FIXME
+            ):
+                if mixline.names == [self.buffer_name]:
+                    # This is the line for the buffer
+                    # TODO: tell them what is the maximum source concentration they can have
+                    msg = (
+                        f'Negative buffer volume of mix "{self.name}"; '
+                        f"this is typically caused by requesting too large a target concentration in a "
+                        f"FixedConcentration action,"
+                        f"since the source concentrations are too low. "
+                        f"Try lowering the target concentration."
+                    )
+                else: # FIXME: reimplement
+                    msg = (
+                        f"Some items have lower transfer volume than {self.min_volume}\n"
+                        f'This is in creating mix "{self.name}", '
+                        f"attempting to pipette {mixline.each_tx_vol} of these components:\n"
+                        f"{mixline.names}"
+                    )
+                error_list.append(VolumeError(msg))
 
         # We'll check the last tx_vol first, because it is usually buffer.
         if ntx[-1][1] < ZERO_VOL:

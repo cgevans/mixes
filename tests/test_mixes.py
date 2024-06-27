@@ -33,16 +33,16 @@ def test_wellpos_movement():
     "Ensure WellPos movements are correct, and fail when appropriate."
 
     assert WellPos("A5").next_byrow() == WellPos("A6")
-    assert WellPos("A12").next_byrow() == WellPos("B1")
-    assert WellPos("A12").next_bycol() == WellPos("B12")
+    assert WellPos("A12", platesize=96).next_byrow() == WellPos("B1")
+    assert WellPos("A12", platesize=96).next_bycol() == WellPos("B12")
 
     with pytest.raises(
         ValueError, match=r"Row I \(9\) out of bounds for plate size 96"
     ):
-        WellPos("H12").next_byrow()
+        WellPos("H12", platesize=96).next_byrow()
 
     with pytest.raises(ValueError, match="Column 13 out of bounds for plate size 96"):
-        WellPos("H12").next_bycol()
+        WellPos("H12", platesize=96).next_bycol()
 
     assert WellPos("A12", platesize=384).next_byrow() == "A13"
 
@@ -67,7 +67,7 @@ def test_wellpos_movement():
 
 def test_invalid_wellrefs():
     with pytest.raises(ValueError):
-        WellPos("A14")
+        WellPos("A14", platesize=96)
 
     with pytest.raises(ValueError):
         WellPos("Q14", platesize=384)
@@ -96,11 +96,11 @@ def _itertools_pairwise(iterable):  # FIXME: in 3.10
 def test_all_wellref_96():
     allbyrow96 = [f"{r}{c}" for r in "ABCDEFGH" for c in range(1, 13)]
     for x, y in _itertools_pairwise(allbyrow96):
-        assert WellPos(x).next_byrow() == y
+        assert WellPos(x, platesize=96).next_byrow() == y
 
     allbyrow96 = [f"{r}{c}" for c in range(1, 13) for r in "ABCDEFGH"]
     for x, y in _itertools_pairwise(allbyrow96):
-        assert WellPos(x).next_bycol() == y
+        assert WellPos(x, platesize=96).next_bycol() == y
 
 
 def test_component():
