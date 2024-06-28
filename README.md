@@ -34,6 +34,11 @@ components at different concentrations spread across several plates.
 
 # Changelog
 
+## v0.6.0
+
+- Optional ECHO liquid handler support, with the 'echo' feature (eg, `pip install --upgrade alhambra_mixes[echo]`).  Uses [kithairon](https://github.com/cgevans/kithairon), which
+  does require Python ≥ 3.10.
+
 ## v0.5.0
 
 An interim version release while larger changes are being made, so that users can make use of several important new features, and the pypi-available version fits well with the latest documentation.

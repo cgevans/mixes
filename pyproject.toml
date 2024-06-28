@@ -10,9 +10,8 @@ rye = { dev-dependencies = [
 [tool.hatch]
 version.source = "vcs"
 
-[tool.setuptools_scm]
-version_scheme = "no-guess-dev"
-write_to = "src/alhambra_mixes/_version.py"
+[tool.hatch.build.hooks.vcs]
+version-file = "src/alhambra_mixes/_version.py"
 
 [tool.pytest.ini_options]
 # addopts = "--cov alhambra --cov-report term-missing --cov-report html"
@@ -22,9 +21,16 @@ norecursedirs = [
     ".tox"]
 testpaths = ["tests"]
 
+[tool.hatch.metadata.hooks.vcs.urls]
+Homepage = "https://github.com/cgevans/mixes"
+Documentation = "https://alhambra-mixes.readthedocs.io"
+Repository = "https://github.com/cgevans/mixes.git"
+Issues = "https://github.com/cgevans/issues"
+source_archive = "https://github.com/org/repo/archive/{commit_hash}.zip"
+
 [project]
 name = "alhambra_mixes"
-dynamic = ["version"]
+dynamic = ["version", "urls"]
 description = "Many-component mix library for molecular programming"
 authors = [{name = "Constantine Evans", email="mixes@mb.costi.net"}]
 license = { file = "LICENSE.txt" }
@@ -34,6 +40,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: BSD License",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering",
@@ -50,7 +57,7 @@ dependencies = [
     "typing_extensions >= 4.2",
 ]
 readme = "README.md"
-requires-python = ">= 3.7"
+requires-python = ">= 3.8"
 
 [project.optional-dependencies]
 docs = [
@@ -77,7 +84,7 @@ all = [
 where = ["src"]
 
 [tool.black]
-target_version = ["py39"]
+target-version = ["py312"]
 
 [tool.mypy]
 python_version = "3.9"
