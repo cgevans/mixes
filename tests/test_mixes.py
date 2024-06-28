@@ -127,7 +127,7 @@ def test_component_allcomps():
 
 @pytest.fixture
 def reference():
-    return Reference.from_csv("tests/test_reference.csv")
+    return Reference.from_csv("tests/data/test_reference.csv")
 
 
 def test_reference_saveload(
@@ -135,7 +135,7 @@ def test_reference_saveload(
 ):
     sf = tmp_path_factory.mktemp("exp") / "test.csv"
 
-    r = load_reference("tests/test_reference.csv")
+    r = load_reference("tests/data/test_reference.csv")
 
     assert r == reference
 

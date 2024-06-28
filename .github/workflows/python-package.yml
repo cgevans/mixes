@@ -19,62 +19,37 @@ on:
       - CHANGELOG.md
       - README.md
       - AUTHORS.md
+concurrency:
+  group: test-${{ github.head_ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+  FORCE_COLOR: "1"
 jobs:
-  # black:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Set up Python 3.10
-  #       uses: actions/setup-python@v4
-  #       with:
-  #         python-version: "3.10"
-  #     - uses: actions/checkout@v3
-  #     - uses: psf/black@stable
-  #       with:
-  #          options: "--check --verbose --diff"
-  #          src: "./src"
-  mypy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
-      - uses: actions/checkout@v3
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip setuptools_scm[toml] wheel setuptools
-          python -m pip install --upgrade attrs types-attrs types-tabulate types-PyYAML types-toml
-          python -m pip install --upgrade mypy
-          python -m pip install --upgrade .
-          mkdir -p .mypy_cache
-      - name: Mypy
-        run: |
-          mypy --cache-dir .mypy_cache --install-types --non-interactive --show-traceback ./src/alhambra_mixes
   tests:
-    #needs: "mypy"
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
+    - name: Install Hatch
+      run: pip install --upgrade hatch coverage
+    - name: Run tests
       run: |
-        python -m pip install --upgrade pip setuptools_scm[toml] wheel setuptools
-        python -m pip install --upgrade pytest
-        python -m pip install --upgrade .[testing]
-    - name: Test with tox/pytest
-      run: |
-        python -m pytest --cov alhambra_mixes --cov-report=xml
-
+        hatch test --python ${{ matrix.python-version }} --cover --randomize
+        coverage xml
     - name: "Upload coverage to Codecov"
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v4
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       with:
         fail_ci_if_error: false

@@ -1,0 +1,8 @@
+Name,Plate,Well,Concentration,Concentration_Unit,Sequence
+comp1,P 1,A5,1000.,nM,
+strand1,P 2,D4,1000.,nM,AGAACC
+strand2,tube,,1000.,nM,GAGGT
+strand3,P 2,D7,1000.,nM,GGTG
+strand3,P 2,D5,1000.5,nM,GGTG
+strand3,P 3,D7,2000.223,nM,GGTG
+strand3,P 4,D7,2000.,nM,GGTG AGG
