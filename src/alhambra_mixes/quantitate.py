@@ -50,7 +50,7 @@ import pandas
 import pint
 from pint import Quantity
 
-from .units import Q_, DecimalQuantity, _parse_vol_optional, nmol, normalize, uM, ureg
+from .units import NAN_AMOUNT, NAN_VOL, Q_, DecimalQuantity, _parse_vol_optional, nmol, normalize, uM, ureg
 
 
 def parse_vol(vol: Union[float, int, str, DecimalQuantity]) -> DecimalQuantity:

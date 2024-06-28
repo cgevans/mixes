@@ -493,7 +493,7 @@ def assert_close(
 ) -> None:
     # This helps with comparing Decimal quantities, which cannot be multiplied by floats, which is
     # what happens with the default rtol parameter of pint.testing.assert_allclose.
-    pint.testing.assert_allclose(actual, expected, rtol, atol, msg)
+    pint.testing.assert_allclose(actual, expected, rtol, atol, msg) # type: ignore
 
 
 def test_split_mix():
