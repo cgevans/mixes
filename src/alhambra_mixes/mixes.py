@@ -11,13 +11,13 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
+    List,
     Literal,
     Sequence,
     Tuple,
     TypeVar,
     cast,
-    Iterable,
-    List,
 )
 
 import attrs
@@ -25,9 +25,12 @@ import pandas as pd
 import pint
 from tabulate import TableFormat, tabulate
 
-from .actions import AbstractAction  # Fixme: should not need special cases
-from .actions import FixedConcentration, FixedVolume
-from .components import AbstractComponent, Component, Strand, _empty_components
+from .actions import (
+    AbstractAction,  # Fixme: should not need special cases
+    FixedConcentration,
+    FixedVolume,
+)
+from .components import AbstractComponent, Component, _empty_components
 from .dictstructure import _STRUCTURE_CLASSES, _structure, _unstructure
 from .locations import PlateType, WellPos
 from .logging import log
@@ -39,18 +42,17 @@ from .printing import (
     _format_errors,
     _format_title,
     emphasize,
-    html_with_borders_tablefmt,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .references import Reference
-    from .experiments import Experiment
     from attrs import Attribute
     from kithairon.picklists import PickList
 
+    from .experiments import Experiment
+    from .references import Reference
+
 from .units import *
 from .units import VolumeError, _parse_vol_optional, normalize
-
 from .util import _get_picklist_class
 
 warnings.filterwarnings(
@@ -182,7 +184,7 @@ class Mix(AbstractComponent):
     def is_mix(self) -> bool:
         return True
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if type(self) != type(other):
             return False
         for a in self.__attrs_attrs__:  # type: ignore
@@ -203,11 +205,11 @@ class Mix(AbstractComponent):
             ]
         if self.actions is None:
             raise ValueError(
-                f"Mix.actions must contain at least one action, but it was not specified"
+                "Mix.actions must contain at least one action, but it was not specified"
             )
         elif len(self.actions) == 0:
             raise ValueError(
-                f"Mix.actions must contain at least one action, but it is empty"
+                "Mix.actions must contain at least one action, but it is empty"
             )
 
     def printed_name(self, tablefmt: str | TableFormat) -> str:
@@ -240,7 +242,7 @@ class Mix(AbstractComponent):
                 0
             ]
         else:
-            raise NotImplemented
+            raise NotImplementedError
 
     @property
     def total_volume(self) -> DecimalQuantity:
@@ -663,7 +665,7 @@ class Mix(AbstractComponent):
         )
         display(HTML(ins_str))
 
-    def generate_picklist(self, experiment: Experiment | None) -> "PickList | None":
+    def generate_picklist(self, experiment: Experiment | None) -> PickList | None:
         """
         :param experiment:
             experiment to use for generating picklist
@@ -979,7 +981,7 @@ class Mix(AbstractComponent):
 
         return consumed_volumes, made_volumes
 
-    def _unstructure(self, experiment: "Experiment" | None = None) -> dict[str, Any]:
+    def _unstructure(self, experiment: Experiment | None = None) -> dict[str, Any]:
         d: dict[str, Any] = {}
         d["class"] = self.__class__.__name__
         for a in cast("Sequence[Attribute]", self.__attrs_attrs__):
@@ -999,8 +1001,8 @@ class Mix(AbstractComponent):
 
     @classmethod
     def _structure(
-        cls, d: dict[str, Any], experiment: "Experiment" | None = None
-    ) -> "Mix":
+        cls, d: dict[str, Any], experiment: Experiment | None = None
+    ) -> Mix:
         for k, v in d.items():
             d[k] = _structure(v, experiment)
         return cls(**d)

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import math
-from abc import abstractmethod, ABCMeta
+from abc import ABCMeta, abstractmethod
 from math import isnan
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, Any, List, Literal, Sequence, TypeVar, cast
 from warnings import warn
 
 import attrs
@@ -16,24 +16,23 @@ from .printing import MixLine, TableFormat
 from .units import _parse_vol_optional_none_zero
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .references import Reference
+
     from .experiments import Experiment
-    from attrs import Attribute
+    from .references import Reference
 
 from .units import *
 from .units import (
+    Q_,
+    Decimal,
+    DecimalQuantity,
     VolumeError,
     _parse_conc_required,
     _parse_vol_optional,
     _parse_vol_required,
     _ratio,
-    DecimalQuantity,
-    Decimal,
-    DNAN,
+    nM,
     uL,
-    Q_,
     ureg,
-    nM
 )
 
 T = TypeVar("T")
@@ -51,8 +50,8 @@ class AbstractAction(metaclass=ABCMeta):
 
     def tx_volume(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_vol: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> DecimalQuantity:  # pragma: no cover
         """The total volume transferred by the action to the sample.  May depend on the total mix volume.
 
@@ -69,13 +68,13 @@ class AbstractAction(metaclass=ABCMeta):
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
-        actions: Sequence[AbstractAction] = tuple(),
+        actions: Sequence[AbstractAction] = (),
     ) -> Sequence[MixLine]:  # pragma: no cover
         ...
 
     @abstractmethod
     def all_components(
-        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = tuple()
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = ()
     ) -> pd.DataFrame:  # pragma: no cover
         """A dataframe containing all base components added by the action.
 
@@ -89,20 +88,20 @@ class AbstractAction(metaclass=ABCMeta):
 
     @abstractmethod
     def with_experiment(
-        self: T, experiment: "Experiment", inplace: bool = True
+        self: T, experiment: Experiment, *, inplace: bool = True
     ) -> T:  # pragma: no cover
         """Returns a copy of the action updated from a experiment dataframe."""
         ...
 
     @abstractmethod
     def with_reference(
-        self: T, reference: Reference, inplace: bool = False
+        self: T, reference: Reference, *, inplace: bool = False
     ) -> T:  # pragma: no cover
         """Returns a copy of the action updated from a reference dataframe."""
         ...
 
     def dest_concentration(
-        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = tuple()
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = ()
     ) -> DecimalQuantity:
         """The destination concentration added to the mix by the action.
 
@@ -116,7 +115,7 @@ class AbstractAction(metaclass=ABCMeta):
         raise ValueError("Single destination concentration not defined.")
 
     def dest_concentrations(
-        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = tuple()
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = ()
     ) -> Sequence[DecimalQuantity]:
         raise ValueError
 
@@ -129,25 +128,25 @@ class AbstractAction(metaclass=ABCMeta):
     @abstractmethod
     def source_concentrations(self) -> list[DecimalQuantity]:
         pass
-    
+
     @abstractmethod
     def each_volumes(
         self,
         mix_volume: DecimalQuantity,
-        actions: Sequence[AbstractAction] = tuple(),
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         ...
 
     @classmethod
     @abstractmethod
     def _structure(
-        cls, d: dict[str, Any], experiment: "Experiment"
-    ) -> "AbstractAction":  # pragma: no cover
+        cls, d: dict[str, Any], experiment: Experiment
+    ) -> AbstractAction:  # pragma: no cover
         ...
 
     @abstractmethod
     def _unstructure(
-        self, experiment: "Experiment | None"
+        self, experiment: Experiment | None
     ) -> dict[str, Any]:  # pragma: no cover
         ...
 
@@ -157,8 +156,8 @@ T_AWC = TypeVar("T_AWC", bound="ActionWithComponents")
 
 @attrs.define(eq=False)
 class ActionWithComponents(AbstractAction):
-    
-    components: list[AbstractComponent] = attrs.field(
+
+    components: list[AbstractComponent | str] = attrs.field(
         converter=_maybesequence_comps, on_setattr=attrs.setters.convert
     )
 
@@ -170,7 +169,7 @@ class ActionWithComponents(AbstractAction):
     def name(self) -> str:
         return ", ".join(c.name for c in self.components)
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if type(self) != type(other):
             return False
         for a in self.__attrs_attrs__: # type: ignore
@@ -184,7 +183,7 @@ class ActionWithComponents(AbstractAction):
         return True
 
     def with_experiment(
-        self: T_AWC, experiment: "Experiment", inplace: bool = True
+        self: T_AWC, experiment: Experiment, *, inplace: bool = True
     ) -> T_AWC:
         if inplace:
             self.components = [
@@ -200,7 +199,7 @@ class ActionWithComponents(AbstractAction):
             )
 
     def with_reference(
-        self: T_AWC, reference: Reference, inplace: bool = False
+        self: T_AWC, reference: Reference, *, inplace: bool = False
     ) -> T_AWC:
         if inplace:
             self.components = [ # type: ignore
@@ -217,7 +216,7 @@ class ActionWithComponents(AbstractAction):
         concs = [c.concentration for c in self.components]
         return concs
 
-    def _unstructure(self, experiment: "Experiment | None") -> dict[str, Any]:
+    def _unstructure(self, experiment: Experiment | None) -> dict[str, Any]:
         d: dict[str, Any] = {}
         d["class"] = self.__class__.__name__
         d["components"] = [c._unstructure(experiment) for c in self.components]
@@ -235,8 +234,8 @@ class ActionWithComponents(AbstractAction):
 
     @classmethod
     def _structure(
-        cls, d: dict[str, Any], experiment: "Experiment | None" = None
-    ) -> "ActionWithComponents":
+        cls, d: dict[str, Any], experiment: Experiment | None = None
+    ) -> ActionWithComponents:
         scomps: List[AbstractComponent] = []
         for cd in d["components"]:
             if experiment and (cd["name"] in experiment.components):
@@ -248,14 +247,14 @@ class ActionWithComponents(AbstractAction):
             else:
                 scomps.append(_structure(cd))
         d["components"] = scomps
-        for k in d.keys():
+        for k in d:
             if k == "components":
                 continue
             d[k] = _structure(d[k])
         return cls(**d)
 
     def all_components(
-        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = tuple()
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = ()
     ) -> pd.DataFrame:
         newdf = _empty_components()
 
@@ -317,19 +316,19 @@ class ActionWithComponents(AbstractAction):
         plates: list[str] = []
         wells_list: list[list[WellPos]] = []
 
-        for plate, plate_comps in locdf.groupby("plate"): 
+        for plate, plate_comps in locdf.groupby("plate"):
             for vol, plate_vol_comps in plate_comps.groupby(
                 "ea_vols"
-            ): 
+            ):
                 if pd.isna(plate_vol_comps["well"].iloc[0]):
                     if not pd.isna(plate_vol_comps["well"]).all():
                         raise ValueError
                     names.append(list(plate_vol_comps["names"]))
                     ea_vols.append(vol) # type: ignore
                     tot_vols.append(vol * len(plate_vol_comps)) # type: ignore
-                    numbers.append((len(plate_vol_comps)))
-                    source_concs.append((plate_vol_comps["source_concs"].iloc[0]))
-                    dest_concs.append((plate_vol_comps["dest_concs"].iloc[0]))
+                    numbers.append(len(plate_vol_comps))
+                    source_concs.append(plate_vol_comps["source_concs"].iloc[0])
+                    dest_concs.append(plate_vol_comps["dest_concs"].iloc[0])
                     plates.append(plate) # type: ignore
                     wells_list.append([])
                     continue
@@ -352,11 +351,11 @@ class ActionWithComponents(AbstractAction):
                 plate_vol_comps.sort_values(by="sortkey", inplace=True)
 
                 names.append(list(plate_vol_comps["names"]))
-                ea_vols.append((vol))
-                numbers.append((len(plate_vol_comps)))
-                tot_vols.append((vol * len(plate_vol_comps)))
-                source_concs.append((plate_vol_comps["source_concs"].iloc[0]))
-                dest_concs.append((plate_vol_comps["dest_concs"].iloc[0]))
+                ea_vols.append(vol)
+                numbers.append(len(plate_vol_comps))
+                tot_vols.append(vol * len(plate_vol_comps))
+                source_concs.append(plate_vol_comps["source_concs"].iloc[0])
+                dest_concs.append(plate_vol_comps["dest_concs"].iloc[0])
                 plates.append(plate)
                 wells_list.append(list(plate_vol_comps["well"]))
 
@@ -444,8 +443,8 @@ class FixedVolume(ActionWithComponents):
 
     def dest_concentrations(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_vol: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         return [
             x * y
@@ -456,8 +455,8 @@ class FixedVolume(ActionWithComponents):
 
     def each_volumes(
         self,
-        mix_volume: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_volume: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(self.components)
 
@@ -472,7 +471,7 @@ class FixedVolume(ActionWithComponents):
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
-        actions: Sequence[AbstractAction] = tuple(),
+        actions: Sequence[AbstractAction] = (),
     ) -> list[MixLine]:
         dconcs = self.dest_concentrations(mix_vol, actions)
         eavols = self.each_volumes(mix_vol, actions)
@@ -598,8 +597,8 @@ class EqualConcentration(FixedVolume):
 
     def each_volumes(
         self,
-        mix_volume: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_volume: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         # match self.equal_conc:
         if self.method == "min_volume":
@@ -617,12 +616,12 @@ class EqualConcentration(FixedVolume):
             if any(x != sc[0] for x in sc):
                 raise ValueError("Concentrations")
             return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(self.components)
-        raise ValueError(f"equal_conc={repr(self.method)} not understood")
+        raise ValueError(f"equal_conc={self.method!r} not understood")
 
     def tx_volume(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_vol: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> DecimalQuantity:
         if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
             return self.fixed_volume * len(self.components)
@@ -632,12 +631,12 @@ class EqualConcentration(FixedVolume):
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
-        actions: Sequence[AbstractAction] = tuple(),
+        actions: Sequence[AbstractAction] = (),
     ) -> list[MixLine]:
         ml = super()._mixlines(tablefmt, mix_vol)
         if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
             fv = self.fixed_volume * len(self.components) - sum(self.each_volumes(mix_vol, actions=actions))
-            if not fv == Q_("0.0", uL):
+            if fv != Q_("0.0", uL):
                 ml.append(MixLine([self.method[1]], None, None, fv))
         return ml
 
@@ -709,15 +708,15 @@ class FixedConcentration(ActionWithComponents):
 
     def dest_concentrations(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_vol: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         return [self.fixed_concentration] * len(self.components)
 
     def each_volumes(
         self,
-        mix_volume: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_volume: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         ea_vols = [
             mix_volume * r
@@ -741,7 +740,7 @@ class FixedConcentration(ActionWithComponents):
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
-        actions: Sequence[AbstractAction] = tuple(),
+        actions: Sequence[AbstractAction] = (),
     ) -> list[MixLine]:
         dconcs = self.dest_concentrations(mix_vol, actions)
         eavols = self.each_volumes(mix_vol, actions)
@@ -791,12 +790,12 @@ class ToConcentration(ActionWithComponents):
     compact_display: bool = True
     min_volume: DecimalQuantity = attrs.field(
         converter=_parse_vol_optional,
-        default=Q_(DNAN, uL),
+        default=NAN_VOL,
         on_setattr=attrs.setters.convert,
     )
 
     def _othercomps(
-        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = tuple()
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = ()
     ):
         cps = _empty_components()
 
@@ -834,7 +833,7 @@ class ToConcentration(ActionWithComponents):
     def dest_concentrations(
         self,
         mix_vol: DecimalQuantity,
-        actions: Sequence[AbstractAction] = tuple(),
+        actions: Sequence[AbstractAction] = (),
         _othercomps: pd.DataFrame | None = None,
     ) -> Sequence[DecimalQuantity]:
         if _othercomps is None and actions:
@@ -852,8 +851,8 @@ class ToConcentration(ActionWithComponents):
 
     def each_volumes(
         self,
-        mix_volume: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_volume: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
         _othercomps: pd.DataFrame | None = None,
     ) -> list[DecimalQuantity]:
         ea_vols = [
@@ -881,7 +880,7 @@ class ToConcentration(ActionWithComponents):
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
-        actions: Sequence[AbstractAction] = tuple(),
+        actions: Sequence[AbstractAction] = (),
     ) -> list[MixLine]:
         othercomps = self._othercomps(mix_vol, actions)
         dconcs = self.dest_concentrations(mix_vol, _othercomps=othercomps)

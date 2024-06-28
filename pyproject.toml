@@ -109,3 +109,6 @@ python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
 [[tool.hatch.envs.hatch-test.matrix]]
 python = ["3.10", "3.11", "3.12"]
 feature = ["echo"]
+
+[tool.ruff]
+ignore = ["TID252", "N816", "F405", "F403", "ARG002"]

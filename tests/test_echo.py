@@ -1,13 +1,11 @@
-from decimal import Decimal
-import math
-from typing import cast
-from alhambra_mixes import *
 import pytest
-import re
+
+from alhambra_mixes import Component, Experiment, Mix
 
 
 def test_echo_experiment():
     pytest.importorskip('kithairon')
+    from alhambra_mixes import EchoTargetConcentration
     exp = Experiment()
 
     # We'll make some components:
@@ -23,11 +21,11 @@ def test_echo_experiment():
         ],
         "testmix", plate="destplate", well="A1"
     )
-    
+
     mstr = str(m)
-    
+
     exp.add(m)
-    
+
     p = exp.generate_picklist()
 
     return exp

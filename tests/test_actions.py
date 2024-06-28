@@ -1,6 +1,6 @@
 import pytest
 
-from alhambra_mixes.abbreviated import *
+from alhambra_mixes.abbreviated import EC, FC, FV, Q_, TC, C, uL, ureg
 
 
 def test_names_and_numbers():
@@ -15,7 +15,7 @@ def test_names_and_numbers():
     df = FC("a long name", fixed_concentration="100 µM", set_name="set name")
     assert cf.name == "set name" == df.name
     assert cf.number == 2
-    assert 1 == df.number
+    assert df.number == 1
 
 
 def test_ec_volumes():

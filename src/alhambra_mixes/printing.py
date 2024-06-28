@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from math import isnan
-from typing import Any, Iterable, Literal, Sequence, Union, cast
+from typing import Any, Iterable, Sequence, Union, cast
 
 import attrs
 import numpy as np

@@ -3,33 +3,30 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from math import isnan
 from typing import TYPE_CHECKING, Any, Dict, Sequence, Tuple, TypeVar, cast
-from typing_extensions import Self
 
 import attrs
 import pandas as pd
 
+from .dictstructure import _STRUCTURE_CLASSES, _structure, _unstructure
 from .locations import WellPos, _parse_wellpos_optional
 from .logging import log
 from .printing import TableFormat
 from .units import (
+    NAN_VOL,
     Q_,
     ZERO_VOL,
-    Decimal,
-    Quantity,
+    DecimalQuantity,
     _parse_conc_optional,
     _parse_vol_optional,
     nM,
     ureg,
-    NAN_VOL,
-    DecimalQuantity,
 )
-from .util import _none_as_empty_string
-from .dictstructure import _structure, _unstructure, _STRUCTURE_CLASSES
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .references import Reference
-    from .experiments import Experiment
     from attrs import Attribute
+
+    from .experiments import Experiment
+    from .references import Reference
 
 
 T = TypeVar("T")
@@ -93,19 +90,19 @@ class AbstractComponent(ABC):
 
     @abstractmethod
     def with_experiment(
-        self, reference: "Experiment", inplace: bool = True
+        self, reference: Experiment, inplace: bool = True
     ) -> AbstractComponent:  # pragma: no cover
         ...
 
     @classmethod
     @abstractmethod
     def _structure(
-        cls, d: dict[str, Any], experiment: "Experiment" | None = None
-    ) -> "AbstractComponent":  # pragma: no cover
+        cls, d: dict[str, Any], experiment: Experiment | None = None
+    ) -> AbstractComponent:  # pragma: no cover
         ...
 
     @abstractmethod
-    def _unstructure(self, experiment: "Experiment" | None = None) -> dict[str, Any]:
+    def _unstructure(self, experiment: Experiment | None = None) -> dict[str, Any]:
         ...
 
     def printed_name(self, tablefmt: str | TableFormat) -> str:
@@ -180,7 +177,7 @@ class Component(AbstractComponent):
         )
         return df
 
-    def _unstructure(self, experiment: "Experiment" | None = None) -> dict[str, Any]:
+    def _unstructure(self, experiment: Experiment | None = None) -> dict[str, Any]:
         d = {}
         d["class"] = self.__class__.__name__
         for att in cast("Sequence[Attribute]", self.__attrs_attrs__):
@@ -196,14 +193,14 @@ class Component(AbstractComponent):
 
     @classmethod
     def _structure(
-        cls, d: dict[str, Any], experiment: "Experiment" | None = None
-    ) -> "Component":
+        cls, d: dict[str, Any], experiment: Experiment | None = None
+    ) -> Component:
         for k, v in d.items():
             d[k] = _structure(v, experiment)
         return cls(**d)
 
     def with_experiment(
-        self: Component, experiment: "Experiment", inplace: bool = True
+        self: Component, experiment: Experiment, inplace: bool = True
     ) -> AbstractComponent:
         if self.name in experiment.components:
             return experiment.components[self.name]
@@ -229,7 +226,7 @@ class Component(AbstractComponent):
         matches = []
         for _, ref_comp in ref_comps.iterrows():
             ref_conc = Q_(ref_comp["Concentration (nM)"], nM)
-            if not isnan(self.concentration.m) and not (ref_conc == self.concentration):
+            if not isnan(self.concentration.m) and ref_conc != self.concentration:
                 mismatches.append(("Concentration (nM)", ref_comp))
                 continue
 
@@ -300,7 +297,7 @@ class Strand(Component):
         matches = []
         for _, ref_comp in ref_comps.iterrows():
             ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], nM)
-            if not isnan(self.concentration.m) and not (ref_conc == self.concentration):
+            if not isnan(self.concentration.m) and ref_conc != self.concentration:
                 mismatches.append(("Concentration (nM)", ref_comp))
                 continue
 

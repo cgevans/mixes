@@ -44,14 +44,13 @@ from __future__ import annotations
 import decimal
 import warnings
 from decimal import Decimal as D
-from .units import DecimalQuantity, nmol
-from typing import Any, Iterable, Sequence, Type, Union, cast
+from typing import Any, Iterable, Sequence, Union, cast
 
 import pandas
 import pint
 from pint import Quantity
 
-from .units import DNAN, Q_, _parse_vol_optional, nM, uL, uM, ureg, normalize
+from .units import DNAN, Q_, DecimalQuantity, _parse_vol_optional, nmol, normalize, uL, uM, ureg
 
 
 def parse_vol(vol: Union[float, int, str, DecimalQuantity]) -> DecimalQuantity:
@@ -211,7 +210,7 @@ def measure_conc(
         ave_absorbance = absorbance
     elif _has_length(absorbance):
         if len(absorbance) == 0:
-            raise ValueError(f"absorbance cannot be an empty sequence")
+            raise ValueError("absorbance cannot be an empty sequence")
         if not isinstance(absorbance[0], (int, float)):
             raise TypeError(
                 f"absorbance sequence must contain ints or floats, "

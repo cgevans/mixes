@@ -8,32 +8,32 @@ from typing import (
     Any,
     Dict,
     Iterator,
+    Literal,
     Mapping,
     Sequence,
     Set,
     TextIO,
     Tuple,
-    cast,
-    Literal,
 )
 
 import attrs
 
-from .dictstructure import _structure, _unstructure
-from .units import DNAN, Q_, ZERO_VOL, Decimal, uL, Quantity, DecimalQuantity
-from .mixes import Mix
-from .mixes import VolumeError
-
+from .dictstructure import _structure
+from .mixes import Mix, VolumeError
+from .units import DNAN, Q_, DecimalQuantity, uL
 from .util import _get_picklist_class
 
 if TYPE_CHECKING:  # pragma: no cover
+    from kithairon import PickList
+
     from alhambra_mixes.actions import AbstractAction
+
     from .components import AbstractComponent
     from .references import Reference
-    from kithairon import PickList
-    
+
 
 from abc import ABCMeta, abstractmethod
+
 
 def _exp_attr_set_reference(
     self, attribute: Any, reference: Reference | None
@@ -53,38 +53,38 @@ class AbstractLocationType(metaclass=ABCMeta):
     @abstractmethod
     def name(self):
         ...
-    
+
     @property
     @abstractmethod
     def is_echo_source_compatible(self) -> bool:
         return False
-    
+
 # class LocationType(AbstractLocationType):
 #     __slots__ = ("name", "loc_type", "is_echo_source_compatible")
 #     name: str
 #     loc_type: Literal["plate96", "plate384", "tube"]
 #     is_echo_source_compatible: bool
-    
+
 #     def __init__(self, name: str, loc_type: Literal["plate96", "plate384", "tube"], is_echo_source_compatible: bool = False):
 #         self.name = name
 #         self.loc_type = loc_type
 #         self.is_echo_source_compatible = is_echo_source_compatible
-        
+
 #     def __str__(self):
 #         return self.name
-    
+
 #     def __repr__(self):
 #         return f"LocationType({self.name}, {self.loc_type}, {self.is_echo_source_compatible})"
-    
+
 #     def __eq__(self, other):
 #         return self.name == other.name and self.loc_type == other.loc_type and self.is_echo_source_compatible == other.is_echo_source_compatible
-    
+
 #     def __hash__(self):
 #         return hash((self.name, self.loc_type, self.is_echo_source_compatible))
-    
+
 # LOCATION_TYPE_MAP = {
 #     '384PP_AQ_BP': LocationType('384PP_AQ_BP', 'plate384', True),
-# }    
+# }
 
 # def _location_type_converter(value: AbstractLocationType | str) -> AbstractLocationType:
 #     if isinstance(value, AbstractLocationType):
@@ -93,14 +93,14 @@ class AbstractLocationType(metaclass=ABCMeta):
 #         return LOCATION_TYPE_MAP[value]
 #     else:
 #         raise ValueError(f"Invalid location type: {value}")
-    
+
 @attrs.define()
 class LocationInfo:
     echo_source_type: str | None = None
     echo_dest_type: str | None = None
     full_location: tuple[str, ...] = ()
     info: dict[str, Any] = attrs.field(factory=dict)
-    
+
     @classmethod
     def from_obj(self, obj) -> LocationInfo:
         if isinstance(obj, LocationInfo):
@@ -112,7 +112,7 @@ class LocationInfo:
 
 class LocationDict:
     _locs: dict[str, LocationInfo]
-    
+
     def __init__(self, locs: dict[str, LocationInfo | Any]):
         self._locs = {k: LocationInfo.from_obj(v) for k, v in locs.items()}
 
@@ -127,47 +127,47 @@ class LocationDict:
 
     def __getitem__(self, key: str) -> LocationInfo:
         return self._locs[key]
-    
+
     def __setitem__(self, key: str, value: LocationInfo | Any) -> None:
         self._locs[key] = LocationInfo.from_obj(value)
-        
+
     def __delitem__(self, key: str) -> None:
         del self._locs[key]
-        
+
     def __contains__(self, key: str) -> bool:
         return key in self._locs
-    
+
     def __iter__(self) -> Iterator[str]:
         return iter(self._locs)
-    
+
     def __len__(self) -> int:
         return len(self._locs)
-    
+
     def keys(self) -> Set[str]:
         return self._locs.keys()
-    
+
     def values(self) -> Set[LocationInfo]:
         return self._locs.values()
-    
+
     def items(self) -> Set[Tuple[str, LocationInfo]]:
         return self._locs.items()
-    
+
     def __repr__(self) -> str:
         return f"LocationDict({self._locs})"
-    
+
     def __str__(self) -> str:
         return f"LocationDict({self._locs})"
-    
+
     def __eq__(self, other) -> bool:
         return self._locs == other._locs
-    
+
     def get(self, key: str, default: Any | None = None) -> LocationInfo | None:
         if default is not None:
             default = LocationInfo.from_obj(default)
         return self._locs.get(key, default)
 
 @attrs.define()
-class Experiment: 
+class Experiment:
     """
     A class collecting many related mixes and components, allowing methods to be run that consider all of them
     together.
@@ -184,7 +184,7 @@ class Experiment:
     )
     locations: LocationDict = attrs.field(factory=dict, converter=LocationDict.from_obj)
 
-    def generate_picklist(self) -> "PickList":
+    def generate_picklist(self) -> PickList:
         PickList = _get_picklist_class()
 
         pls: list[PickList] = []
@@ -194,10 +194,10 @@ class Experiment:
                 if p is not None:
                     pls.append(p)
         p = PickList.concat(pls)
-        
+
         import networkx as nx
         import polars as pl
-        
+
         g = p.well_transfer_multigraph()
 
         a = list(enumerate(nx.topological_generations(g)))
@@ -314,9 +314,8 @@ class Experiment:
                 # This will only happen in a hypothetical component where
                 # the name cannot be changed.
                 raise ValueError(f"Component does not have a settable name: {mix}.")
-        else:
-            if mix.name != name:
-                raise ValueError(f"Component name {mix.name} does not match {name}.")
+        elif mix.name != name:
+            raise ValueError(f"Component name {mix.name} does not match {name}.")
         mix = mix.with_experiment(self, True)
         if self.reference:
             mix = mix.with_reference(self.reference, inplace=True)
@@ -409,7 +408,7 @@ class Experiment:
         }
 
     @classmethod
-    def _structure(cls, d: dict[str, Any]) -> "Experiment":
+    def _structure(cls, d: dict[str, Any]) -> Experiment:
         """
         Create an Experiment from a dict representation.
         """
@@ -421,7 +420,7 @@ class Experiment:
         return cls(**d)
 
     @classmethod
-    def load(cls, filename_or_stream: str | PathLike | TextIO) -> "Experiment":
+    def load(cls, filename_or_stream: str | PathLike | TextIO) -> Experiment:
         """
         Load an experiment from a JSON-formatted file created by Experiment.save.
         """
@@ -429,7 +428,7 @@ class Experiment:
             p = Path(filename_or_stream)
             if not p.suffix:
                 p = p.with_suffix(".json")
-            s: TextIO = open(p, "r")
+            s: TextIO = open(p)
             close = True
         else:
             s = filename_or_stream

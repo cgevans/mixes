@@ -1,10 +1,8 @@
 import itertools
 import re
 from decimal import Decimal
-from typing import cast, Optional
+from typing import Optional
 
-import numpy as np
-import pandas as pd
 import pint.testing
 import pytest
 
@@ -499,7 +497,7 @@ def assert_close(
 
 
 def test_split_mix():
-    from alhambra_mixes import Mix, FixedConcentration, FixedVolume, Strand, split_mix
+    from alhambra_mixes import FixedConcentration, FixedVolume, Mix, Strand, split_mix
 
     staples = [Strand(f"stap{i}", concentration="1uM") for i in range(10)]
     staple_mix = Mix(
@@ -510,12 +508,12 @@ def test_split_mix():
     buffer_10x = Component(name="10x buffer", concentration="100 mM")
     mix = Mix(
         actions=[
-            FixedVolume(components=[buffer_10x], fixed_volume=f"10 uL"),
-            FixedConcentration(components=[m13], fixed_concentration=f"1 nM"),
-            FixedConcentration(components=[staple_mix], fixed_concentration=f"10 nM"),
+            FixedVolume(components=[buffer_10x], fixed_volume="10 uL"),
+            FixedConcentration(components=[m13], fixed_concentration="1 nM"),
+            FixedConcentration(components=[staple_mix], fixed_concentration="10 nM"),
         ],
         name="mm",
-        fixed_total_volume=f"100 uL",
+        fixed_total_volume="100 uL",
     )
     sm = split_mix(mix=mix, num_tubes=5, excess=0)
 
@@ -533,7 +531,7 @@ def test_split_mix():
 
 
 def test_split_mix_with_excess():
-    from alhambra_mixes import Mix, FixedConcentration, FixedVolume, Strand, split_mix
+    from alhambra_mixes import FixedConcentration, FixedVolume, Mix, Strand, split_mix
 
     staples = [Strand(f"stap{i}", concentration="1uM") for i in range(10)]
     staple_mix = Mix(
@@ -544,12 +542,12 @@ def test_split_mix_with_excess():
     buffer_10x = Component(name="10x buffer", concentration="100 mM")
     mix = Mix(
         actions=[
-            FixedVolume(components=[buffer_10x], fixed_volume=f"10 uL"),
-            FixedConcentration(components=[m13], fixed_concentration=f"1 nM"),
-            FixedConcentration(components=[staple_mix], fixed_concentration=f"10 nM"),
+            FixedVolume(components=[buffer_10x], fixed_volume="10 uL"),
+            FixedConcentration(components=[m13], fixed_concentration="1 nM"),
+            FixedConcentration(components=[staple_mix], fixed_concentration="10 nM"),
         ],
         name="mm",
-        fixed_total_volume=f"100 uL",
+        fixed_total_volume="100 uL",
     )
     sm = split_mix(mix=mix, num_tubes=5, excess=0.1)
 
@@ -568,7 +566,7 @@ def test_split_mix_with_excess():
 
 @pytest.fixture
 def master_mix_fixture():
-    from alhambra_mixes import Mix, FixedConcentration, Strand
+    from alhambra_mixes import FixedConcentration, Mix, Strand
 
     s1 = Strand("s1", concentration="100 nM")
     s2 = Strand("s2", concentration="100 nM")
@@ -581,23 +579,23 @@ def master_mix_fixture():
     mixes = [
         Mix(
             actions=[
-                FixedConcentration(components=[s1, s2], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s7], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s1, s2], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s3, s4], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s7], fixed_concentration="10 nM"),
             ],
             name="mix 0",
-            fixed_total_volume=f"100 uL",
+            fixed_total_volume="100 uL",
         ),
         Mix(
             actions=[
-                FixedConcentration(components=[s1, s2], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s8], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s1, s2], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s3, s4], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s8], fixed_concentration="10 nM"),
             ],
             name="mix 1",
-            fixed_total_volume=f"100 uL",
+            fixed_total_volume="100 uL",
         ),
     ]
     return mixes
@@ -669,33 +667,33 @@ def test_master_mix_different_buffer_volumes():
     mixes = [
         Mix(
             actions=[
-                FixedConcentration(components=[s1, s2], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s1, s2], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s3, s4], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration="10 nM"),
             ],
             name="mix 0",
-            fixed_total_volume=f"100 uL",
+            fixed_total_volume="100 uL",
         ),
         Mix(
             actions=[
-                FixedConcentration(components=[s1, s2], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s8], fixed_concentration=f"10 nM"),
+                FixedConcentration(components=[s1, s2], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s3, s4], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s8], fixed_concentration="10 nM"),
             ],
             name="mix 1",
-            fixed_total_volume=f"100 uL",
+            fixed_total_volume="100 uL",
         ),
         Mix(
             actions=[
-                FixedConcentration(components=[s1, s2], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s7], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s8], fixed_concentration=f"20 nM"),
+                FixedConcentration(components=[s1, s2], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s3, s4], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s7], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s8], fixed_concentration="20 nM"),
             ],
             name="mix 1",
-            fixed_total_volume=f"100 uL",
+            fixed_total_volume="100 uL",
         ),
     ]
     mm, final_mixes = master_mix(mixes=mixes, name="master mix")
@@ -763,7 +761,7 @@ def test_master_mix_exclude_shared_components(master_mix_fixture):
 
 
 def test_master_mix_with_FixedVolume_action(master_mix_fixture):
-    from alhambra_mixes import Mix, FixedConcentration, FixedVolume, Strand, master_mix
+    from alhambra_mixes import FixedConcentration, FixedVolume, Mix, Strand, master_mix
 
     s1 = Strand("s1", concentration="100 nM")
     s2 = Strand("s2", concentration="100 nM")
@@ -776,23 +774,23 @@ def test_master_mix_with_FixedVolume_action(master_mix_fixture):
     mixes = [
         Mix(
             actions=[
-                FixedVolume(components=[s1, s2], fixed_volume=f"10 uL"),
-                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s7], fixed_concentration=f"10 nM"),
+                FixedVolume(components=[s1, s2], fixed_volume="10 uL"),
+                FixedConcentration(components=[s3, s4], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s7], fixed_concentration="10 nM"),
             ],
             name="mix 0",
-            fixed_total_volume=f"100 uL",
+            fixed_total_volume="100 uL",
         ),
         Mix(
             actions=[
-                FixedVolume(components=[s1, s2], fixed_volume=f"10 uL"),
-                FixedConcentration(components=[s3, s4], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s5, s6], fixed_concentration=f"10 nM"),
-                FixedConcentration(components=[s8], fixed_concentration=f"10 nM"),
+                FixedVolume(components=[s1, s2], fixed_volume="10 uL"),
+                FixedConcentration(components=[s3, s4], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s5, s6], fixed_concentration="10 nM"),
+                FixedConcentration(components=[s8], fixed_concentration="10 nM"),
             ],
             name="mix 1",
-            fixed_total_volume=f"100 uL",
+            fixed_total_volume="100 uL",
         ),
     ]
 

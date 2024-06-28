@@ -3,10 +3,11 @@ from __future__ import annotations
 import decimal
 from decimal import Decimal
 from typing import Sequence, TypeVar, Union, cast, overload
-from typing_extensions import TypeAlias
+
 import pint
 from pint import Quantity
 from pint.facets.plain import PlainQuantity, PlainUnit
+from typing_extensions import TypeAlias
 
 # This needs to be here to make Decimal NaNs behave the way that NaNs
 # *everywhere else in the standard library* behave.
@@ -84,7 +85,7 @@ def _ratio(
 
 
 @overload
-def _ratio(top: PlainQuantity[T] | DecimalQuantity, bottom: PlainQuantity[T] | DecimalQuantity) -> Union[float, Decimal]: 
+def _ratio(top: PlainQuantity[T] | DecimalQuantity, bottom: PlainQuantity[T] | DecimalQuantity) -> Union[float, Decimal]:
     ...
 
 

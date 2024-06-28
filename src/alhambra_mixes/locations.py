@@ -252,7 +252,7 @@ def mixgaps(wl: Iterable[WellPos], by: Literal["row", "col"]) -> int:
     prevpos = next(wli)
 
     for pos in wli:
-        if not (getnextpos(prevpos) == pos):
+        if getnextpos(prevpos) != pos:
             score += 1
         prevpos = pos
     return score

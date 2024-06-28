@@ -1,36 +1,33 @@
 import math
-import attrs
-from tabulate import TableFormat
-from .actions import ActionWithComponents, AbstractAction
 from abc import ABCMeta
-from typing import Sequence, cast, TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, Sequence, cast
+
+import attrs
 import polars as pl
+from tabulate import TableFormat
 
-from .printing import MixLine
-
+from .actions import AbstractAction, ActionWithComponents
 from .experiments import Experiment
 from .mixes import Mix
-
-from typing import Literal
+from .printing import MixLine
 
 if TYPE_CHECKING:
     from kithairon.picklists import PickList
 
-from .util import _get_picklist_class
 
 from .units import (
     DNAN,
+    Q_,
     DecimalQuantity,
     _parse_conc_required,
     _parse_vol_optional,
-    Q_,
     _parse_vol_required,
     _ratio,
     uL,
 )
 
 try:
-    from kithairon.picklists import PickList # type: ignore
+    from kithairon.picklists import PickList  # type: ignore
 except ImportError as err:
     if err.name != "kithairon":
         raise err
@@ -258,7 +255,7 @@ class EchoEqualTargetConcentration(AbstractEchoAction):
             return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(
                 self.components
             )
-        raise ValueError(f"equal_conc={repr(self.method)} not understood")
+        raise ValueError(f"equal_conc={self.method!r} not understood")
 
     @property
     def name(self) -> str:

@@ -14,9 +14,9 @@ T = TypeVar("T")
 def _none_as_empty_string(v: str | None) -> str:
     return "" if v is None else v
 
-def _get_picklist_class() -> "type[PickList]":
+def _get_picklist_class() -> type[PickList]:
     try:
-        from kithairon.picklists import PickList # type: ignore
+        from kithairon.picklists import PickList  # type: ignore
         return PickList
     except ImportError as err:
         if err.name != "kithairon":
