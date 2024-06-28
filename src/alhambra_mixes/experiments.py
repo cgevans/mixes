@@ -184,7 +184,7 @@ class Experiment:
     )
     locations: LocationDict = attrs.field(factory=dict, converter=LocationDict.from_obj)
 
-    def generate_picklist(self) -> PickList:
+    def generate_picklist(self) -> "PickList":
         _require_kithairon()
 
         pls: list[PickList] = []
