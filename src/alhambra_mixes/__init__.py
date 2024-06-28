@@ -16,15 +16,7 @@ from .quantitate import hydrate_and_measure_conc_and_dilute, measure_conc_and_di
 from .references import Reference, load_reference
 from .units import DNAN, VolumeError, uL, uM, nM, Q_, ureg
 
-try:
-    from .echo import EchoEqualTargetConcentration, EchoFillToVolume, EchoFixedVolume, EchoTargetConcentration, AbstractEchoAction
-except ImportError as err:
-    if err.name == "kithairon":
-        pass
-    else:
-        raise err
-
-__all__ = (
+__all__ = [
     "uL",
     "uM",
     "nM",
@@ -52,9 +44,26 @@ __all__ = (
     "hydrate_and_measure_conc_and_dilute",
     "split_mix",
     "master_mix",
-    "EchoEqualTargetConcentration",
-    "EchoFillToVolume",
-    "EchoFixedVolume",
-    "EchoTargetConcentration",
-    "AbstractEchoAction",
-)
+]
+
+try:
+    from .echo import (
+        EchoEqualTargetConcentration,
+        EchoFillToVolume,
+        EchoFixedVolume,
+        EchoTargetConcentration,
+        AbstractEchoAction,
+    )
+
+    __all__ += [
+        "EchoEqualTargetConcentration",
+        "EchoFillToVolume",
+        "EchoFixedVolume",
+        "EchoTargetConcentration",
+        "AbstractEchoAction"
+    ]
+except ImportError as err:
+    if err.name == "kithairon":
+        pass
+    else:
+        raise err

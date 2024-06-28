@@ -51,7 +51,7 @@ if TYPE_CHECKING:  # pragma: no cover
 from .units import *
 from .units import VolumeError, _parse_vol_optional, normalize
 
-from .util import _require_kithairon
+from .util import _get_picklist_class
 
 warnings.filterwarnings(
     "ignore",
@@ -671,7 +671,7 @@ class Mix(AbstractComponent):
             picklist for the mix
         """
 
-        _require_kithairon()
+        PickList = _get_picklist_class()
         pls: list[PickList] = []
         for action in self.actions:
             if hasattr(action, "to_picklist"):
@@ -1334,7 +1334,7 @@ def split_mix(
 def intersection(s1: Iterable[T], s2: Iterable[T]) -> list[T]:
     """
     Interprets s1 and s2 as "sets" (with unhashable elements that implement ==) and
-    computes a list of their intersection s1 \cap s2.
+    computes a list of their intersection s1 \\cap s2.
 
     Parameters
     ----------
@@ -1347,7 +1347,7 @@ def intersection(s1: Iterable[T], s2: Iterable[T]) -> list[T]:
 
     Returns
     -------
-       list of elements in both `s1` and `s2`
+    list of elements in both `s1` and `s2`
     """
     return [elt for elt in s1 if elt in s2]
 
@@ -1355,7 +1355,7 @@ def intersection(s1: Iterable[T], s2: Iterable[T]) -> list[T]:
 def difference(s1: Iterable[T], s2: Iterable[T]) -> list[T]:
     """
     Interprets s1 and s2 as "sets" (with unhashable elements that implement ==) and
-    computes a list of their difference s1 \ s2.
+    computes a list of their difference s1 \\ s2.
 
     Parameters
     ----------

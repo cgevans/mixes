@@ -16,7 +16,7 @@ from typing import Literal
 if TYPE_CHECKING:
     from kithairon.picklists import PickList
 
-from .util import _require_kithairon
+from .util import _get_picklist_class
 
 from .units import (
     DNAN,
@@ -29,7 +29,13 @@ from .units import (
     uL,
 )
 
-_require_kithairon()
+try:
+    from kithairon.picklists import PickList # type: ignore
+except ImportError as err:
+    if err.name != "kithairon":
+        raise err
+    raise ImportError("kithairon is required for Echo support, but it is not installed.", name="kithairon")
+
 
 DEFAULT_DROPLET_VOL = Q_(25, "nL")
 

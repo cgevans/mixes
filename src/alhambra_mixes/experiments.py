@@ -24,7 +24,7 @@ from .units import DNAN, Q_, ZERO_VOL, Decimal, uL, Quantity, DecimalQuantity
 from .mixes import Mix
 from .mixes import VolumeError
 
-from .util import _require_kithairon
+from .util import _get_picklist_class
 
 if TYPE_CHECKING:  # pragma: no cover
     from alhambra_mixes.actions import AbstractAction
@@ -185,7 +185,7 @@ class Experiment:
     locations: LocationDict = attrs.field(factory=dict, converter=LocationDict.from_obj)
 
     def generate_picklist(self) -> "PickList":
-        _require_kithairon()
+        PickList = _get_picklist_class()
 
         pls: list[PickList] = []
         for c in self.components.values():
