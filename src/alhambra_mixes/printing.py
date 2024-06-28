@@ -167,7 +167,7 @@ _NL: dict[Union[str, TableFormat], str] = {
 
 
 def _formatter(
-    x: int | float | str | list[str] | DecimalQuantity | None,
+    x: float | str | list[str] | DecimalQuantity | None,
     italic: bool = False,
     tablefmt: str | TableFormat = "pipe",
     splits: list = [],

@@ -111,4 +111,7 @@ python = ["3.10", "3.11", "3.12"]
 feature = ["echo"]
 
 [tool.ruff]
-ignore = ["TID252", "N816", "F405", "F403", "ARG002"]
+ignore = ["TID252", "N816", "F405", "F403", "ARG002"
+    # For now
+    , "EM101", "EM102", "RET505", "RET504", "TRY003", "PLR2004"
+]

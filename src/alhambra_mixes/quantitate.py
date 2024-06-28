@@ -50,7 +50,7 @@ import pandas
 import pint
 from pint import Quantity
 
-from .units import DNAN, Q_, DecimalQuantity, _parse_vol_optional, nmol, normalize, uL, uM, ureg
+from .units import Q_, DecimalQuantity, _parse_vol_optional, nmol, normalize, uM, ureg
 
 
 def parse_vol(vol: Union[float, int, str, DecimalQuantity]) -> DecimalQuantity:
@@ -84,7 +84,7 @@ warnings.filterwarnings(
 )
 
 
-def parse_conc(conc: float | int | str | DecimalQuantity) -> DecimalQuantity:
+def parse_conc(conc: float | str | DecimalQuantity) -> DecimalQuantity:
     """
     Default units for conc being a float/int is µM (micromolar).
     """
@@ -106,11 +106,11 @@ def parse_conc(conc: float | int | str | DecimalQuantity) -> DecimalQuantity:
         conc = Q_(D(conc.m), conc.u)
         return normalize(conc)
     elif conc is None:
-        return Q_(DNAN, uL)
+        return NAN_VOL
     raise ValueError
 
 
-def parse_nmol(nmoles: float | int | str | DecimalQuantity) -> DecimalQuantity:
+def parse_nmol(nmoles: float | str | DecimalQuantity) -> DecimalQuantity:
     """
     Default units for molar amount being a float/int is nmol (nanomoles).
     """
@@ -128,13 +128,13 @@ def parse_nmol(nmoles: float | int | str | DecimalQuantity) -> DecimalQuantity:
         nmoles = Q_(D(nmoles.m), nmoles.u)
         return normalize(nmoles)
     elif nmoles is None:
-        return Q_(DNAN, nmol)
+        return NAN_AMOUNT
     raise ValueError
 
 
 # initial hydration of dry DNA
 def hydrate(
-    target_conc: float | int | str | DecimalQuantity, nmol: float | int | str | DecimalQuantity
+    target_conc: float | str | DecimalQuantity, nmol: float | str | DecimalQuantity
 ) -> DecimalQuantity:
     """
     Indicates how much buffer/water volume to add to a dry DNA sample to reach a particular concentration.
@@ -155,9 +155,9 @@ def hydrate(
 
 
 def dilute(
-    target_conc: float | int | str | DecimalQuantity,
-    start_conc: float | int | str | DecimalQuantity,
-    vol: float | int | str | DecimalQuantity,
+    target_conc: float | str | DecimalQuantity,
+    start_conc: float | str | DecimalQuantity,
+    vol: float | str | DecimalQuantity,
 ) -> DecimalQuantity:
     """
     Indicates how much buffer/water volume to add to a wet DNA sample to reach a particular concentration.
@@ -193,7 +193,7 @@ def _has_length(lst: Any) -> bool:
 
 
 def measure_conc(
-    absorbance: float | int | Sequence[float | int], ext_coef: float | int
+    absorbance: float | Sequence[float], ext_coef: float
 ) -> DecimalQuantity:
     """
     Calculates concentration of DNA sample given an absorbance reading on a NanoDrop machine.
@@ -232,11 +232,11 @@ def measure_conc(
 
 
 def measure_conc_and_dilute(
-    absorbance: float | int | Sequence[float | int],
-    ext_coef: float | int,
-    target_conc: float | int | str | DecimalQuantity,
-    vol: float | int | str | DecimalQuantity,
-    vol_removed: None | float | int | str | DecimalQuantity = None,
+    absorbance: float | Sequence[float],
+    ext_coef: float,
+    target_conc: float | str | DecimalQuantity,
+    vol: float | str | DecimalQuantity,
+    vol_removed: None | float | str | DecimalQuantity = None,
 ) -> tuple[DecimalQuantity, DecimalQuantity]:
     """
     Calculates concentration of DNA sample given an absorbance reading on a NanoDrop machine,
@@ -304,9 +304,9 @@ def get_vols_of_strands_from_dataframe(dataframe: pandas.DataFrame) -> dict[str,
 
 def measure_conc_and_dilute_from_specs(
     filename: str,
-    target_conc: float | int | str | DecimalQuantity,
-    absorbances: dict[str, float | int | Sequence[float | int]],
-    vols_removed: dict[str, None | float | int | str | DecimalQuantity] | None = None,
+    target_conc: float | str | DecimalQuantity,
+    absorbances: dict[str, float | Sequence[float]],
+    vols_removed: dict[str, None | float | str | DecimalQuantity] | None = None,
     enforce_utf8: bool = True,
 ) -> dict[str, tuple[DecimalQuantity, DecimalQuantity]]:
     """
@@ -376,9 +376,9 @@ def measure_conc_and_dilute_from_specs(
 
 def display_measure_conc_and_dilute_from_specs(
     filename: str,
-    target_conc: float | int | str | DecimalQuantity,
-    absorbances: dict[str, float | int | Sequence[float | int]],
-    vols_removed: dict[str, None | float | int | str | DecimalQuantity] | None = None,
+    target_conc: float | str | DecimalQuantity,
+    absorbances: dict[str, float | Sequence[float]],
+    vols_removed: dict[str, None | float | str | DecimalQuantity] | None = None,
     enforce_utf8: bool = True,
 ) -> None:
     """
@@ -429,12 +429,12 @@ def display_measure_conc_and_dilute_from_specs(
 
 
 def hydrate_and_measure_conc_and_dilute(
-    nmol: float | int | str | DecimalQuantity,
-    target_conc_high: float | int | str | DecimalQuantity,
-    target_conc_low: float | int | str | DecimalQuantity,
-    absorbance: float | int | Sequence[float | int],
-    ext_coef: float | int,
-    vol_removed: None | float | int | str | DecimalQuantity = None,
+    nmol: float | str | DecimalQuantity,
+    target_conc_high: float | str | DecimalQuantity,
+    target_conc_low: float | str | DecimalQuantity,
+    absorbance: float | Sequence[float],
+    ext_coef: float,
+    vol_removed: None | float | str | DecimalQuantity = None,
 ) -> tuple[DecimalQuantity, DecimalQuantity]:
     """
     Assuming :func:`hydrate` is called with parameters `nmol` and `target_conc_high` to give initial
@@ -518,10 +518,10 @@ def key_to_prop_from_dataframe(
 
 def hydrate_and_measure_conc_and_dilute_from_specs(
     filename: str,
-    target_conc_high: float | int | str | DecimalQuantity,
-    target_conc_low: float | int | str | DecimalQuantity,
-    absorbances: dict[str, float | int | Sequence[float | int]],
-    vols_removed: dict[str, None | float | int | str | DecimalQuantity] | None = None,
+    target_conc_high: float | str | DecimalQuantity,
+    target_conc_low: float | str | DecimalQuantity,
+    absorbances: dict[str, float | Sequence[float]],
+    vols_removed: dict[str, None | float | str | DecimalQuantity] | None = None,
     enforce_utf8: bool = True,
 ) -> dict[str, tuple[DecimalQuantity, DecimalQuantity]]:
     """
@@ -652,7 +652,7 @@ def iterable_is_empty(iterable: Iterable) -> bool:
 
 def hydrate_from_specs(
     filename: str,
-    target_conc: float | int | str | DecimalQuantity,
+    target_conc: float | str | DecimalQuantity,
     strands: Sequence[str] | Sequence[int] | None = None,
     enforce_utf8: bool = True,
 ) -> dict[str, DecimalQuantity]:
@@ -798,7 +798,7 @@ def find_volume_key(dataframe: pandas.DataFrame) -> str:
 
 def measure_conc_from_specs(
     filename: str,
-    absorbances: dict[str, float | int | Sequence[float] | Sequence[int]],
+    absorbances: dict[str, float | Sequence[float] | Sequence[int]],
     enforce_utf8: bool = True,
 ) -> dict[str, DecimalQuantity]:
     """
@@ -848,10 +848,10 @@ def measure_conc_from_specs(
 
 def display_hydrate_and_measure_conc_and_dilute_from_specs(
     filename: str,
-    target_conc_high: float | int | str | DecimalQuantity,
-    target_conc_low: float | int | str | DecimalQuantity,
-    absorbances: dict[str, float | int | Sequence[float | int]],
-    vols_removed: dict[str, None | float | int | str | DecimalQuantity] | None = None,
+    target_conc_high: float | str | DecimalQuantity,
+    target_conc_low: float | str | DecimalQuantity,
+    absorbances: dict[str, float | Sequence[float]],
+    vols_removed: dict[str, None | float | str | DecimalQuantity] | None = None,
 ) -> None:
     """
     Like :meth:`hydrate_and_measure_conc_and_dilute_from_specs`, but displays the value in a Jupyter
@@ -883,7 +883,7 @@ def display_hydrate_and_measure_conc_and_dilute_from_specs(
 
 def display_hydrate_from_specs(
     filename: str,
-    target_conc: float | int | str | DecimalQuantity,
+    target_conc: float | str | DecimalQuantity,
     strands: Sequence[str] | Sequence[int] | None = None,
 ) -> None:
     """
@@ -919,7 +919,7 @@ def display_hydrate_from_specs(
 
 
 def display_measure_conc_from_specs(
-    filename: str, absorbances: dict[str, float | int | Sequence[float] | Sequence[int]]
+    filename: str, absorbances: dict[str, float | Sequence[float] | Sequence[int]]
 ) -> None:
     """
     Indicates how much volume to add to a dry DNA sample to reach a particular concentration,

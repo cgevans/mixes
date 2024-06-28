@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import math
 from abc import ABCMeta
 from typing import TYPE_CHECKING, Literal, Sequence, cast
@@ -16,7 +18,7 @@ if TYPE_CHECKING:
 
 
 from .units import (
-    DNAN,
+    NAN_VOL,
     Q_,
     DecimalQuantity,
     _parse_conc_required,
@@ -40,7 +42,7 @@ DEFAULT_DROPLET_VOL = Q_(25, "nL")
 class AbstractEchoAction(ActionWithComponents, metaclass=ABCMeta):
     """Abstract base class for Echo actions."""
 
-    def to_picklist(self, mix: Mix, experiment: Experiment | None = None) -> "PickList":
+    def to_picklist(self, mix: Mix, experiment: Experiment | None = None) -> PickList:
         def el_get(key):
             if experiment is None:
                 return None
@@ -120,8 +122,8 @@ class EchoFixedVolume(AbstractEchoAction):
 
     def dest_concentrations(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_vol: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         return [
             x * y
@@ -132,8 +134,8 @@ class EchoFixedVolume(AbstractEchoAction):
 
     def each_volumes(
         self,
-        mix_volume: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_volume: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(self.components)
 
@@ -148,7 +150,7 @@ class EchoFixedVolume(AbstractEchoAction):
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
-        actions: Sequence[AbstractAction] = tuple(),
+        actions: Sequence[AbstractAction] = (),
     ) -> list[MixLine]:
         dconcs = self.dest_concentrations(mix_vol, actions)
         eavols = self.each_volumes(mix_vol, actions)
@@ -215,8 +217,8 @@ class EchoEqualTargetConcentration(AbstractEchoAction):
 
     def dest_concentrations(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_vol: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         return [
             x * y
@@ -227,8 +229,8 @@ class EchoEqualTargetConcentration(AbstractEchoAction):
 
     def each_volumes(
         self,
-        mix_volume: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_volume: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         if self.method == "min_volume":
             sc = self.source_concentrations
@@ -268,7 +270,7 @@ class EchoEqualTargetConcentration(AbstractEchoAction):
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
-        actions: Sequence[AbstractAction] = tuple(),
+        actions: Sequence[AbstractAction] = (),
     ) -> list[MixLine]:
         dconcs = self.dest_concentrations(mix_vol, actions)
         eavols = self.each_volumes(mix_vol, actions)
@@ -325,8 +327,8 @@ class EchoTargetConcentration(AbstractEchoAction):
 
     def dest_concentrations(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_vol: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         return [
             x * y
@@ -338,13 +340,13 @@ class EchoTargetConcentration(AbstractEchoAction):
 
     def each_volumes(
         self,
-        mix_volume: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_volume: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         ea_vols = [
             (round((mix_volume * r / self.droplet_volume).m_as("")) * self.droplet_volume)
             if not math.isnan(mix_volume.m) and not math.isnan(r)
-            else Q_(DNAN, uL)
+            else NAN_VOL
             for r in _ratio(self.target_concentration, self.source_concentrations)
         ]
         return ea_vols
@@ -353,7 +355,7 @@ class EchoTargetConcentration(AbstractEchoAction):
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
-        actions: Sequence[AbstractAction] = tuple(),
+        actions: Sequence[AbstractAction] = (),
     ) -> list[MixLine]:
         dconcs = self.dest_concentrations(mix_vol, actions)
         eavols = self.each_volumes(mix_vol, actions)
@@ -413,8 +415,8 @@ class EchoFillToVolume(AbstractEchoAction):
 
     def dest_concentrations(
         self,
-        mix_vol: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_vol: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         return [
             x * y
@@ -426,8 +428,8 @@ class EchoFillToVolume(AbstractEchoAction):
 
     def each_volumes(
         self,
-        mix_volume: DecimalQuantity = Q_(DNAN, uL),
-        actions: Sequence[AbstractAction] = tuple(),
+        mix_volume: DecimalQuantity = NAN_VOL,
+        actions: Sequence[AbstractAction] = (),
     ) -> list[DecimalQuantity]:
         othervol = sum(
             [a.tx_volume(mix_volume, actions) for a in actions if a is not self]
@@ -453,7 +455,7 @@ class EchoFillToVolume(AbstractEchoAction):
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
-        actions: Sequence[AbstractAction] = tuple(),
+        actions: Sequence[AbstractAction] = (),
     ) -> list[MixLine]:
         dconcs = self.dest_concentrations(mix_vol, actions)
         eavols = self.each_volumes(mix_vol, actions)

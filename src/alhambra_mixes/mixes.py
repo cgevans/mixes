@@ -10,9 +10,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    Dict,
     Iterable,
-    List,
     Literal,
     Sequence,
     Tuple,
@@ -162,7 +160,7 @@ class Mix(AbstractComponent):
     "A short name, eg, for labelling a test tube."
     fixed_total_volume: DecimalQuantity = attrs.field(
         converter=_parse_vol_optional,
-        default=Q_(DNAN, uL),
+        default=NAN_VOL,
         kw_only=True,
         on_setattr=attrs.setters.convert,
     )
@@ -516,9 +514,9 @@ class Mix(AbstractComponent):
     def __str__(self) -> str:
         return f"Table: {self.infoline()}\n\n" + self.table()
 
-    def with_experiment(self: Mix, experiment: Experiment, inplace: bool = True) -> Mix:
+    def with_experiment(self: Mix, experiment: Experiment, *, inplace: bool = True) -> Mix:
         newactions = [
-            action.with_experiment(experiment, inplace) for action in self.actions
+            action.with_experiment(experiment, inplace=inplace) for action in self.actions
         ]
         if inplace:
             self.actions = newactions
@@ -526,7 +524,7 @@ class Mix(AbstractComponent):
         else:
             return attrs.evolve(self, actions=newactions)
 
-    def with_reference(self: Mix, reference: Reference, inplace: bool = True) -> Mix:
+    def with_reference(self: Mix, reference: Reference, *, inplace: bool = True) -> Mix:
         if inplace:
             self.reference = reference
             for action in self.actions:
@@ -684,7 +682,7 @@ class Mix(AbstractComponent):
             return None
 
     def instructions(
-        self,
+        self, *,
         plate_type: PlateType = PlateType.wells96,
         raise_failed_validation: bool = False,
         combine_plate_actions: bool = True,
@@ -948,9 +946,9 @@ class Mix(AbstractComponent):
 
     def _update_volumes(
         self,
-        consumed_volumes: Dict[str, Quantity] = {},
-        made_volumes: Dict[str, Quantity] = {},
-    ) -> Tuple[Dict[str, Quantity], Dict[str, Quantity]]:
+        consumed_volumes: dict[str, Quantity] = {},
+        made_volumes: dict[str, Quantity] = {},
+    ) -> Tuple[dict[str, Quantity], dict[str, Quantity]]:
         """
         Given a
         """
@@ -1185,7 +1183,7 @@ class _SplitMix(Mix):
             raise ValueError("small_mix_volume must be positive")
 
     def instructions(
-        self,
+        self, *,
         plate_type: PlateType = PlateType.wells96,
         raise_failed_validation: bool = False,
         combine_plate_actions: bool = True,
@@ -1227,7 +1225,7 @@ def split_mix(
     mix: Mix,
     num_tubes: int | None = None,
     names: Iterable[str] | None = None,
-    excess: int | float | Decimal = Decimal(0.05),
+    excess: float | Decimal = Decimal(0.05),
 ) -> Mix:
     """
     A "split mix" is a :any:`Mix` that involves creating a large volume mix and splitting it into several
@@ -1407,8 +1405,8 @@ def compute_shared_actions(
         if isinstance(component, Component):
             exclude_shared_components[idx] = component.name
     # now that we set them all to be strings, cast the variable so mypy doesn't complain below
-    # for some reason cannot cast to list[str] (causes runtime error), but can cast to List[str]
-    exclude_shared_components = cast(List[str], exclude_shared_components)
+    # for some reason cannot cast to list[str] (causes runtime error), but can cast to list[str]
+    exclude_shared_components = cast("list[str]", exclude_shared_components)
 
     action_sets = [mix.actions for mix in mixes]
     if len(action_sets) == 0:
@@ -1491,7 +1489,7 @@ def verify_mixes_for_master_mix(mixes: Iterable[Mix]) -> None:
 def master_mix(
     mixes: Iterable[Mix],
     name: str = "master mix",
-    excess: float | int | Decimal = Decimal(0.05),
+    excess: float | Decimal = Decimal(0.05),
     exclude_shared_components: Iterable[str | Component] = (),
 ) -> tuple[Mix, list[Mix]]:
     """

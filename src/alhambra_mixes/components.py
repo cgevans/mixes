@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isnan
-from typing import TYPE_CHECKING, Any, Dict, Sequence, Tuple, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Sequence, Tuple, TypeVar, cast
 
 import attrs
 import pandas as pd
@@ -84,13 +84,13 @@ class AbstractComponent(ABC):
 
     @abstractmethod
     def with_reference(
-        self: T, reference: Reference, inplace: bool = False
+        self: T, reference: Reference, *, inplace: bool = False
     ) -> T:  # pragma: no cover
         ...
 
     @abstractmethod
     def with_experiment(
-        self, reference: Experiment, inplace: bool = True
+        self, experiment: Experiment, *, inplace: bool = True
     ) -> AbstractComponent:  # pragma: no cover
         ...
 
@@ -110,9 +110,9 @@ class AbstractComponent(ABC):
 
     def _update_volumes(
         self,
-        consumed_volumes: Dict[str, DecimalQuantity] = {},
-        made_volumes: Dict[str, DecimalQuantity] = {},
-    ) -> Tuple[Dict[str, DecimalQuantity], Dict[str, DecimalQuantity]]:
+        consumed_volumes: dict[str, DecimalQuantity] = {},
+        made_volumes: dict[str, DecimalQuantity] = {},
+    ) -> Tuple[dict[str, DecimalQuantity], dict[str, DecimalQuantity]]:
         """
         Given a
         """
@@ -139,7 +139,7 @@ class Component(AbstractComponent):
 
     """
 
-    name: str
+    name: str # type: ignore
     concentration: DecimalQuantity = attrs.field(
         converter=_parse_conc_optional,
         default=None,
@@ -150,13 +150,13 @@ class Component(AbstractComponent):
         default=None,
         kw_only=True
     )
-    well: str | WellPos | None = attrs.field(
+    well: WellPos | None = attrs.field(
         converter=_parse_wellpos_optional,
         default=None,
         kw_only=True,
         on_setattr=attrs.setters.convert,
     )
-    volume: DecimalQuantity = attrs.field(
+    volume: DecimalQuantity = attrs.field( # type: ignore
         converter=_parse_vol_optional,
         default=NAN_VOL,
         on_setattr=attrs.setters.convert,
@@ -164,7 +164,7 @@ class Component(AbstractComponent):
     )
 
     @property
-    def location(self) -> tuple[str, WellPos | None]:
+    def location(self) -> tuple[str | None, WellPos | None]: # type: ignore
         return (self.plate, self.well)
 
     def all_components(self) -> pd.DataFrame:
@@ -180,7 +180,7 @@ class Component(AbstractComponent):
     def _unstructure(self, experiment: Experiment | None = None) -> dict[str, Any]:
         d = {}
         d["class"] = self.__class__.__name__
-        for att in cast("Sequence[Attribute]", self.__attrs_attrs__):
+        for att in cast("Sequence[Attribute]", self.__attrs_attrs__): # type: ignore
             if att.name in ["reference"]:
                 continue
             val = getattr(self, att.name)

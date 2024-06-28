@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from abc import ABCMeta, abstractmethod
 from math import isnan
-from typing import TYPE_CHECKING, Any, List, Literal, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Literal, Sequence, TypeVar, cast
 from warnings import warn
 
 import attrs
@@ -187,14 +187,14 @@ class ActionWithComponents(AbstractAction):
     ) -> T_AWC:
         if inplace:
             self.components = [
-                c.with_experiment(experiment, inplace) for c in self.components
+                c.with_experiment(experiment, inplace=inplace) for c in self.components
             ]
             return self
         else:
             return attrs.evolve(
                 self,
                 components=[
-                    c.with_experiment(experiment, inplace) for c in self.components
+                    c.with_experiment(experiment, inplace=inplace) for c in self.components
                 ],
             )
 
@@ -236,7 +236,7 @@ class ActionWithComponents(AbstractAction):
     def _structure(
         cls, d: dict[str, Any], experiment: Experiment | None = None
     ) -> ActionWithComponents:
-        scomps: List[AbstractComponent] = []
+        scomps: list[AbstractComponent] = []
         for cd in d["components"]:
             if experiment and (cd["name"] in experiment.components):
                 scomps.append(experiment.components[cd["name"]])
@@ -589,7 +589,7 @@ class EqualConcentration(FixedVolume):
     ] = "min_volume"
 
     @property
-    def source_concentrations(self) -> List[DecimalQuantity]:
+    def source_concentrations(self) -> list[DecimalQuantity]:
         concs = super().source_concentrations
         if any(x != concs[0] for x in concs) and (self.method == "check"):
             raise ValueError("Not all components have equal concentration.")
@@ -636,7 +636,7 @@ class EqualConcentration(FixedVolume):
         ml = super()._mixlines(tablefmt, mix_vol)
         if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
             fv = self.fixed_volume * len(self.components) - sum(self.each_volumes(mix_vol, actions=actions))
-            if fv != Q_("0.0", uL):
+            if fv != ZERO_VOL:
                 ml.append(MixLine([self.method[1]], None, None, fv))
         return ml
 
@@ -842,11 +842,11 @@ class ToConcentration(ActionWithComponents):
             otherconcs = [
                 Q_(_othercomps.loc[comp.name, "concentration_nM"], nM) # type: ignore
                 if comp.name in _othercomps.index
-                else Q_("0.0", nM)
+                else ZERO_CONC
                 for comp in self.components
             ]
         else:
-            otherconcs = [Q_("0.0", nM) for _ in self.components]
+            otherconcs = [ZERO_CONC for _ in self.components]
         return [self.fixed_concentration - other for other in otherconcs]
 
     def each_volumes(

@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
-    Dict,
     Iterator,
     Literal,
     Mapping,
@@ -20,7 +19,7 @@ import attrs
 
 from .dictstructure import _structure
 from .mixes import Mix, VolumeError
-from .units import DNAN, Q_, DecimalQuantity, uL
+from .units import NAN_VOL, Q_, DecimalQuantity, uL
 from .util import _get_picklist_class
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -175,7 +174,7 @@ class Experiment:
     Components can be referenced, and set, by name with [], and can be iterated through.
     """
 
-    components: Dict[str, AbstractComponent] = attrs.field(
+    components: dict[str, AbstractComponent] = attrs.field(
         factory=dict
     )  # FIXME: CompRef
     volume_checks: bool = True
@@ -244,7 +243,7 @@ class Experiment:
         self.components[component.name] = component
 
         if isinstance(component, Mix):
-            component = component.with_experiment(self, True)
+            component = component.with_experiment(self, inplace=True)
             if apply_reference and self.reference:
                 component = component.with_reference(self.reference, inplace=True)
 
@@ -263,7 +262,7 @@ class Experiment:
         name: str = "",
         test_tube_name: str | None = None,
         *,
-        fixed_total_volume: DecimalQuantity | str = Q_(DNAN, uL),
+        fixed_total_volume: DecimalQuantity | str = NAN_VOL,
         fixed_concentration: str | DecimalQuantity | None = None,
         buffer_name: str = "Buffer",
         min_volume: DecimalQuantity | str = Q_("0.5", uL),
@@ -316,7 +315,7 @@ class Experiment:
                 raise ValueError(f"Component does not have a settable name: {mix}.")
         elif mix.name != name:
             raise ValueError(f"Component name {mix.name} does not match {name}.")
-        mix = mix.with_experiment(self, True)
+        mix = mix.with_experiment(self, inplace=True)
         if self.reference:
             mix = mix.with_reference(self.reference, inplace=True)
         self.components[name] = mix
@@ -360,8 +359,8 @@ class Experiment:
     def consumed_and_produced_volumes(
         self,
     ) -> Mapping[str, Tuple[DecimalQuantity, DecimalQuantity]]:
-        consumed_volume: Dict[str, DecimalQuantity] = {}
-        produced_volume: Dict[str, DecimalQuantity] = {}
+        consumed_volume: dict[str, DecimalQuantity] = {}
+        produced_volume: dict[str, DecimalQuantity] = {}
         for component in self.components.values():
             component._update_volumes(consumed_volume, produced_volume)
         return {
@@ -447,7 +446,7 @@ class Experiment:
         for mix in self:
             if not isinstance(mix, Mix):
                 continue
-            mix.with_experiment(self, True)
+            mix.with_experiment(self, inplace=True)
 
     def save(self, filename_or_stream: str | PathLike | TextIO) -> None:
         """

@@ -256,7 +256,7 @@ class Reference:
                                 )
                             del v["Plate"]
                         v["Concentration (nM)"] = conc_dict.get(
-                            k, all_conc if all_conc is not None else Q_(DNAN, nM)
+                            k, all_conc if all_conc is not None else NAN_CONC
                         ).m_as(nM)
                     all_seqs = (
                         pd.concat(
