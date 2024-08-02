@@ -22,6 +22,7 @@ import attrs
 import pandas as pd
 import pint
 from tabulate import TableFormat, tabulate
+import polars as pl
 
 from .actions import (
     AbstractAction,  # Fixme: should not need special cases
@@ -475,19 +476,29 @@ class Mix(AbstractComponent):
 
         return error_list
 
+    def all_components_polars(self) -> pl.DataFrame:
+        all_comps = []
+        for action in self.actions:
+            all_comps.append(
+                action.all_components_polars(self.total_volume, self.actions)
+            )
+        df = pl.concat(all_comps)
+
+        return df.group_by("name").agg(
+            pl.when(pl.col("concentration_nM").is_null().any())
+            .then(pl.lit(None))
+            .otherwise(pl.col("concentration_nM").sum())
+            .alias("concentration_nM"),
+            pl.col("component").first(),  # FIXME
+        )
+
     def all_components(self) -> pd.DataFrame:
         """
         Return a Series of all component names, and their concentrations (as pint nM).
         """
-        cps = _empty_components()
-
-        for action in self.actions:
-            mcomp = action.all_components(self.total_volume, self.actions)
-            cps, _ = cps.align(mcomp)
-            cps.fillna({"concentration_nM": Decimal("0.0")}, inplace=True)
-            cps.loc[mcomp.index, "concentration_nM"] += mcomp.concentration_nM
-            cps.loc[mcomp.index, "component"] = mcomp.component
-        return cps
+        df = self.all_components_polars().to_pandas()
+        df.set_index("name", inplace=True)
+        return df
 
     def _repr_markdown_(self) -> str:
         return f"Table: {self.infoline()}\n" + self.table(tablefmt="pipe")
@@ -514,9 +525,12 @@ class Mix(AbstractComponent):
     def __str__(self) -> str:
         return f"Table: {self.infoline()}\n\n" + self.table()
 
-    def with_experiment(self: Mix, experiment: Experiment, *, inplace: bool = True) -> Mix:
+    def with_experiment(
+        self: Mix, experiment: Experiment, *, inplace: bool = True
+    ) -> Mix:
         newactions = [
-            action.with_experiment(experiment, inplace=inplace) for action in self.actions
+            action.with_experiment(experiment, inplace=inplace)
+            for action in self.actions
         ]
         if inplace:
             self.actions = newactions
@@ -682,7 +696,8 @@ class Mix(AbstractComponent):
             return None
 
     def instructions(
-        self, *,
+        self,
+        *,
         plate_type: PlateType = PlateType.wells96,
         raise_failed_validation: bool = False,
         combine_plate_actions: bool = True,
@@ -998,9 +1013,7 @@ class Mix(AbstractComponent):
         return d
 
     @classmethod
-    def _structure(
-        cls, d: dict[str, Any], experiment: Experiment | None = None
-    ) -> Mix:
+    def _structure(cls, d: dict[str, Any], experiment: Experiment | None = None) -> Mix:
         for k, v in d.items():
             d[k] = _structure(v, experiment)
         return cls(**d)
@@ -1183,7 +1196,8 @@ class _SplitMix(Mix):
             raise ValueError("small_mix_volume must be positive")
 
     def instructions(
-        self, *,
+        self,
+        *,
         plate_type: PlateType = PlateType.wells96,
         raise_failed_validation: bool = False,
         combine_plate_actions: bool = True,

@@ -20,7 +20,9 @@ from .units import (
     _parse_vol_optional,
     nM,
     ureg,
+    NAN_CONC
 )
+import polars as pl
 
 if TYPE_CHECKING:  # pragma: no cover
     from attrs import Attribute
@@ -142,7 +144,7 @@ class Component(AbstractComponent):
     name: str # type: ignore
     concentration: DecimalQuantity = attrs.field(
         converter=_parse_conc_optional,
-        default=None,
+        default=NAN_CONC,
         on_setattr=attrs.setters.convert,
         eq=norm_nan_for_eq,
     )
@@ -167,14 +169,27 @@ class Component(AbstractComponent):
     def location(self) -> tuple[str | None, WellPos | None]: # type: ignore
         return (self.plate, self.well)
 
-    def all_components(self) -> pd.DataFrame:
-        df = pd.DataFrame(
+    def all_components_polars(self) -> pl.DataFrame:
+        c = self.concentration.to(nM).magnitude
+        if isnan(c):
+            c = None
+        comp_df = pl.DataFrame(
             {
-                "concentration_nM": [self.concentration.to(nM).magnitude],
-                "component": [self],
+                'name': [self.name],
+                'concentration_nM': [c],
+                'component': [self]
             },
-            index=pd.Index([self.name], name="name"),
+            schema={
+                'name': pl.String,
+                'concentration_nM': pl.Decimal(precision=20, scale=6),
+                'component': pl.Object
+            }
         )
+        return comp_df
+
+    def all_components(self) -> pd.DataFrame:
+        df = self.all_components_polars().to_pandas()
+        df.set_index('name', inplace=True)
         return df
 
     def _unstructure(self, experiment: Experiment | None = None) -> dict[str, Any]:
