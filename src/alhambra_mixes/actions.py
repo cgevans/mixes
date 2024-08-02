@@ -281,7 +281,6 @@ class ActionWithComponents(AbstractAction):
             pl.col("component").first(),  # FIXME
         )
 
-        print(newdf)
         return newdf
 
     def all_components(
