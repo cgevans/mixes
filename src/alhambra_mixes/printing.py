@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from math import isnan
-from typing import Any, Iterable, Literal, Sequence, Union, cast
+from typing import Any, Iterable, Sequence, Union, cast
 
 import attrs
 import numpy as np
@@ -167,7 +167,7 @@ _NL: dict[Union[str, TableFormat], str] = {
 
 
 def _formatter(
-    x: int | float | str | list[str] | DecimalQuantity | None,
+    x: float | str | list[str] | DecimalQuantity | None,
     italic: bool = False,
     tablefmt: str | TableFormat = "pipe",
     splits: list = [],

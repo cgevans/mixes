@@ -1,11 +1,10 @@
-from re import L
 
 from .actions import *
 from .components import *
+from .experiments import Experiment
 from .mixes import *
 from .references import *
 from .units import *
-from .experiments import Experiment
 
 __all__ = (
     "Q_",
@@ -36,7 +35,6 @@ TC = ToConcentration
 S = Strand
 C = Component
 Ref = Reference
-Mix = Mix
 Exp = Experiment
 
 µM = ureg.Unit("µM")

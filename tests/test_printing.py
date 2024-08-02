@@ -1,4 +1,3 @@
-import pytest
 
 from alhambra_mixes.printing import _format_title
 

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Sequence, TypeVar
+from typing import TYPE_CHECKING, TypeVar
+
+if TYPE_CHECKING:
+    from kithairon.picklists import PickList
 
 T = TypeVar("T")
 
@@ -13,3 +16,17 @@ T = TypeVar("T")
 
 def _none_as_empty_string(v: str | None) -> str:
     return "" if v is None else v
+
+def _get_picklist_class() -> type[PickList]:
+    try:
+        from kithairon.picklists import PickList  # type: ignore
+        return PickList
+    except ImportError as err:
+        if err.name != "kithairon":
+            raise err
+        raise ImportError("kithairon is required for Echo support, but it is not installed.", name="kithairon")
+
+__all__ = (
+    "_none_as_empty_string",
+    "_get_picklist_class",
+)

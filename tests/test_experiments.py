@@ -1,10 +1,12 @@
-from decimal import Decimal
 import math
-from typing import cast
-from alhambra_mixes import *
-from alhambra_mixes.abbreviated import *
-import pytest
 import re
+from decimal import Decimal
+from typing import cast
+
+import pytest
+
+from alhambra_mixes import Q_, Component, Experiment, Mix, Reference, VolumeError, ureg
+from alhambra_mixes.abbreviated import FC, FV, C, Exp
 
 
 @pytest.fixture
@@ -244,7 +246,7 @@ def test_save_load_on_stream(experiment, tmp_path):
     with open(tmp_path / "test.json", "w") as f:
         experiment.save(f)
 
-    with open(tmp_path / "test.json", "r") as f:
+    with open(tmp_path / "test.json") as f:
         e2 = Exp.load(f)
 
     assert e2 == experiment

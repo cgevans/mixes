@@ -3,30 +3,29 @@ from __future__ import annotations
 from math import isnan
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Sequence, TextIO, cast
+from typing import TYPE_CHECKING, Any, Sequence, TextIO, cast
 
 import attrs
 from typing_extensions import TypeAlias
 
-from .components import Component, Strand
+from .components import Strand
 from .locations import PlateType, WellPos, _parse_wellpos_optional
 from .mixes import PlateMap
 from .units import (
     DNAN,
     Q_,
     Decimal,
+    DecimalQuantity,
     _parse_conc_optional,
     _parse_conc_required,
-    Quantity,
-    PlainQuantity,
-    DecimalQuantity,
     nM,
     ureg,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .mixes import PlateMap
     from pandas.core.indexing import _LocIndexer
+
+    from .mixes import PlateMap
 
 import numpy as np
 import pandas as pd
@@ -137,7 +136,7 @@ class Reference:
             return Q_(valref.df["Concentration (nM)"].iloc[0], nM)
         elif len(valref) > 1:
             raise ValueError(
-                f"Found multiple possible components: {str(valref)}", valref
+                f"Found multiple possible components: {valref!s}", valref
             )
 
         raise ValueError("Did not find any matching components.")
@@ -257,7 +256,7 @@ class Reference:
                                 )
                             del v["Plate"]
                         v["Concentration (nM)"] = conc_dict.get(
-                            k, all_conc if all_conc is not None else Q_(DNAN, nM)
+                            k, all_conc if all_conc is not None else NAN_CONC
                         ).m_as(nM)
                     all_seqs = (
                         pd.concat(

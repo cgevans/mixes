@@ -3,10 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .locations import WellPos
-from .units import ureg, Quantity
+from .units import ureg
 
 if TYPE_CHECKING:  # pragma: no cover
-    from attrs import Attribute
 
     from .experiments import Experiment
 
@@ -19,13 +18,13 @@ __all__ = (
 _STRUCTURE_CLASSES: dict[str, Any] = {}
 
 
-def _structure(x: dict[str, Any], experiment: "Experiment" | None = None) -> Any:
+def _structure(x: dict[str, Any], experiment: Experiment | None = None) -> Any:
     if isinstance(x, dict) and ("class" in x):
         c = _STRUCTURE_CLASSES[x["class"]]
         del x["class"]
         if hasattr(c, "_structure"):
             return c._structure(x, experiment)
-        for k in x.keys():
+        for k in x:
             x[k] = _structure(x[k])
         return c(**x)
     elif isinstance(x, list):

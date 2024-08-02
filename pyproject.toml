@@ -1,10 +1,17 @@
 [build-system]
-requires = ["setuptools>=60", "setuptools_scm[toml]>=8", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
-[tool.setuptools_scm]
-version_scheme = "no-guess-dev"
-write_to = "src/alhambra_mixes/_version.py"
+[tool]
+rye = { dev-dependencies = [
+    "pytest>=8.2.2",
+] }
+
+[tool.hatch]
+version.source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/alhambra_mixes/_version.py"
 
 [tool.pytest.ini_options]
 # addopts = "--cov alhambra --cov-report term-missing --cov-report html"
@@ -14,18 +21,26 @@ norecursedirs = [
     ".tox"]
 testpaths = ["tests"]
 
+[tool.hatch.metadata.hooks.vcs.urls]
+Homepage = "https://github.com/cgevans/mixes"
+Documentation = "https://alhambra-mixes.readthedocs.io"
+Repository = "https://github.com/cgevans/mixes.git"
+Issues = "https://github.com/cgevans/issues"
+source_archive = "https://github.com/org/repo/archive/{commit_hash}.zip"
+
 [project]
 name = "alhambra_mixes"
-dynamic = ["version"]
+dynamic = ["version", "urls"]
 description = "Many-component mix library for molecular programming"
 authors = [{name = "Constantine Evans", email="mixes@mb.costi.net"}]
-license = { file = "LICENCE.txt" }
+license = { file = "LICENSE.txt" }
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: BSD License",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering",
@@ -36,11 +51,13 @@ dependencies = [
     "pandas",
     "openpyxl",
     "pint >= 0.20",
+    "polars ~= 0.20.7",
     "tabulate",
     "toml",
-    "typing_extensions >= 4.2"
+    "typing_extensions >= 4.2",
 ]
 readme = "README.md"
+requires-python = ">= 3.8"
 
 [project.optional-dependencies]
 docs = [
@@ -55,15 +72,19 @@ testing = [
     "pytest",
     "pytest-cov"
 ]
+echo = [
+    "kithairon >= 0.2.0",
+]
+all = [
+    "alhambra_mixes[echo]"
+]
 
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
-
-
 [tool.black]
-target_version = ["py39"]
+target-version = ["py312"]
 
 [tool.mypy]
 python_version = "3.9"
@@ -72,3 +93,25 @@ warn_unused_configs = true
 ignore_missing_imports = true
 #disallow_untyped_defs = true
 #disallow_incomplete_defs = true
+
+[tool.hatch.envs.hatch-test]
+dependencies = [
+"pytest",
+"pytest-cov",
+]
+
+[tool.hatch.envs.hatch-test.overrides]
+name.echo.features = ["echo"]
+
+[[tool.hatch.envs.hatch-test.matrix]]
+python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
+
+[[tool.hatch.envs.hatch-test.matrix]]
+python = ["3.10", "3.11", "3.12"]
+feature = ["echo"]
+
+[tool.ruff]
+ignore = ["TID252", "N816", "F405", "F403", "ARG002"
+    # For now
+    , "EM101", "EM102", "RET505", "RET504", "TRY003", "PLR2004"
+]

@@ -2,34 +2,31 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isnan
-from typing import TYPE_CHECKING, Any, Dict, Sequence, Tuple, TypeVar, cast
-from typing_extensions import Self
+from typing import TYPE_CHECKING, Any, Sequence, Tuple, TypeVar, cast
 
 import attrs
 import pandas as pd
 
+from .dictstructure import _STRUCTURE_CLASSES, _structure, _unstructure
 from .locations import WellPos, _parse_wellpos_optional
 from .logging import log
 from .printing import TableFormat
 from .units import (
+    NAN_VOL,
     Q_,
     ZERO_VOL,
-    Decimal,
-    Quantity,
+    DecimalQuantity,
     _parse_conc_optional,
     _parse_vol_optional,
     nM,
     ureg,
-    NAN_VOL,
-    DecimalQuantity,
 )
-from .util import _none_as_empty_string
-from .dictstructure import _structure, _unstructure, _STRUCTURE_CLASSES
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .references import Reference
-    from .experiments import Experiment
     from attrs import Attribute
+
+    from .experiments import Experiment
+    from .references import Reference
 
 
 T = TypeVar("T")
@@ -53,8 +50,8 @@ class AbstractComponent(ABC):
         return ("", None)
 
     @property
-    def plate(self) -> str:
-        return ""
+    def plate(self) -> str | None:
+        return None
 
     @property
     def is_mix(self) -> bool:
@@ -87,25 +84,25 @@ class AbstractComponent(ABC):
 
     @abstractmethod
     def with_reference(
-        self: T, reference: Reference, inplace: bool = False
+        self: T, reference: Reference, *, inplace: bool = False
     ) -> T:  # pragma: no cover
         ...
 
     @abstractmethod
     def with_experiment(
-        self, reference: "Experiment", inplace: bool = True
+        self, experiment: Experiment, *, inplace: bool = True
     ) -> AbstractComponent:  # pragma: no cover
         ...
 
     @classmethod
     @abstractmethod
     def _structure(
-        cls, d: dict[str, Any], experiment: "Experiment" | None = None
-    ) -> "AbstractComponent":  # pragma: no cover
+        cls, d: dict[str, Any], experiment: Experiment | None = None
+    ) -> AbstractComponent:  # pragma: no cover
         ...
 
     @abstractmethod
-    def _unstructure(self, experiment: "Experiment" | None = None) -> dict[str, Any]:
+    def _unstructure(self, experiment: Experiment | None = None) -> dict[str, Any]:
         ...
 
     def printed_name(self, tablefmt: str | TableFormat) -> str:
@@ -113,9 +110,9 @@ class AbstractComponent(ABC):
 
     def _update_volumes(
         self,
-        consumed_volumes: Dict[str, DecimalQuantity] = {},
-        made_volumes: Dict[str, DecimalQuantity] = {},
-    ) -> Tuple[Dict[str, DecimalQuantity], Dict[str, DecimalQuantity]]:
+        consumed_volumes: dict[str, DecimalQuantity] = {},
+        made_volumes: dict[str, DecimalQuantity] = {},
+    ) -> Tuple[dict[str, DecimalQuantity], dict[str, DecimalQuantity]]:
         """
         Given a
         """
@@ -142,20 +139,16 @@ class Component(AbstractComponent):
 
     """
 
-    name: str
+    name: str # type: ignore
     concentration: DecimalQuantity = attrs.field(
         converter=_parse_conc_optional,
         default=None,
         on_setattr=attrs.setters.convert,
         eq=norm_nan_for_eq,
     )
-    # FIXME: this is not a great way to do this: should make code not give None
-    # Fortuitously, mypy doesn't support this converter, so problems should give type errors.
-    plate: str = attrs.field(
-        default="",
-        kw_only=True,
-        converter=_none_as_empty_string,
-        on_setattr=attrs.setters.convert,
+    plate: str | None = attrs.field(
+        default=None,
+        kw_only=True
     )
     well: WellPos | None = attrs.field(
         converter=_parse_wellpos_optional,
@@ -163,7 +156,7 @@ class Component(AbstractComponent):
         kw_only=True,
         on_setattr=attrs.setters.convert,
     )
-    volume: DecimalQuantity = attrs.field(
+    volume: DecimalQuantity = attrs.field( # type: ignore
         converter=_parse_vol_optional,
         default=NAN_VOL,
         on_setattr=attrs.setters.convert,
@@ -171,7 +164,7 @@ class Component(AbstractComponent):
     )
 
     @property
-    def location(self) -> tuple[str, WellPos | None]:
+    def location(self) -> tuple[str | None, WellPos | None]: # type: ignore
         return (self.plate, self.well)
 
     def all_components(self) -> pd.DataFrame:
@@ -184,10 +177,10 @@ class Component(AbstractComponent):
         )
         return df
 
-    def _unstructure(self, experiment: "Experiment" | None = None) -> dict[str, Any]:
+    def _unstructure(self, experiment: Experiment | None = None) -> dict[str, Any]:
         d = {}
         d["class"] = self.__class__.__name__
-        for att in cast("Sequence[Attribute]", self.__attrs_attrs__):
+        for att in cast("Sequence[Attribute]", self.__attrs_attrs__): # type: ignore
             if att.name in ["reference"]:
                 continue
             val = getattr(self, att.name)
@@ -200,14 +193,14 @@ class Component(AbstractComponent):
 
     @classmethod
     def _structure(
-        cls, d: dict[str, Any], experiment: "Experiment" | None = None
-    ) -> "Component":
+        cls, d: dict[str, Any], experiment: Experiment | None = None
+    ) -> Component:
         for k, v in d.items():
             d[k] = _structure(v, experiment)
         return cls(**d)
 
     def with_experiment(
-        self: Component, experiment: "Experiment", inplace: bool = True
+        self: Component, experiment: Experiment, inplace: bool = True
     ) -> AbstractComponent:
         if self.name in experiment.components:
             return experiment.components[self.name]
@@ -233,7 +226,7 @@ class Component(AbstractComponent):
         matches = []
         for _, ref_comp in ref_comps.iterrows():
             ref_conc = Q_(ref_comp["Concentration (nM)"], nM)
-            if not isnan(self.concentration.m) and not (ref_conc == self.concentration):
+            if not isnan(self.concentration.m) and ref_conc != self.concentration:
                 mismatches.append(("Concentration (nM)", ref_comp))
                 continue
 
@@ -304,7 +297,7 @@ class Strand(Component):
         matches = []
         for _, ref_comp in ref_comps.iterrows():
             ref_conc = ureg.Quantity(ref_comp["Concentration (nM)"], nM)
-            if not isnan(self.concentration.m) and not (ref_conc == self.concentration):
+            if not isnan(self.concentration.m) and ref_conc != self.concentration:
                 mismatches.append(("Concentration (nM)", ref_comp))
                 continue
 

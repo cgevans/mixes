@@ -3,10 +3,11 @@ from __future__ import annotations
 import decimal
 from decimal import Decimal
 from typing import Sequence, TypeVar, Union, cast, overload
-from typing_extensions import TypeAlias
+
 import pint
 from pint import Quantity
 from pint.facets.plain import PlainQuantity, PlainUnit
+from typing_extensions import TypeAlias
 
 # This needs to be here to make Decimal NaNs behave the way that NaNs
 # *everywhere else in the standard library* behave.
@@ -21,6 +22,7 @@ __all__ = [
     "Q_",
     "DNAN",
     "ZERO_VOL",
+    "ZERO_CONC",
     "NAN_VOL",
     "Decimal",
     "Quantity",
@@ -58,6 +60,9 @@ class VolumeError(ValueError):
 DNAN = Decimal("nan")
 ZERO_VOL = Q_("0.0", "µL")
 NAN_VOL = Q_("nan", "µL")
+ZERO_CONC = Q_("0.0", "nM")
+NAN_CONC = Q_("nan", "nM")
+NAN_AMOUNT = Q_("nan", "nmol")
 
 T = TypeVar("T", bound=Union[float, Decimal])
 
@@ -84,7 +89,7 @@ def _ratio(
 
 
 @overload
-def _ratio(top: PlainQuantity[T] | DecimalQuantity, bottom: PlainQuantity[T] | DecimalQuantity) -> Union[float, Decimal]: 
+def _ratio(top: PlainQuantity[T] | DecimalQuantity, bottom: PlainQuantity[T] | DecimalQuantity) -> Union[float, Decimal]:
     ...
 
 
@@ -115,7 +120,7 @@ def _parse_conc_optional(v: str | Quantity | None) -> DecimalQuantity:
         v = Q_(v.m, v.u)
         return cast(DecimalQuantity, v.to_compact())
     elif v is None:
-        return Q_(DNAN, nM)
+        return NAN_CONC
     raise ValueError
 
 
@@ -152,7 +157,7 @@ def _parse_vol_optional(v: str | Quantity) -> DecimalQuantity:
         v = Q_(v.m, v.u)
         return cast(DecimalQuantity, v.to_compact())
     elif v is None:
-        return Q_(DNAN, uL)
+        return NAN_VOL
     raise ValueError
 
 

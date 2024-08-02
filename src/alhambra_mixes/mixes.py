@@ -10,14 +10,12 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    Dict,
+    Iterable,
     Literal,
     Sequence,
     Tuple,
     TypeVar,
     cast,
-    Iterable,
-    List,
 )
 
 import attrs
@@ -25,9 +23,12 @@ import pandas as pd
 import pint
 from tabulate import TableFormat, tabulate
 
-from .actions import AbstractAction  # Fixme: should not need special cases
-from .actions import FixedConcentration, FixedVolume
-from .components import AbstractComponent, Component, Strand, _empty_components
+from .actions import (
+    AbstractAction,  # Fixme: should not need special cases
+    FixedConcentration,
+    FixedVolume,
+)
+from .components import AbstractComponent, Component, _empty_components
 from .dictstructure import _STRUCTURE_CLASSES, _structure, _unstructure
 from .locations import PlateType, WellPos
 from .logging import log
@@ -39,16 +40,18 @@ from .printing import (
     _format_errors,
     _format_title,
     emphasize,
-    html_with_borders_tablefmt,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .references import Reference
-    from .experiments import Experiment
     from attrs import Attribute
+    from kithairon.picklists import PickList
+
+    from .experiments import Experiment
+    from .references import Reference
 
 from .units import *
 from .units import VolumeError, _parse_vol_optional, normalize
+from .util import _get_picklist_class
 
 warnings.filterwarnings(
     "ignore",
@@ -157,7 +160,7 @@ class Mix(AbstractComponent):
     "A short name, eg, for labelling a test tube."
     fixed_total_volume: DecimalQuantity = attrs.field(
         converter=_parse_vol_optional,
-        default=Q_(DNAN, uL),
+        default=NAN_VOL,
         kw_only=True,
         on_setattr=attrs.setters.convert,
     )
@@ -172,12 +175,14 @@ class Mix(AbstractComponent):
         kw_only=True,
         on_setattr=attrs.setters.convert,
     )
+    plate: str = ""
+    well: WellPos | None = None
 
     @property
     def is_mix(self) -> bool:
         return True
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if type(self) != type(other):
             return False
         for a in self.__attrs_attrs__:  # type: ignore
@@ -198,11 +203,11 @@ class Mix(AbstractComponent):
             ]
         if self.actions is None:
             raise ValueError(
-                f"Mix.actions must contain at least one action, but it was not specified"
+                "Mix.actions must contain at least one action, but it was not specified"
             )
         elif len(self.actions) == 0:
             raise ValueError(
-                f"Mix.actions must contain at least one action, but it is empty"
+                "Mix.actions must contain at least one action, but it is empty"
             )
 
     def printed_name(self, tablefmt: str | TableFormat) -> str:
@@ -235,7 +240,7 @@ class Mix(AbstractComponent):
                 0
             ]
         else:
-            raise NotImplemented
+            raise NotImplementedError
 
     @property
     def total_volume(self) -> DecimalQuantity:
@@ -405,13 +410,13 @@ class Mix(AbstractComponent):
                 )
             )
 
-        # ensure we pipette at least self.min_volume from each source
-
         for mixline in mixlines:
             if (
                 not isnan(mixline.each_tx_vol.m)
                 and mixline.each_tx_vol != ZERO_VOL
-                and mixline.each_tx_vol < self.min_volume
+                and (mixline.each_tx_vol < self.min_volume)
+                if ((mixline.note is None) or ("ECHO" not in mixline.note))
+                else False  # FIXME
             ):
                 if mixline.names == [self.buffer_name]:
                     # This is the line for the buffer
@@ -423,8 +428,7 @@ class Mix(AbstractComponent):
                         f"since the source concentrations are too low. "
                         f"Try lowering the target concentration."
                     )
-                else:
-                    # FIXME: why do these need :f?
+                else:  # FIXME: reimplement
                     msg = (
                         f"Some items have lower transfer volume than {self.min_volume}\n"
                         f'This is in creating mix "{self.name}", '
@@ -480,7 +484,7 @@ class Mix(AbstractComponent):
         for action in self.actions:
             mcomp = action.all_components(self.total_volume, self.actions)
             cps, _ = cps.align(mcomp)
-            cps.loc[:, "concentration_nM"].fillna(Decimal("0.0"), inplace=True)
+            cps.fillna({"concentration_nM": Decimal("0.0")}, inplace=True)
             cps.loc[mcomp.index, "concentration_nM"] += mcomp.concentration_nM
             cps.loc[mcomp.index, "component"] = mcomp.component
         return cps
@@ -500,6 +504,8 @@ class Mix(AbstractComponent):
         ]
         if self.test_tube_name:
             elems.append(f"Test tube name: {self.test_tube_name}")
+        if self.plate:
+            elems.append(f"Plate: {self.plate}, Well: {self.well}")
         return ", ".join(elems)
 
     def __repr__(self) -> str:
@@ -508,9 +514,9 @@ class Mix(AbstractComponent):
     def __str__(self) -> str:
         return f"Table: {self.infoline()}\n\n" + self.table()
 
-    def with_experiment(self: Mix, experiment: Experiment, inplace: bool = True) -> Mix:
+    def with_experiment(self: Mix, experiment: Experiment, *, inplace: bool = True) -> Mix:
         newactions = [
-            action.with_experiment(experiment, inplace) for action in self.actions
+            action.with_experiment(experiment, inplace=inplace) for action in self.actions
         ]
         if inplace:
             self.actions = newactions
@@ -518,7 +524,7 @@ class Mix(AbstractComponent):
         else:
             return attrs.evolve(self, actions=newactions)
 
-    def with_reference(self: Mix, reference: Reference, inplace: bool = True) -> Mix:
+    def with_reference(self: Mix, reference: Reference, *, inplace: bool = True) -> Mix:
         if inplace:
             self.reference = reference
             for action in self.actions:
@@ -657,8 +663,26 @@ class Mix(AbstractComponent):
         )
         display(HTML(ins_str))
 
+    def generate_picklist(self, experiment: Experiment | None) -> PickList | None:
+        """
+        :param experiment:
+            experiment to use for generating picklist
+        :return:
+            picklist for the mix
+        """
+
+        PickList = _get_picklist_class()
+        pls: list[PickList] = []
+        for action in self.actions:
+            if hasattr(action, "to_picklist"):
+                pls.append(action.to_picklist(self, experiment))
+        if len(pls) > 0:
+            return PickList.concat(pls)
+        else:
+            return None
+
     def instructions(
-        self,
+        self, *,
         plate_type: PlateType = PlateType.wells96,
         raise_failed_validation: bool = False,
         combine_plate_actions: bool = True,
@@ -922,9 +946,9 @@ class Mix(AbstractComponent):
 
     def _update_volumes(
         self,
-        consumed_volumes: Dict[str, Quantity] = {},
-        made_volumes: Dict[str, Quantity] = {},
-    ) -> Tuple[Dict[str, Quantity], Dict[str, Quantity]]:
+        consumed_volumes: dict[str, Quantity] = {},
+        made_volumes: dict[str, Quantity] = {},
+    ) -> Tuple[dict[str, Quantity], dict[str, Quantity]]:
         """
         Given a
         """
@@ -955,7 +979,7 @@ class Mix(AbstractComponent):
 
         return consumed_volumes, made_volumes
 
-    def _unstructure(self, experiment: "Experiment" | None = None) -> dict[str, Any]:
+    def _unstructure(self, experiment: Experiment | None = None) -> dict[str, Any]:
         d: dict[str, Any] = {}
         d["class"] = self.__class__.__name__
         for a in cast("Sequence[Attribute]", self.__attrs_attrs__):
@@ -975,8 +999,8 @@ class Mix(AbstractComponent):
 
     @classmethod
     def _structure(
-        cls, d: dict[str, Any], experiment: "Experiment" | None = None
-    ) -> "Mix":
+        cls, d: dict[str, Any], experiment: Experiment | None = None
+    ) -> Mix:
         for k, v in d.items():
             d[k] = _structure(v, experiment)
         return cls(**d)
@@ -1159,7 +1183,7 @@ class _SplitMix(Mix):
             raise ValueError("small_mix_volume must be positive")
 
     def instructions(
-        self,
+        self, *,
         plate_type: PlateType = PlateType.wells96,
         raise_failed_validation: bool = False,
         combine_plate_actions: bool = True,
@@ -1201,7 +1225,7 @@ def split_mix(
     mix: Mix,
     num_tubes: int | None = None,
     names: Iterable[str] | None = None,
-    excess: int | float | Decimal = Decimal(0.05),
+    excess: float | Decimal = Decimal(0.05),
 ) -> Mix:
     """
     A "split mix" is a :any:`Mix` that involves creating a large volume mix and splitting it into several
@@ -1310,7 +1334,7 @@ def split_mix(
 def intersection(s1: Iterable[T], s2: Iterable[T]) -> list[T]:
     """
     Interprets s1 and s2 as "sets" (with unhashable elements that implement ==) and
-    computes a list of their intersection s1 \cap s2.
+    computes a list of their intersection s1 \\cap s2.
 
     Parameters
     ----------
@@ -1323,7 +1347,7 @@ def intersection(s1: Iterable[T], s2: Iterable[T]) -> list[T]:
 
     Returns
     -------
-       list of elements in both `s1` and `s2`
+    list of elements in both `s1` and `s2`
     """
     return [elt for elt in s1 if elt in s2]
 
@@ -1331,7 +1355,7 @@ def intersection(s1: Iterable[T], s2: Iterable[T]) -> list[T]:
 def difference(s1: Iterable[T], s2: Iterable[T]) -> list[T]:
     """
     Interprets s1 and s2 as "sets" (with unhashable elements that implement ==) and
-    computes a list of their difference s1 \ s2.
+    computes a list of their difference s1 \\ s2.
 
     Parameters
     ----------
@@ -1381,8 +1405,8 @@ def compute_shared_actions(
         if isinstance(component, Component):
             exclude_shared_components[idx] = component.name
     # now that we set them all to be strings, cast the variable so mypy doesn't complain below
-    # for some reason cannot cast to list[str] (causes runtime error), but can cast to List[str]
-    exclude_shared_components = cast(List[str], exclude_shared_components)
+    # for some reason cannot cast to list[str] (causes runtime error), but can cast to list[str]
+    exclude_shared_components = cast("list[str]", exclude_shared_components)
 
     action_sets = [mix.actions for mix in mixes]
     if len(action_sets) == 0:
@@ -1465,7 +1489,7 @@ def verify_mixes_for_master_mix(mixes: Iterable[Mix]) -> None:
 def master_mix(
     mixes: Iterable[Mix],
     name: str = "master mix",
-    excess: float | int | Decimal = Decimal(0.05),
+    excess: float | Decimal = Decimal(0.05),
     exclude_shared_components: Iterable[str | Component] = (),
 ) -> tuple[Mix, list[Mix]]:
     """
