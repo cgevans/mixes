@@ -20,7 +20,7 @@ import attrs
 from .dictstructure import _structure
 from .mixes import Mix, VolumeError
 from .units import NAN_VOL, Q_, DecimalQuantity, uL
-from .util import _get_picklist_class
+from .util import _get_picklist_class, gen_random_hash, maybe_cache_once
 
 if TYPE_CHECKING:  # pragma: no cover
     from kithairon import PickList
@@ -165,7 +165,7 @@ class LocationDict:
             default = LocationInfo.from_obj(default)
         return self._locs.get(key, default)
 
-@attrs.define()
+@attrs.define(eq=False)
 class Experiment:
     """
     A class collecting many related mixes and components, allowing methods to be run that consider all of them
@@ -173,6 +173,8 @@ class Experiment:
 
     Components can be referenced, and set, by name with [], and can be iterated through.
     """
+
+    __hash__ = object.__hash__
 
     components: dict[str, AbstractComponent] = attrs.field(
         factory=dict
@@ -183,13 +185,14 @@ class Experiment:
     )
     locations: LocationDict = attrs.field(factory=dict, converter=LocationDict.from_obj)
 
-    def generate_picklist(self) -> PickList:
+    def generate_picklist(self, _cache_key=None) -> PickList:
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
         PickList = _get_picklist_class()
 
         pls: list[PickList] = []
         for c in self.components.values():
             if hasattr(c, "generate_picklist"):
-                p = c.generate_picklist(self)
+                p = c.generate_picklist(self, _cache_key=_cache_key)
                 if p is not None:
                     pls.append(p)
         p = PickList.concat(pls)

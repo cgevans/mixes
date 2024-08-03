@@ -22,6 +22,7 @@ import attrs
 import pandas as pd
 import pint
 from tabulate import TableFormat, tabulate
+import polars as pl
 
 from .actions import (
     AbstractAction,  # Fixme: should not need special cases
@@ -51,7 +52,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 from .units import *
 from .units import VolumeError, _parse_vol_optional, normalize
-from .util import _get_picklist_class
+from .util import _get_picklist_class, gen_random_hash, maybe_cache_once
 
 warnings.filterwarnings(
     "ignore",
@@ -151,7 +152,7 @@ class Mix(AbstractComponent):
     """Class denoting a Mix, a collection of source components mixed to
     some volume or concentration.
     """
-
+    __hash__ = object.__hash__
     actions: Sequence[AbstractAction] = attrs.field(
         converter=_maybesequence_action, on_setattr=attrs.setters.convert
     )
@@ -228,6 +229,10 @@ class Mix(AbstractComponent):
         3. If `fixed_concentration` is none, then the final concentration of the first
            mix component.
         """
+        return self._get_concentration()
+
+    @maybe_cache_once
+    def _get_concentration(self, _cache_key=None) -> DecimalQuantity:
         if isinstance(self.fixed_concentration, pint.Quantity):
             return self.fixed_concentration
         elif isinstance(self.fixed_concentration, str):
@@ -236,9 +241,9 @@ class Mix(AbstractComponent):
                 Decimal(ac.loc[self.fixed_concentration, "concentration_nM"]), nM
             )
         elif self.fixed_concentration is None:
-            return self.actions[0].dest_concentrations(self.total_volume, self.actions)[
-                0
-            ]
+            return self.actions[0].dest_concentrations(
+                self._get_total_volume(_cache_key=_cache_key), self.actions, _cache_key=_cache_key
+            )[0]
         else:
             raise NotImplementedError
 
@@ -248,6 +253,10 @@ class Mix(AbstractComponent):
         Total volume of the mix.  If the mix has a fixed total volume, then that,
         otherwise, the sum of the transfer volumes of each component.
         """
+        return self._get_total_volume()
+    
+    @maybe_cache_once
+    def _get_total_volume(self, _cache_key=None) -> DecimalQuantity:
         if self.fixed_total_volume is not None and not (
             isnan(self.fixed_total_volume.m)
         ):
@@ -256,7 +265,7 @@ class Mix(AbstractComponent):
             return sum(
                 [
                     c.tx_volume(
-                        self.fixed_total_volume or Q_(DNAN, ureg.uL), self.actions
+                        self.fixed_total_volume or Q_(DNAN, ureg.uL), self.actions, _cache_key=_cache_key
                     )
                     for c in self.actions
                 ],
@@ -268,8 +277,15 @@ class Mix(AbstractComponent):
         """
         The volume of buffer to be added to the mix, in addition to the components.
         """
-        mvol = sum(c.tx_volume(self.total_volume, self.actions) for c in self.actions)
-        return self.total_volume - mvol
+        return self._get_buffer_volume()
+
+    @maybe_cache_once
+    def _get_buffer_volume(self, _cache_key=None) -> Quantity:
+        mvol = sum(
+            c.tx_volume(self._get_total_volume(_cache_key=_cache_key), self.actions, _cache_key=_cache_key)
+            for c in self.actions
+        )
+        return self._get_total_volume(_cache_key=_cache_key) - mvol
 
     def table(
         self,
@@ -282,6 +298,7 @@ class Mix(AbstractComponent):
         disable_numparse=False,
         colalign=None,
         buffer_line_if_absent=False,
+        _cache_key=None,
     ) -> str:
         """Generate a table describing the mix.
 
@@ -300,24 +317,26 @@ class Mix(AbstractComponent):
         buffer_line_if_absent
             If True and the buffer volume is 0, include an explicit line for buffer anyway that says 0 uL.
         """
-        mixlines = list(self.mixlines(buffer_name=buffer_name, tablefmt=tablefmt))
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
+
+        mixlines = list(self.mixlines(buffer_name=buffer_name, tablefmt=tablefmt, _cache_key=_cache_key))
 
         if not buffer_line_if_absent:
             remove_buffer_mixline_if_absent(mixlines, buffer_name)
 
-        validation_errors = self.validate(mixlines=mixlines)
+        validation_errors = self.validate(mixlines=mixlines, _cache_key=_cache_key)
 
         # If we're validating and generating an error, we need the tablefmt to be
         # a text one, so we'll call ourselves again:
         if validation_errors and raise_failed_validation:
-            raise VolumeError(self.table("pipe"))
+            raise VolumeError(self.table("pipe", buffer_name=buffer_name))
 
         mixlines.append(
             MixLine(
                 ["Total:"],
                 None,
-                self.concentration,
-                self.total_volume,
+                self._get_concentration(_cache_key=_cache_key),
+                self._get_total_volume(_cache_key=_cache_key),
                 fake=True,
                 number=sum(m.number for m in mixlines),
             )
@@ -342,17 +361,31 @@ class Mix(AbstractComponent):
         )
 
     def mixlines(
-        self, tablefmt: str | TableFormat = "pipe", buffer_name: str = "Buffer"
+        self,
+        tablefmt: str | TableFormat = "pipe",
+        buffer_name: str = "Buffer",
+        _cache_key=None,
     ) -> list[MixLine]:
         mixlines: list[MixLine] = []
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
 
         for action in self.actions:
             mixlines += action._mixlines(
-                tablefmt=tablefmt, mix_vol=self.total_volume, actions=self.actions
+                tablefmt=tablefmt,
+                mix_vol=self._get_total_volume(_cache_key=_cache_key),
+                actions=self.actions,
+                _cache_key=_cache_key,
             )
 
         if self.has_fixed_total_volume():
-            mixlines.append(MixLine([buffer_name], None, None, self.buffer_volume))
+            mixlines.append(
+                MixLine(
+                    [buffer_name],
+                    None,
+                    None,
+                    self._get_buffer_volume(_cache_key=_cache_key),
+                )
+            )
         return mixlines
 
     def has_fixed_concentration_action(self) -> bool:
@@ -366,6 +399,7 @@ class Mix(AbstractComponent):
         tablefmt: str | TableFormat | None = None,
         mixlines: Sequence[MixLine] | None = None,
         raise_errors: bool = False,
+        _cache_key=None,
     ) -> list[VolumeError]:
         if mixlines is None:
             if tablefmt is None:
@@ -397,7 +431,7 @@ class Mix(AbstractComponent):
                 )
             )
 
-        tot_vol = self.total_volume
+        tot_vol = self._get_total_volume(_cache_key=_cache_key)
         high_vols = [(n, x) for n, x in ntx if x > tot_vol]
         if high_vols:
             error_list.append(
@@ -460,7 +494,7 @@ class Mix(AbstractComponent):
         # XXX: this assumes 1-1 correspondence between mixlines and actions (true in current implementation)
         for action in self.actions:
             for component, volume in zip(
-                action.components, action.each_volumes(self.total_volume, self.actions)
+                action.components, action.each_volumes(self._get_total_volume(_cache_key=_cache_key), self.actions, _cache_key=_cache_key)
             ):
                 if isinstance(component, Mix):
                     if component.fixed_total_volume < volume:
@@ -475,19 +509,30 @@ class Mix(AbstractComponent):
 
         return error_list
 
+    def all_components_polars(self, _cache_key=None) -> pl.DataFrame:
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
+        all_comps = []
+        for action in self.actions:
+            all_comps.append(
+                action.all_components_polars(self._get_total_volume(_cache_key=_cache_key), self.actions, _cache_key=_cache_key)
+            )
+        df = pl.concat(all_comps)
+
+        return df.group_by("name").agg(
+            pl.when(pl.col("concentration_nM").is_null().any())
+            .then(pl.lit(None))
+            .otherwise(pl.col("concentration_nM").sum())
+            .alias("concentration_nM"),
+            pl.col("component").first(),  # FIXME
+        )
+
     def all_components(self) -> pd.DataFrame:
         """
         Return a Series of all component names, and their concentrations (as pint nM).
         """
-        cps = _empty_components()
-
-        for action in self.actions:
-            mcomp = action.all_components(self.total_volume, self.actions)
-            cps, _ = cps.align(mcomp)
-            cps.fillna({"concentration_nM": Decimal("0.0")}, inplace=True)
-            cps.loc[mcomp.index, "concentration_nM"] += mcomp.concentration_nM
-            cps.loc[mcomp.index, "component"] = mcomp.component
-        return cps
+        df = self.all_components_polars().to_pandas()
+        df.set_index("name", inplace=True)
+        return df
 
     def _repr_markdown_(self) -> str:
         return f"Table: {self.infoline()}\n" + self.table(tablefmt="pipe")
@@ -495,11 +540,12 @@ class Mix(AbstractComponent):
     def _repr_html_(self) -> str:
         return f"<p>Table: {self.infoline()}</p>\n" + self.table(tablefmt="unsafehtml")
 
-    def infoline(self) -> str:
+    def infoline(self, _cache_key=None) -> str:
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
         elems = [
             f"Mix: {self.name}",
-            f"Conc: {self.concentration:,.2f~#P}",
-            f"Total Vol: {self.total_volume:,.2f~#P}",
+            f"Conc: {self._get_concentration(_cache_key=_cache_key):,.2f~#P}",
+            f"Total Vol: {self._get_total_volume(_cache_key=_cache_key):,.2f~#P}",
             # f"Component Count: {len(self.all_components())}",
         ]
         if self.test_tube_name:
@@ -514,9 +560,12 @@ class Mix(AbstractComponent):
     def __str__(self) -> str:
         return f"Table: {self.infoline()}\n\n" + self.table()
 
-    def with_experiment(self: Mix, experiment: Experiment, *, inplace: bool = True) -> Mix:
+    def with_experiment(
+        self: Mix, experiment: Experiment, *, inplace: bool = True
+    ) -> Mix:
         newactions = [
-            action.with_experiment(experiment, inplace=inplace) for action in self.actions
+            action.with_experiment(experiment, inplace=inplace)
+            for action in self.actions
         ]
         if inplace:
             self.actions = newactions
@@ -663,7 +712,7 @@ class Mix(AbstractComponent):
         )
         display(HTML(ins_str))
 
-    def generate_picklist(self, experiment: Experiment | None) -> PickList | None:
+    def generate_picklist(self, experiment: Experiment | None, _cache_key=None) -> PickList | None:
         """
         :param experiment:
             experiment to use for generating picklist
@@ -675,14 +724,15 @@ class Mix(AbstractComponent):
         pls: list[PickList] = []
         for action in self.actions:
             if hasattr(action, "to_picklist"):
-                pls.append(action.to_picklist(self, experiment))
+                pls.append(action.to_picklist(self, experiment, _cache_key=_cache_key))
         if len(pls) > 0:
             return PickList.concat(pls)
         else:
             return None
 
     def instructions(
-        self, *,
+        self,
+        *,
         plate_type: PlateType = PlateType.wells96,
         raise_failed_validation: bool = False,
         combine_plate_actions: bool = True,
@@ -948,34 +998,41 @@ class Mix(AbstractComponent):
         self,
         consumed_volumes: dict[str, Quantity] = {},
         made_volumes: dict[str, Quantity] = {},
+        _cache_key=None,
     ) -> Tuple[dict[str, Quantity], dict[str, Quantity]]:
         """
         Given a
         """
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
         if self.name in made_volumes:
             # We've already been seen.  Ignore our components.
             return consumed_volumes, made_volumes
 
-        made_volumes[self.name] = self.total_volume
+        made_volumes[self.name] = self._get_total_volume(_cache_key=_cache_key)
         consumed_volumes[self.name] = ZERO_VOL
 
         for action in self.actions:
             for component, volume in zip(
-                action.components, action.each_volumes(self.total_volume, self.actions)
+                action.components,
+                action.each_volumes(
+                    self._get_total_volume(_cache_key=_cache_key), tuple(self.actions), _cache_key=_cache_key
+                ),
             ):
                 consumed_volumes[component.name] = (
                     consumed_volumes.get(component.name, ZERO_VOL) + volume
                 )
-                component._update_volumes(consumed_volumes, made_volumes)
+                component._update_volumes(
+                    consumed_volumes, made_volumes, _cache_key=_cache_key
+                )
 
         # Potentially deal with buffer...
-        if self.buffer_volume.m > 0:
+        if self._get_buffer_volume(_cache_key=_cache_key).m > 0:
             made_volumes[self.buffer_name] = made_volumes.get(
                 self.buffer_name, 0 * ureg.ul
             )
-            consumed_volumes[self.buffer_name] = (
-                consumed_volumes.get(self.buffer_name, 0 * ureg.ul) + self.buffer_volume
-            )
+            consumed_volumes[self.buffer_name] = consumed_volumes.get(
+                self.buffer_name, 0 * ureg.ul
+            ) + self._get_buffer_volume(_cache_key=_cache_key)
 
         return consumed_volumes, made_volumes
 
@@ -998,9 +1055,7 @@ class Mix(AbstractComponent):
         return d
 
     @classmethod
-    def _structure(
-        cls, d: dict[str, Any], experiment: Experiment | None = None
-    ) -> Mix:
+    def _structure(cls, d: dict[str, Any], experiment: Experiment | None = None) -> Mix:
         for k, v in d.items():
             d[k] = _structure(v, experiment)
         return cls(**d)
@@ -1183,7 +1238,8 @@ class _SplitMix(Mix):
             raise ValueError("small_mix_volume must be positive")
 
     def instructions(
-        self, *,
+        self,
+        *,
         plate_type: PlateType = PlateType.wells96,
         raise_failed_validation: bool = False,
         combine_plate_actions: bool = True,

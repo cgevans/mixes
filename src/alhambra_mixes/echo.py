@@ -8,6 +8,8 @@ import attrs
 import polars as pl
 from tabulate import TableFormat
 
+from alhambra_mixes.util import gen_random_hash, maybe_cache_once
+
 from .actions import AbstractAction, ActionWithComponents
 from .experiments import Experiment
 from .mixes import Mix
@@ -33,7 +35,10 @@ try:
 except ImportError as err:
     if err.name != "kithairon":
         raise err
-    raise ImportError("kithairon is required for Echo support, but it is not installed.", name="kithairon")
+    raise ImportError(
+        "kithairon is required for Echo support, but it is not installed.",
+        name="kithairon",
+    )
 
 
 DEFAULT_DROPLET_VOL = Q_(25, "nL")
@@ -42,15 +47,16 @@ DEFAULT_DROPLET_VOL = Q_(25, "nL")
 class AbstractEchoAction(ActionWithComponents, metaclass=ABCMeta):
     """Abstract base class for Echo actions."""
 
-    def to_picklist(self, mix: Mix, experiment: Experiment | None = None) -> PickList:
+    @maybe_cache_once
+    def to_picklist(self, mix: Mix, experiment: Experiment | None = None, _cache_key=None) -> PickList:
         def el_get(key):
             if experiment is None:
                 return None
             return experiment.locations.get(key, None)
 
-        mix_vol = mix.total_volume
-        dconcs = self.dest_concentrations(mix_vol, mix.actions)
-        eavols = self.each_volumes(mix_vol, mix.actions)
+        mix_vol = mix._get_total_volume(_cache_key=_cache_key)
+        dconcs = self.dest_concentrations(mix_vol, mix.actions, _cache_key=_cache_key)
+        eavols = self.each_volumes(mix_vol, mix.actions, _cache_key=_cache_key)
         locdf = PickList(
             pl.DataFrame(
                 {
@@ -58,7 +64,7 @@ class AbstractEchoAction(ActionWithComponents, metaclass=ABCMeta):
                         c.printed_name(tablefmt="plain") for c in self.components
                     ],
                     "Source Concentration": [
-                        float(c.m_as("nM")) for c in self.source_concentrations
+                        float(c.m_as("nM")) for c in self._get_source_concentrations(_cache_key=_cache_key)
                     ],
                     "Destination Concentration": [float(c.m_as("nM")) for c in dconcs],
                     "Concentration Units": "nM",
@@ -102,7 +108,7 @@ class AbstractEchoAction(ActionWithComponents, metaclass=ABCMeta):
         return locdf
 
 
-@attrs.define(eq=True)
+@attrs.define(eq=False)
 class EchoFixedVolume(AbstractEchoAction):
     """Transfer a fixed volume of liquid to a target mix."""
 
@@ -120,15 +126,19 @@ class EchoFixedVolume(AbstractEchoAction):
                 f"Fixed volume {fv} is not an integer multiple of droplet volume {dv}."
             )
 
+    @maybe_cache_once
     def dest_concentrations(
         self,
         mix_vol: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
         return [
             x * y
             for x, y in zip(
-                self.source_concentrations, _ratio(self.each_volumes(mix_vol), mix_vol)
+                self._get_source_concentrations(_cache_key=_cache_key),
+                _ratio(self.each_volumes(mix_vol, _cache_key=_cache_key), mix_vol),
             )
         ]
 
@@ -136,6 +146,7 @@ class EchoFixedVolume(AbstractEchoAction):
         self,
         mix_volume: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
         return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(self.components)
 
@@ -146,19 +157,24 @@ class EchoFixedVolume(AbstractEchoAction):
         else:
             return self.set_name
 
+    @maybe_cache_once
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[MixLine]:
-        dconcs = self.dest_concentrations(mix_vol, actions)
-        eavols = self.each_volumes(mix_vol, actions)
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
+        dconcs = self.dest_concentrations(mix_vol, actions, _cache_key=_cache_key)
+        eavols = self.each_volumes(mix_vol, actions, _cache_key=_cache_key)
 
         locdf = pl.DataFrame(
             {
                 "name": [c.printed_name(tablefmt=tablefmt) for c in self.components],
-                "source_conc": list(self.source_concentrations),
+                "source_conc": list(
+                    self._get_source_concentrations(_cache_key=_cache_key)
+                ),
                 "dest_conc": list(dconcs),
                 "ea_vols": list(eavols),
                 "plate": [c.plate for c in self.components],
@@ -194,7 +210,7 @@ class EchoFixedVolume(AbstractEchoAction):
         return ml
 
 
-@attrs.define(eq=True)
+@attrs.define(eq=False)
 class EchoEqualTargetConcentration(AbstractEchoAction):
     """Transfer a fixed volume of liquid to a target mix."""
 
@@ -215,25 +231,30 @@ class EchoEqualTargetConcentration(AbstractEchoAction):
                 f"Fixed volume {fv} is not an integer multiple of droplet volume {dv}."
             )
 
+    @maybe_cache_once
     def dest_concentrations(
         self,
         mix_vol: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
         return [
             x * y
             for x, y in zip(
-                self.source_concentrations, _ratio(self.each_volumes(mix_vol), mix_vol)
+                self._get_source_concentrations(_cache_key=_cache_key),
+                _ratio(self.each_volumes(mix_vol, _cache_key=_cache_key), mix_vol),
             )
         ]
 
+    @maybe_cache_once
     def each_volumes(
         self,
         mix_volume: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
         if self.method == "min_volume":
-            sc = self.source_concentrations
+            sc = self._get_source_concentrations(_cache_key=_cache_key)
             scmax = max(sc)
             return [
                 round((self.fixed_volume * x / self.droplet_volume).m_as(""))
@@ -243,7 +264,7 @@ class EchoEqualTargetConcentration(AbstractEchoAction):
         elif (self.method == "max_volume") | (
             isinstance(self.method, Sequence) and self.method[0] == "max_fill"
         ):
-            sc = self.source_concentrations
+            sc = self._get_source_concentrations(_cache_key=_cache_key)
             scmin = min(sc)
             return [
                 round((self.fixed_volume * x / self.droplet_volume).m_as(""))
@@ -251,7 +272,7 @@ class EchoEqualTargetConcentration(AbstractEchoAction):
                 for x in _ratio(scmin, sc)
             ]
         elif self.method == "check":
-            sc = self.source_concentrations
+            sc = self._get_source_concentrations(_cache_key=_cache_key)
             if any(x != sc[0] for x in sc):
                 raise ValueError("Concentrations")
             return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(
@@ -266,19 +287,21 @@ class EchoEqualTargetConcentration(AbstractEchoAction):
         else:
             return self.set_name
 
+    @maybe_cache_once
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[MixLine]:
-        dconcs = self.dest_concentrations(mix_vol, actions)
-        eavols = self.each_volumes(mix_vol, actions)
+        dconcs = self.dest_concentrations(mix_vol, actions, _cache_key=_cache_key)
+        eavols = self.each_volumes(mix_vol, actions, _cache_key=_cache_key)
 
         locdf = pl.DataFrame(
             {
                 "name": [c.printed_name(tablefmt=tablefmt) for c in self.components],
-                "source_conc": list(self.source_concentrations),
+                "source_conc": list(self._get_source_concentrations(_cache_key=_cache_key)),
                 "dest_conc": list(dconcs),
                 "ea_vols": list(eavols),
                 "plate": [c.plate for c in self.components],
@@ -314,7 +337,7 @@ class EchoEqualTargetConcentration(AbstractEchoAction):
         return ml
 
 
-@attrs.define(eq=True)
+@attrs.define(eq=False)
 class EchoTargetConcentration(AbstractEchoAction):
     """Get as close as possible (using direct transfers) to a target concentration, possibly varying mix volume."""
 
@@ -325,45 +348,60 @@ class EchoTargetConcentration(AbstractEchoAction):
     droplet_volume: DecimalQuantity = DEFAULT_DROPLET_VOL
     compact_display: bool = True
 
+    @maybe_cache_once
     def dest_concentrations(
         self,
         mix_vol: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
         return [
             x * y
             for x, y in zip(
-                self.source_concentrations,
-                _ratio(self.each_volumes(mix_vol, actions), mix_vol),
+                self._get_source_concentrations(_cache_key=_cache_key),
+                _ratio(
+                    self.each_volumes(mix_vol, actions, _cache_key=_cache_key), mix_vol
+                ),
             )
         ]
 
+    @maybe_cache_once
     def each_volumes(
         self,
         mix_volume: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
         ea_vols = [
-            (round((mix_volume * r / self.droplet_volume).m_as("")) * self.droplet_volume)
+            (
+                round((mix_volume * r / self.droplet_volume).m_as(""))
+                * self.droplet_volume
+            )
             if not math.isnan(mix_volume.m) and not math.isnan(r)
             else NAN_VOL
-            for r in _ratio(self.target_concentration, self.source_concentrations)
+            for r in _ratio(
+                self.target_concentration,
+                self._get_source_concentrations(_cache_key=_cache_key),
+            )
         ]
         return ea_vols
 
+    @maybe_cache_once
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[MixLine]:
-        dconcs = self.dest_concentrations(mix_vol, actions)
-        eavols = self.each_volumes(mix_vol, actions)
+        dconcs = self.dest_concentrations(mix_vol, actions, _cache_key=_cache_key)
+        eavols = self.each_volumes(mix_vol, actions, _cache_key=_cache_key)
 
         locdf = pl.DataFrame(
             {
                 "name": [c.printed_name(tablefmt=tablefmt) for c in self.components],
-                "source_conc": list(self.source_concentrations),
+                "source_conc": list(self._get_source_concentrations(_cache_key=_cache_key)),
                 "dest_conc": list(dconcs),
                 "ea_vols": list(eavols),
                 "plate": [c.plate for c in self.components],
@@ -406,33 +444,44 @@ class EchoTargetConcentration(AbstractEchoAction):
             return self.set_name
 
 
-@attrs.define(eq=True)
+@attrs.define(eq=False)
 class EchoFillToVolume(AbstractEchoAction):
     target_total_volume: DecimalQuantity = attrs.field(
         converter=_parse_vol_optional, default=None
     )
     droplet_volume: DecimalQuantity = DEFAULT_DROPLET_VOL
 
+    @maybe_cache_once
     def dest_concentrations(
         self,
         mix_vol: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
         return [
             x * y
             for x, y in zip(
-                self.source_concentrations,
-                _ratio(self.each_volumes(mix_vol, actions), mix_vol),
+                self._get_source_concentrations(_cache_key=_cache_key),
+                _ratio(
+                    self.each_volumes(mix_vol, actions, _cache_key=_cache_key), mix_vol
+                ),
             )
         ]
 
+    @maybe_cache_once
     def each_volumes(
         self,
         mix_volume: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
         othervol = sum(
-            [a.tx_volume(mix_volume, actions) for a in actions if a is not self]
+            [
+                a.tx_volume(mix_volume, actions, _cache_key=_cache_key)
+                for a in actions
+                if a is not self
+            ]
         )
 
         if len(self.components) > 1:
@@ -451,14 +500,16 @@ class EchoFillToVolume(AbstractEchoAction):
         ]
         return ea_vols
 
+    @maybe_cache_once
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[MixLine]:
-        dconcs = self.dest_concentrations(mix_vol, actions)
-        eavols = self.each_volumes(mix_vol, actions)
+        dconcs = self.dest_concentrations(mix_vol, actions, _cache_key=_cache_key)
+        eavols = self.each_volumes(mix_vol, actions, _cache_key=_cache_key)
         return [
             MixLine(
                 [comp.printed_name(tablefmt=tablefmt)],
@@ -477,8 +528,6 @@ class EchoFillToVolume(AbstractEchoAction):
                 self.components,
             )
         ]
-
-
 
 
 # class EchoTwoStepConcentration(ActionWithComponents):

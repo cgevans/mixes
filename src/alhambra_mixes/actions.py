@@ -15,8 +15,9 @@ from .locations import WellPos, mixgaps
 from .printing import MixLine, TableFormat
 from .units import _parse_vol_optional_none_zero
 
-if TYPE_CHECKING:  # pragma: no cover
+import polars as pl
 
+if TYPE_CHECKING:  # pragma: no cover
     from .experiments import Experiment
     from .references import Reference
 
@@ -35,6 +36,8 @@ from .units import (
     ureg,
 )
 
+from .util import maybe_cache_once, gen_random_hash
+
 T = TypeVar("T")
 
 
@@ -48,10 +51,14 @@ class AbstractAction(metaclass=ABCMeta):
     def name(self) -> str:  # pragma: no cover
         ...
 
+    def _get_name(self, _cache_key=None) -> str:
+        return self.name
+
     def tx_volume(
         self,
         mix_vol: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> DecimalQuantity:  # pragma: no cover
         """The total volume transferred by the action to the sample.  May depend on the total mix volume.
 
@@ -61,7 +68,7 @@ class AbstractAction(metaclass=ABCMeta):
         mix_vol
             The mix volume.  Does not accept strings.
         """
-        return sum(self.each_volumes(mix_vol, actions), Q_("0", "uL"))
+        return sum(self.each_volumes(mix_vol, actions, _cache_key=_cache_key), Q_("0", "uL"))
 
     @abstractmethod
     def _mixlines(
@@ -69,12 +76,13 @@ class AbstractAction(metaclass=ABCMeta):
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> Sequence[MixLine]:  # pragma: no cover
         ...
 
     @abstractmethod
     def all_components(
-        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = ()
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = (), _cache_key=None
     ) -> pd.DataFrame:  # pragma: no cover
         """A dataframe containing all base components added by the action.
 
@@ -101,7 +109,7 @@ class AbstractAction(metaclass=ABCMeta):
         ...
 
     def dest_concentration(
-        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = ()
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = (), cache_key=None
     ) -> DecimalQuantity:
         """The destination concentration added to the mix by the action.
 
@@ -115,7 +123,7 @@ class AbstractAction(metaclass=ABCMeta):
         raise ValueError("Single destination concentration not defined.")
 
     def dest_concentrations(
-        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = ()
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = (), cache_key=None
     ) -> Sequence[DecimalQuantity]:
         raise ValueError
 
@@ -125,17 +133,20 @@ class AbstractAction(metaclass=ABCMeta):
         pass
 
     @property
-    @abstractmethod
     def source_concentrations(self) -> list[DecimalQuantity]:
-        pass
+        return self._get_source_concentrations()
+
+    @abstractmethod
+    def _get_source_concentrations(self, _cache_key=None) -> list[DecimalQuantity]:
+        ...
 
     @abstractmethod
     def each_volumes(
         self,
         mix_volume: DecimalQuantity,
         actions: Sequence[AbstractAction] = (),
-    ) -> list[DecimalQuantity]:
-        ...
+        _cache_key=None,
+    ) -> list[DecimalQuantity]: ...
 
     @classmethod
     @abstractmethod
@@ -156,13 +167,17 @@ T_AWC = TypeVar("T_AWC", bound="ActionWithComponents")
 
 @attrs.define(eq=False)
 class ActionWithComponents(AbstractAction):
-
+    __hash__ = object.__hash__
     components: list[AbstractComponent | str] = attrs.field(
         converter=_maybesequence_comps, on_setattr=attrs.setters.convert
     )
 
     @property
     def number(self) -> int:
+        return self._get_number()
+
+    @maybe_cache_once
+    def _get_number(self, _cache_key=None) -> int:
         return len(self.components)
 
     @property
@@ -172,7 +187,7 @@ class ActionWithComponents(AbstractAction):
     def __eq__(self, other: object) -> bool:
         if type(self) != type(other):
             return False
-        for a in self.__attrs_attrs__: # type: ignore
+        for a in self.__attrs_attrs__:  # type: ignore
             v1 = getattr(self, a.name)
             v2 = getattr(other, a.name)
             if isinstance(v1, ureg.Quantity):
@@ -194,7 +209,8 @@ class ActionWithComponents(AbstractAction):
             return attrs.evolve(
                 self,
                 components=[
-                    c.with_experiment(experiment, inplace=inplace) for c in self.components
+                    c.with_experiment(experiment, inplace=inplace)
+                    for c in self.components
                 ],
             )
 
@@ -202,7 +218,7 @@ class ActionWithComponents(AbstractAction):
         self: T_AWC, reference: Reference, *, inplace: bool = False
     ) -> T_AWC:
         if inplace:
-            self.components = [ # type: ignore
+            self.components = [  # type: ignore
                 c.with_reference(reference, inplace=True) for c in self.components
             ]
             return self
@@ -213,14 +229,19 @@ class ActionWithComponents(AbstractAction):
 
     @property
     def source_concentrations(self) -> list[DecimalQuantity]:
-        concs = [c.concentration for c in self.components]
+        return self._get_source_concentrations()
+
+    @maybe_cache_once
+    def _get_source_concentrations(self, _cache_key=None) -> list[DecimalQuantity]:
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
+        concs = [c._get_concentration(_cache_key=_cache_key) for c in self.components]
         return concs
 
     def _unstructure(self, experiment: Experiment | None) -> dict[str, Any]:
         d: dict[str, Any] = {}
         d["class"] = self.__class__.__name__
         d["components"] = [c._unstructure(experiment) for c in self.components]
-        for a in self.__attrs_attrs__: # type: ignore
+        for a in self.__attrs_attrs__:  # type: ignore
             if a.name == "components":
                 continue
             val = getattr(self, a.name)
@@ -253,28 +274,45 @@ class ActionWithComponents(AbstractAction):
             d[k] = _structure(d[k])
         return cls(**d)
 
-    def all_components(
-        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = ()
+    def all_components_polars(
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = (), _cache_key=None
     ) -> pd.DataFrame:
-        newdf = _empty_components()
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
+
+        all_comps = []
 
         for comp, dc, sc in zip(
             self.components,
-            self.dest_concentrations(mix_vol, actions),
-            self.source_concentrations,
+            self.dest_concentrations(mix_vol, actions, _cache_key=_cache_key),
+            self._get_source_concentrations(_cache_key=_cache_key),
         ):
-            comps = comp.all_components()
-            comps.concentration_nM *= _ratio(dc, sc)  # type: ignore
+            comps: pl.DataFrame = comp.all_components_polars(_cache_key=_cache_key)
 
-            newdf, _ = newdf.align(comps)
+            r = _ratio(dc, sc)
+            if math.isnan(r):
+                r = None
+            comps = comps.with_columns(pl.col("concentration_nM").mul(r))
 
-            # FIXME: add checks
-            newdf.loc[comps.index, "concentration_nM"] = newdf.loc[
-                comps.index, "concentration_nM"
-            ].add(comps.concentration_nM, fill_value=Decimal("0.0")) # type: ignore
-            newdf.loc[comps.index, "component"] = comps.component
+            all_comps.append(comps)
+
+        newdf: pl.DataFrame = pl.concat(all_comps)
+
+        newdf = newdf.group_by("name").agg(
+            pl.when(pl.col("concentration_nM").is_null().any())
+            .then(pl.lit(None))
+            .otherwise(pl.col("concentration_nM").sum())
+            .alias("concentration_nM"),
+            pl.col("component").first(),  # FIXME
+        )
 
         return newdf
+
+    def all_components(
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = ()
+    ) -> pd.DataFrame:
+        df = self.all_components_polars(mix_vol, actions).to_pandas()
+        df.set_index("name", inplace=True)
+        return df
 
     def _compactstrs(
         self,
@@ -317,19 +355,17 @@ class ActionWithComponents(AbstractAction):
         wells_list: list[list[WellPos]] = []
 
         for plate, plate_comps in locdf.groupby("plate"):
-            for vol, plate_vol_comps in plate_comps.groupby(
-                "ea_vols"
-            ):
+            for vol, plate_vol_comps in plate_comps.groupby("ea_vols"):
                 if pd.isna(plate_vol_comps["well"].iloc[0]):
                     if not pd.isna(plate_vol_comps["well"]).all():
                         raise ValueError
                     names.append(list(plate_vol_comps["names"]))
-                    ea_vols.append(vol) # type: ignore
-                    tot_vols.append(vol * len(plate_vol_comps)) # type: ignore
+                    ea_vols.append(vol)  # type: ignore
+                    tot_vols.append(vol * len(plate_vol_comps))  # type: ignore
                     numbers.append(len(plate_vol_comps))
                     source_concs.append(plate_vol_comps["source_concs"].iloc[0])
                     dest_concs.append(plate_vol_comps["dest_concs"].iloc[0])
-                    plates.append(plate) # type: ignore
+                    plates.append(plate)  # type: ignore
                     wells_list.append([])
                     continue
 
@@ -383,7 +419,7 @@ class ActionWithComponents(AbstractAction):
         ]
 
 
-@attrs.define(eq=True)
+@attrs.define(eq=False)
 class FixedVolume(ActionWithComponents):
     """An action adding one or multiple components, with a set transfer volume.
 
@@ -441,40 +477,53 @@ class FixedVolume(ActionWithComponents):
         c = super().__new__(cls)
         return c
 
+    @maybe_cache_once
     def dest_concentrations(
         self,
         mix_vol: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
         return [
             x * y
             for x, y in zip(
-                self.source_concentrations, _ratio(self.each_volumes(mix_vol, actions), mix_vol)
+                self.source_concentrations,
+                _ratio(self.each_volumes(mix_vol, actions, _cache_key=_cache_key), mix_vol),
             )
         ]
 
+    @maybe_cache_once
     def each_volumes(
         self,
         mix_volume: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
         return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(self.components)
 
     @property
     def name(self) -> str:
+        return self._get_name()
+    
+    @maybe_cache_once
+    def _get_name(self, _cache_key=None) -> str:
         if self.set_name is None:
             return super().name
         else:
             return self.set_name
 
+    @maybe_cache_once
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[MixLine]:
-        dconcs = self.dest_concentrations(mix_vol, actions)
-        eavols = self.each_volumes(mix_vol, actions)
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
+        dconcs = self.dest_concentrations(mix_vol, actions, _cache_key=_cache_key)
+        eavols = self.each_volumes(mix_vol, actions, _cache_key=_cache_key)
         if not self.compact_display:
             ml = [
                 MixLine(
@@ -499,7 +548,7 @@ class FixedVolume(ActionWithComponents):
         return ml
 
 
-@attrs.define(init=False)
+@attrs.define(init=False, eq=False)
 class EqualConcentration(FixedVolume):
     """An action adding an equal concentration of each component, without setting that concentration.
 
@@ -559,6 +608,7 @@ class EqualConcentration(FixedVolume):
     | c1, c2, c3 | 200.00 nM | 40.00 nM  | 3   | 2.50 µl     | 7.50 µl      |       |        |
     | c4         | 100.00 nM | 40.00 nM  | 1   | 5.00 µl     | 5.00 µl      |       |        |
     """
+    __hash__ = object.__hash__
 
     def __init__(
         self,
@@ -584,64 +634,78 @@ class EqualConcentration(FixedVolume):
 
         self.__attrs_init__(components, fixed_volume, set_name, compact_display, method)  # type: ignore
 
-    method: Literal["max_volume", "min_volume", "check"] | tuple[
-        Literal["max_fill"], str
-    ] = "min_volume"
+    method: (
+        Literal["max_volume", "min_volume", "check"] | tuple[Literal["max_fill"], str]
+    ) = "min_volume"
 
     @property
     def source_concentrations(self) -> list[DecimalQuantity]:
-        concs = super().source_concentrations
+        return self._get_source_concentrations()
+    
+    @maybe_cache_once
+    def _get_source_concentrations(self, _cache_key=None) -> list[DecimalQuantity]:
+        concs = FixedVolume._get_source_concentrations(self, _cache_key=_cache_key)
         if any(x != concs[0] for x in concs) and (self.method == "check"):
             raise ValueError("Not all components have equal concentration.")
         return concs
 
+    @maybe_cache_once
     def each_volumes(
         self,
         mix_volume: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
         # match self.equal_conc:
         if self.method == "min_volume":
-            sc = self.source_concentrations
+            sc = self._get_source_concentrations(_cache_key=_cache_key)
             scmax = max(sc)
             return [self.fixed_volume * x for x in _ratio(scmax, sc)]
         elif (self.method == "max_volume") | (
             isinstance(self.method, Sequence) and self.method[0] == "max_fill"
         ):
-            sc = self.source_concentrations
+            sc = self._get_source_concentrations(_cache_key=_cache_key)
             scmin = min(sc)
             return [self.fixed_volume * x for x in _ratio(scmin, sc)]
         elif self.method == "check":
-            sc = self.source_concentrations
+            sc = self._get_source_concentrations(_cache_key=_cache_key)
             if any(x != sc[0] for x in sc):
                 raise ValueError("Concentrations")
-            return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(self.components)
+            return [cast(DecimalQuantity, self.fixed_volume.to(uL))] * len(
+                self.components
+            )
         raise ValueError(f"equal_conc={self.method!r} not understood")
 
+    @maybe_cache_once
     def tx_volume(
         self,
         mix_vol: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> DecimalQuantity:
         if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
             return self.fixed_volume * len(self.components)
-        return sum(self.each_volumes(mix_vol, actions), ureg("0.0 uL"))
+        return sum(self.each_volumes(mix_vol, actions, _cache_key=_cache_key), ureg("0.0 uL"))
 
+    @maybe_cache_once
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[MixLine]:
-        ml = super()._mixlines(tablefmt, mix_vol)
+        ml = FixedVolume._mixlines(self, tablefmt, mix_vol, _cache_key=_cache_key)
         if isinstance(self.method, Sequence) and (self.method[0] == "max_fill"):
-            fv = self.fixed_volume * len(self.components) - sum(self.each_volumes(mix_vol, actions=actions))
+            fv = self.fixed_volume * len(self.components) - sum(
+                self.each_volumes(mix_vol, actions=actions, _cache_key=_cache_key)
+            )
             if fv != ZERO_VOL:
                 ml.append(MixLine([self.method[1]], None, None, fv))
         return ml
 
 
-@attrs.define(eq=True)
+@attrs.define(eq=False)
 class FixedConcentration(ActionWithComponents):
     """An action adding one or multiple components, with a set destination concentration per component (adjusting volumes).
 
@@ -710,17 +774,20 @@ class FixedConcentration(ActionWithComponents):
         self,
         mix_vol: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
         return [self.fixed_concentration] * len(self.components)
 
+    @maybe_cache_once
     def each_volumes(
         self,
         mix_volume: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
         ea_vols = [
             mix_volume * r
-            for r in _ratio(self.fixed_concentration, self.source_concentrations)
+            for r in _ratio(self.fixed_concentration, self._get_source_concentrations(_cache_key=_cache_key))
         ]
         if not math.isnan(self.min_volume.m):
             below_min = []
@@ -736,14 +803,16 @@ class FixedConcentration(ActionWithComponents):
                 )
         return ea_vols
 
+    @maybe_cache_once
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[MixLine]:
-        dconcs = self.dest_concentrations(mix_vol, actions)
-        eavols = self.each_volumes(mix_vol, actions)
+        dconcs = self.dest_concentrations(mix_vol, actions, _cache_key=_cache_key)
+        eavols = self.each_volumes(mix_vol, actions, _cache_key=_cache_key)
         if not self.compact_display:
             ml = [
                 MixLine(
@@ -775,7 +844,7 @@ class FixedConcentration(ActionWithComponents):
             return self.set_name
 
 
-@attrs.define(eq=True)
+@attrs.define(eq=False)
 class ToConcentration(ActionWithComponents):
     """Add an amount of (non-mix) components to result in a fixed total concentration of each in the mix.
 
@@ -794,8 +863,9 @@ class ToConcentration(ActionWithComponents):
         on_setattr=attrs.setters.convert,
     )
 
+    @maybe_cache_once
     def _othercomps(
-        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = ()
+        self, mix_vol: DecimalQuantity, actions: Sequence[AbstractAction] = (), _cache_key=None
     ):
         cps = _empty_components()
 
@@ -830,17 +900,21 @@ class ToConcentration(ActionWithComponents):
 
         return cps
 
+    @maybe_cache_once
     def dest_concentrations(
         self,
         mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = (),
-        _othercomps: pd.DataFrame | None = None,
+        _cache_key=None,
     ) -> Sequence[DecimalQuantity]:
-        if _othercomps is None and actions:
-            _othercomps = self._othercomps(mix_vol, actions)
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
+        if actions:
+            _othercomps = self._othercomps(mix_vol, actions, _cache_key=_cache_key)
+        else:
+            _othercomps = None 
         if _othercomps is not None:
             otherconcs = [
-                Q_(_othercomps.loc[comp.name, "concentration_nM"], nM) # type: ignore
+                Q_(_othercomps.loc[comp.name, "concentration_nM"], nM)  # type: ignore
                 if comp.name in _othercomps.index
                 else ZERO_CONC
                 for comp in self.components
@@ -849,16 +923,18 @@ class ToConcentration(ActionWithComponents):
             otherconcs = [ZERO_CONC for _ in self.components]
         return [self.fixed_concentration - other for other in otherconcs]
 
+    @maybe_cache_once
     def each_volumes(
         self,
         mix_volume: DecimalQuantity = NAN_VOL,
         actions: Sequence[AbstractAction] = (),
-        _othercomps: pd.DataFrame | None = None,
+        _cache_key=None,
     ) -> list[DecimalQuantity]:
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
         ea_vols = [
             mix_volume * r
             for r in _ratio(
-                self.dest_concentrations(mix_volume, actions, _othercomps),
+                self.dest_concentrations(mix_volume, actions, _cache_key=_cache_key),
                 self.source_concentrations,
             )
         ]
@@ -876,15 +952,17 @@ class ToConcentration(ActionWithComponents):
                 )
         return ea_vols
 
+    @maybe_cache_once
     def _mixlines(
         self,
         tablefmt: str | TableFormat,
         mix_vol: DecimalQuantity,
         actions: Sequence[AbstractAction] = (),
+        _cache_key=None,
     ) -> list[MixLine]:
-        othercomps = self._othercomps(mix_vol, actions)
-        dconcs = self.dest_concentrations(mix_vol, _othercomps=othercomps)
-        eavols = self.each_volumes(mix_vol, _othercomps=othercomps)
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
+        dconcs = self.dest_concentrations(mix_vol,  actions=actions,_cache_key=_cache_key)
+        eavols = self.each_volumes(mix_vol, actions=actions, _cache_key=_cache_key)
         if not self.compact_display:
             ml = [
                 MixLine(

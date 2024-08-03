@@ -27,5 +27,3 @@ def test_echo_experiment():
     exp.add(m)
 
     p = exp.generate_picklist()
-
-    return exp
