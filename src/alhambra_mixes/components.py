@@ -174,7 +174,7 @@ class Component(AbstractComponent):
     def location(self) -> tuple[str | None, WellPos | None]: # type: ignore
         return (self.plate, self.well)
 
-    def all_components_polars(self) -> pl.DataFrame:
+    def all_components_polars(self, _cache_key=None) -> pl.DataFrame:
         c = self.concentration.to(nM).magnitude
         if isnan(c):
             c = None

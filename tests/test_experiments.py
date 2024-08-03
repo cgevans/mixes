@@ -239,7 +239,7 @@ def test_save_load(experiment, tmp_path):
 
     e2 = Exp.load(tmp_path / "test.json")
 
-    assert e2 == experiment
+    assert e2._unstructure() == experiment._unstructure()
 
 
 def test_save_load_on_stream(experiment, tmp_path):
@@ -249,7 +249,7 @@ def test_save_load_on_stream(experiment, tmp_path):
     with open(tmp_path / "test.json") as f:
         e2 = Exp.load(f)
 
-    assert e2 == experiment
+    assert e2._unstructure() == experiment._unstructure()
 
 
 def test_save_load_no_suffix(experiment, tmp_path):
@@ -259,7 +259,7 @@ def test_save_load_no_suffix(experiment, tmp_path):
 
     e2 = Exp.load(tmp_path / "test")
 
-    assert e2 == experiment
+    assert e2._unstructure() == experiment._unstructure()
 
 
 def test_load_invalid_json(experiment, tmp_path):

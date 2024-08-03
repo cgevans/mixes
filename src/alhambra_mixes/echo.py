@@ -54,7 +54,7 @@ class AbstractEchoAction(ActionWithComponents, metaclass=ABCMeta):
                 return None
             return experiment.locations.get(key, None)
 
-        mix_vol = mix.total_volume
+        mix_vol = mix._get_total_volume(_cache_key=_cache_key)
         dconcs = self.dest_concentrations(mix_vol, mix.actions, _cache_key=_cache_key)
         eavols = self.each_volumes(mix_vol, mix.actions, _cache_key=_cache_key)
         locdf = PickList(
@@ -138,7 +138,7 @@ class EchoFixedVolume(AbstractEchoAction):
             x * y
             for x, y in zip(
                 self._get_source_concentrations(_cache_key=_cache_key),
-                _ratio(self.each_volumes(mix_vol), mix_vol),
+                _ratio(self.each_volumes(mix_vol, _cache_key=_cache_key), mix_vol),
             )
         ]
 
@@ -241,7 +241,7 @@ class EchoEqualTargetConcentration(AbstractEchoAction):
         return [
             x * y
             for x, y in zip(
-                self._get_source_concentrations(_cache_key),
+                self._get_source_concentrations(_cache_key=_cache_key),
                 _ratio(self.each_volumes(mix_vol, _cache_key=_cache_key), mix_vol),
             )
         ]
@@ -301,7 +301,7 @@ class EchoEqualTargetConcentration(AbstractEchoAction):
         locdf = pl.DataFrame(
             {
                 "name": [c.printed_name(tablefmt=tablefmt) for c in self.components],
-                "source_conc": list(self.source_concentrations),
+                "source_conc": list(self._get_source_concentrations(_cache_key=_cache_key)),
                 "dest_conc": list(dconcs),
                 "ea_vols": list(eavols),
                 "plate": [c.plate for c in self.components],
@@ -401,7 +401,7 @@ class EchoTargetConcentration(AbstractEchoAction):
         locdf = pl.DataFrame(
             {
                 "name": [c.printed_name(tablefmt=tablefmt) for c in self.components],
-                "source_conc": list(self.source_concentrations),
+                "source_conc": list(self._get_source_concentrations(_cache_key=_cache_key)),
                 "dest_conc": list(dconcs),
                 "ea_vols": list(eavols),
                 "plate": [c.plate for c in self.components],
@@ -461,7 +461,7 @@ class EchoFillToVolume(AbstractEchoAction):
         return [
             x * y
             for x, y in zip(
-                self.source_concentrations,
+                self._get_source_concentrations(_cache_key=_cache_key),
                 _ratio(
                     self.each_volumes(mix_vol, actions, _cache_key=_cache_key), mix_vol
                 ),

@@ -9,6 +9,10 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
+CACHE_HITS = 0
+CACHE_MISSES = 0
+CACHE_SKIPS = 0
+
 # Largely replaced by concrete type code.
 # def _maybesequence(object_or_sequence: Sequence[T] | T) -> list[T]:
 #     if isinstance(object_or_sequence, Sequence):
@@ -66,11 +70,21 @@ def maybe_cache_once(fun):
             and (current_hash == last_hash)
             and (last_cache_data is not None)
         ):
+            global CACHE_HITS
+            CACHE_HITS += 1
             return last_cache_data
+
         data = fun(*args, **kwargs, _cache_key=_cache_key)
         if _cache_key is not None:
+            global CACHE_MISSES
+            CACHE_MISSES += 1
             last_hash = current_hash
             last_cache_data = data
+        else:
+            global CACHE_SKIPS
+            CACHE_SKIPS += 1
+            # raise ValueError("Cache key was not provided, so cache was not used.")
+            # print(fun, args, kwargs)
         return data
 
     functools.update_wrapper(inner, fun)
