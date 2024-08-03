@@ -51,7 +51,7 @@ dependencies = [
     "pandas",
     "openpyxl",
     "pint >= 0.20",
-    "polars ~= 1.4",
+    "polars[pandas,numpy] ~= 1.4",
     "tabulate",
     "toml",
     "typing_extensions >= 4.2",
