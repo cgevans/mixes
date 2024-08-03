@@ -52,7 +52,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 from .units import *
 from .units import VolumeError, _parse_vol_optional, normalize
-from .util import _get_picklist_class
+from .util import _get_picklist_class, gen_random_hash
 
 warnings.filterwarnings(
     "ignore",
@@ -269,7 +269,13 @@ class Mix(AbstractComponent):
         """
         The volume of buffer to be added to the mix, in addition to the components.
         """
-        mvol = sum(c.tx_volume(self.total_volume, self.actions) for c in self.actions)
+        return self._get_buffer_volume()
+
+    def _get_buffer_volume(self, _cache_key=None) -> Quantity:
+        mvol = sum(
+            c.tx_volume(self.total_volume, self.actions, _cache_key=_cache_key)
+            for c in self.actions
+        )
         return self.total_volume - mvol
 
     def table(
@@ -343,17 +349,18 @@ class Mix(AbstractComponent):
         )
 
     def mixlines(
-        self, tablefmt: str | TableFormat = "pipe", buffer_name: str = "Buffer"
+        self, tablefmt: str | TableFormat = "pipe", buffer_name: str = "Buffer", _cache_key=None
     ) -> list[MixLine]:
         mixlines: list[MixLine] = []
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
 
         for action in self.actions:
             mixlines += action._mixlines(
-                tablefmt=tablefmt, mix_vol=self.total_volume, actions=self.actions
+                tablefmt=tablefmt, mix_vol=self.total_volume, actions=self.actions, _cache_key=_cache_key
             )
 
         if self.has_fixed_total_volume():
-            mixlines.append(MixLine([buffer_name], None, None, self.buffer_volume))
+            mixlines.append(MixLine([buffer_name], None, None, self._get_buffer_volume(_cache_key=_cache_key)))
         return mixlines
 
     def has_fixed_concentration_action(self) -> bool:
@@ -963,10 +970,12 @@ class Mix(AbstractComponent):
         self,
         consumed_volumes: dict[str, Quantity] = {},
         made_volumes: dict[str, Quantity] = {},
+        _cache_key=None,
     ) -> Tuple[dict[str, Quantity], dict[str, Quantity]]:
         """
         Given a
         """
+        _cache_key = gen_random_hash() if _cache_key is None else _cache_key
         if self.name in made_volumes:
             # We've already been seen.  Ignore our components.
             return consumed_volumes, made_volumes
@@ -976,20 +985,25 @@ class Mix(AbstractComponent):
 
         for action in self.actions:
             for component, volume in zip(
-                action.components, action.each_volumes(self.total_volume, self.actions)
+                action.components,
+                action.each_volumes(
+                    self.total_volume, tuple(self.actions), _cache_key=_cache_key
+                ),
             ):
                 consumed_volumes[component.name] = (
                     consumed_volumes.get(component.name, ZERO_VOL) + volume
                 )
-                component._update_volumes(consumed_volumes, made_volumes)
+                component._update_volumes(
+                    consumed_volumes, made_volumes, _cache_key=_cache_key
+                )
 
         # Potentially deal with buffer...
-        if self.buffer_volume.m > 0:
+        if self._get_buffer_volume(_cache_key=_cache_key).m > 0:
             made_volumes[self.buffer_name] = made_volumes.get(
                 self.buffer_name, 0 * ureg.ul
             )
             consumed_volumes[self.buffer_name] = (
-                consumed_volumes.get(self.buffer_name, 0 * ureg.ul) + self.buffer_volume
+                consumed_volumes.get(self.buffer_name, 0 * ureg.ul) + self._get_buffer_volume(_cache_key=_cache_key)
             )
 
         return consumed_volumes, made_volumes

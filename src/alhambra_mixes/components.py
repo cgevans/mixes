@@ -114,6 +114,7 @@ class AbstractComponent(ABC):
         self,
         consumed_volumes: dict[str, DecimalQuantity] = {},
         made_volumes: dict[str, DecimalQuantity] = {},
+        _cache_key=None,
     ) -> Tuple[dict[str, DecimalQuantity], dict[str, DecimalQuantity]]:
         """
         Given a
@@ -142,12 +143,16 @@ class Component(AbstractComponent):
     """
 
     name: str # type: ignore
+    def _get_name(self, _cache_key=None) -> str:
+        return self.name
     concentration: DecimalQuantity = attrs.field(
         converter=_parse_conc_optional,
         default=NAN_CONC,
         on_setattr=attrs.setters.convert,
         eq=norm_nan_for_eq,
     )
+    def _get_concentration(self, _cache_key=None) -> DecimalQuantity:
+        return self.concentration
     plate: str | None = attrs.field(
         default=None,
         kw_only=True
