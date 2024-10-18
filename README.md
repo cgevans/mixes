@@ -34,6 +34,10 @@ components at different concentrations spread across several plates.
 
 # Changelog
 
+## v0.6.1
+
+- Adds `html_with_borders_tablefmt` again (and import `printing`).
+
 ## v0.6.0
 
 - Optional ECHO liquid handler support, with the 'echo' feature (eg, `pip install --upgrade alhambra_mixes[echo]`).  Uses [kithairon](https://github.com/cgevans/kithairon), which
