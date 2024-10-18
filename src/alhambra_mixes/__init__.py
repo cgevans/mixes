@@ -16,7 +16,7 @@ from .references import Reference, load_reference
 from .units import DNAN, Q_, VolumeError, nM, uL, uM, ureg
 from .printing import html_with_borders_tablefmt
 
-import printing
+from . import printing
 
 __all__ = [
     "uL",
