@@ -525,7 +525,7 @@ class Mix(AbstractComponent):
             pl.when(pl.col("concentration_nM").is_null().any())
             .then(pl.lit(None))
             .otherwise(pl.col("concentration_nM").sum())
-            .alias("concentration_nM"),
+            .alias("concentration_nM").cast(pl.Decimal(scale=6)),
             pl.col("component").first(),  # FIXME
         )
 
