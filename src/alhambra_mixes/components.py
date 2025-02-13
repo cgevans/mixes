@@ -186,7 +186,7 @@ class Component(AbstractComponent):
             },
             schema={
                 'name': pl.String,
-                'concentration_nM': pl.Decimal(precision=20, scale=6),
+                'concentration_nM': pl.Decimal(scale=6),
                 'component': pl.Object
             }
         )

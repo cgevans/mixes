@@ -291,7 +291,7 @@ class ActionWithComponents(AbstractAction):
             r = _ratio(dc, sc)
             if math.isnan(r):
                 r = None
-            comps = comps.with_columns(pl.col("concentration_nM").mul(r))
+            comps = comps.with_columns(pl.col("concentration_nM").mul(r).cast(pl.Decimal(scale=6)))
 
             all_comps.append(comps)
 
