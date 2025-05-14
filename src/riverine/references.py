@@ -86,9 +86,9 @@ class Reference:
         """
         well_to_strand_name = {}
         found_plate_name = False
-        available_plate_names = []
+        available_plate_names = set()
         for row in self.df.itertuples():
-            available_plate_names.append(row.Plate)
+            available_plate_names.add(row.Plate)
             if row.Plate == name:  # type: ignore
                 found_plate_name = True
                 well = row.Well  # type: ignore
