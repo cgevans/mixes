@@ -81,14 +81,21 @@ class Reference:
         :return:
             a :class:`PlateMap` consisting of all strands in this Reference object from plate named
             `name`. Currently always makes a 96-well plate.
+        :raises ValueError:
+            If the `name` is not the name of a plate in the reference.
         """
         well_to_strand_name = {}
+        found_plate_name = False
         for row in self.df.itertuples():
             if row.Plate == name:  # type: ignore
+                found_plate_name = True
                 well = row.Well  # type: ignore
                 sequence = row.Sequence  # type: ignore
                 strand = Strand(name=row.Name, sequence=sequence)  # type: ignore
                 well_to_strand_name[well] = strand.name
+
+        if not found_plate_name:
+            raise ValueError(f'Plate "{name}" not found in reference file.')
 
         plate_map = PlateMap(
             plate_name=name,
