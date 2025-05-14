@@ -73,16 +73,27 @@ class Reference:
         plate_type: PlateType = PlateType.wells96,
     ) -> PlateMap:
         """
-        :param name:
+        Return a :class:`PlateMap` for a given plate name in the Reference.
+
+        Parameters
+        ----------
+
+        name:
             Name of plate to make a :class:`PlateMap` for.
-        :param plate_type:
+
+        plate_type:
             Either :data:`PlateType.wells96` or :data:`PlateType.wells384`;
             default is :data:`PlateType.wells96`.
-        :return:
+
+        Returns
+        -------
             a :class:`PlateMap` consisting of all strands in this Reference object from plate named
             `name`. Currently always makes a 96-well plate.
-        :raises ValueError:
-            If the `name` is not the name of a plate in the reference.
+
+        Raises
+        ------
+        ValueError:
+            If `name` is not the name of a plate in the reference.
         """
         well_to_strand_name = {}
         found_plate_name = False
