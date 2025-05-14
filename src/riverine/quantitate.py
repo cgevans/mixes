@@ -139,11 +139,17 @@ def hydrate(
     """
     Indicates how much buffer/water volume to add to a dry DNA sample to reach a particular concentration.
 
-    :param target_conc:
+    Parameters
+    ----------
+
+    target_conc:
         target concentration. If float/int, units are µM (micromolar).
-    :param nmol:
+
+    nmol:
         number of nmol (nanomoles) of dry product.
-    :return:
+
+    Returns
+    -------
         number of µL (microliters) of water/buffer to pipette to reach `target_conc` concentration
     """
     target_conc = parse_conc(target_conc)
@@ -162,13 +168,20 @@ def dilute(
     """
     Indicates how much buffer/water volume to add to a wet DNA sample to reach a particular concentration.
 
-    :param target_conc:
+    Parameters
+    ----------
+
+    target_conc:
         target concentration. If float/int, units are µM (micromolar).
-    :param start_conc:
+
+    start_conc:
         current concentration of sample. If float/int, units are µM (micromolar).
-    :param vol:
+
+    vol:
         current volume of sample. If float/int, units are µL (microliters)
-    :return:
+
+    Returns
+    -------
         number of µL (microliters) of water/buffer to add to dilate to concentration `target_conc`
     """
     target_conc = parse_conc(target_conc)
@@ -198,12 +211,18 @@ def measure_conc(
     """
     Calculates concentration of DNA sample given an absorbance reading on a NanoDrop machine.
 
-    :param absorbance:
+    Parameters
+    ----------
+
+    absorbance:
         UV absorbance at 260 nm. Can either be a single float/int or a nonempty sequence of floats/ints
         representing repeated measurements; if the latter then an average is taken.
-    :param ext_coef:
+
+    ext_coef:
         Extinction coefficient in L/mol*cm.
-    :return:
+
+    Returns
+    -------
         concentration of DNA sample
     """
     if isinstance(absorbance, (float, int)):
@@ -242,19 +261,26 @@ def measure_conc_and_dilute(
     Calculates concentration of DNA sample given an absorbance reading on a NanoDrop machine,
     then calculates the amount of buffer/water that must be added to dilute it to a target concentration.
 
-    :param absorbance:
+    Parameters
+    ----------
+
+    absorbance:
         UV absorbance at 260 nm. Can either be a single float/int or a nonempty sequence of floats/ints
         representing repeated measurements; if the latter then an average is taken.
-    :param ext_coef:
+
+    ext_coef:
         Extinction coefficient in L/mol*cm.
-    :param target_conc:
+
+    target_conc:
         target concentration. If float/int, units are µM (micromolar).
-    :param vol:
+
+    vol:
         current volume of sample. If float/int, units are µL (microliters)
         NOTE: This is the volume *before* samples are taken to measure absorbance.
         It is assumed that each sample taken to measure absorbance is 1 µL.
         If that is not the case, then set the parameter `vol_removed` to the total volume removed.
-    :param vol_removed:
+
+    vol_removed:
         Total volume removed from `vol` to measure absorbance.
         For example, if two samples were taken, one at 1 µL and one at 1.5 µL, then set
         `vol_removed` = 2.5 µL.
@@ -264,7 +290,9 @@ def measure_conc_and_dilute(
         then it is assumed the number of samples is 1 (i.e., `vol_removed` = 1 µL),
         otherwise if `absorbance` is a list, then the length of the list is assumed to be the
         number of samples taken, each at 1 µL.
-    :return:
+
+    Returns
+    -------
         The pair (current concentration of DNA sample, volume to add to reach `target_conc`)
     """
     if vol_removed is None:
@@ -324,25 +352,34 @@ def measure_conc_and_dilute_from_specs(
     {'mon0': (<Quantity(186.765409, 'micromolar')>, <Quantity(28.186813, 'microliter')>),
      'adp0': (<Quantity(190.933463, 'micromolar')>, <Quantity(30.563653, 'microliter')>)}
 
-    :param filename:
+    Parameters
+    ----------
+
+    filename:
         IDT specs file (e.g., coa.csv)
-    :param target_conc:
+
+    target_conc:
         target concentration to dilute to from measured concentration
-    :param absorbances:
+
+    absorbances:
         measured absorbance of each strand. Should be a dict mapping each strand name (as it appears in
         the "Sequence name" column of `filename`) to an absorbance or nonempty list of absorbances, meaning
         UV absorbance at 260 nm. If a list then an average is taken.
-    :param vols_removed:
+
+    vols_removed:
         dict mapping each strand name to the volume that was removed to take absorbance measurements.
         For any strand name not appearing as a key in the dict, it is assumed that 1 microliter was taken
         for each absorbance measurement made.
-    :param enforce_utf8:
+
+    enforce_utf8:
         If `filename` is a text CSV file and this paramter is True, it enforces that `filename` is valid
         UTF-8, raising an exception if not. This helps to avoid accidentally dropping Unicode characters
         such as µ, which would silently convert a volume from µL to L.
         If do not want to convert the specs file to UTF-8 and you are certain that no important Unicode
         characters would be dropped, then you can set this parameter to false.
-    :return:
+
+    Returns
+    -------
         dict mapping each strand name to a pair `(conc, vol)`, where `conc` is its measured concentration
         and `vol` is the volume that should be subsequently added to reach concentration `target_conc`
     """
@@ -385,19 +422,26 @@ def display_measure_conc_and_dilute_from_specs(
     Like :meth:`measure_conc_and_dilute_from_specs`, but displays the value in a Jupyter
     notebook instead of returning it.
 
-    :param filename:
+    Parameters
+    ----------
+
+    filename:
         IDT specs file (e.g., coa.csv)
-    :param target_conc:
+
+    target_conc:
         target concentration to dilute to from measured concentration
-    :param absorbances:
+
+    absorbances:
         measured absorbance of each strand. Should be a dict mapping each strand name (as it appears in
         the "Sequence name" column of `filename`) to an absorbance or nonempty list of absorbances, meaning
         UV absorbance at 260 nm. If a list then an average is taken.
-    :param vols_removed:
+
+    vols_removed:
         dict mapping each strand name to the volume that was removed to take absorbance measurements.
         For any strand name not appearing as a key in the dict, it is assumed that 1 microliter was taken
         for each absorbance measurement made.
-    :param enforce_utf8:
+
+    enforce_utf8:
         If `filename` is a text CSV file and this paramter is True, it enforces that `filename` is valid
         UTF-8, raising an exception if not. This helps to avoid accidentally dropping Unicode characters
         such as µ, which would silently convert a volume from µL to L.
@@ -451,19 +495,27 @@ def hydrate_and_measure_conc_and_dilute(
     `target_conc_low` with a subsequent dilution step. (As opposed to requiring a vacufuge to
     concentrate the sample higher).
 
-    :param nmol:
+    Parameters
+    ----------
+
+    nmol:
         number of nmol (nanomoles) of dry product.
-    :param target_conc_high:
+
+    target_conc_high:
         target concentration for initial hydration. Should be higher than `target_conc_low`,
-    :param target_conc_low:
+
+    target_conc_low:
         the "real" target concentration that we will try to hit after the second
         addition of water/buffer.
-    :param absorbance:
+
+    absorbance:
         UV absorbance at 260 nm. Can either be a single float/int or a nonempty sequence of floats/ints
         representing repeated measurements; if the latter then an average is taken.
-    :param ext_coef:
+
+    ext_coef:
         Extinction coefficient in L/mol*cm.
-    :param vol_removed:
+
+    vol_removed:
         Total volume removed from `vol` to measure absorbance.
         For example, if two samples were taken, one at 1 µL and one at 1.5 µL, then set
         `vol_removed` = 2.5 µL.
@@ -569,20 +621,27 @@ def hydrate_and_measure_conc_and_dilute_from_specs(
     Instead of returning a dictionary, these methods display the result in the Jupyter notebook,
     as nicely-formatted Markdown.
 
-    :param filename:
+    Parameters
+    ----------
+
+    filename:
         path to IDT Excel/CSV spreadsheet with specs of strands (e.g., coa.csv)
-    :param target_conc_high:
+
+    target_conc_high:
         target concentration for initial hydration. Should be higher than `target_conc_low`,
-    :param target_conc_low:
+
+    target_conc_low:
         the "real" target concentration that we will try to hit after the second
         addition of water/buffer.
-    :param absorbances:
+
+    absorbances:
         UV absorbances at 260 nm. Is a dict mapping each strand name to an "absorbance" as defined
         in the `absobance` parameter of :func:`hydrate_and_measure_conc_and_dilute`.
         In other words the value to which each strand name maps
         can either be a single float/int, or a nonempty sequence of floats/ints
         representing repeated measurements; if the latter then an average is taken.
-    :param vols_removed:
+
+    vols_removed:
         Total volumes removed from `vol` to measure absorbance;
         is a dict mapping strand names (should be subset of strand names that are keys in `absorbances`).
         Can be None, or can have strictly fewer strand names than in `absorbances`;
@@ -595,13 +654,16 @@ def hydrate_and_measure_conc_and_dilute_from_specs(
         then it is assumed the number of samples is 1 (i.e., `vol_removed` = 1 µL),
         otherwise if `absorbance` is a list, then the length of the list is assumed to be the
         number of samples taken, each at 1 µL.
-    :param enforce_utf8:
+
+    enforce_utf8:
         If `filename` is a text CSV file and this paramter is True, it enforces that `filename` is valid
         UTF-8, raising an exception if not. This helps to avoid accidentally dropping Unicode characters
         such as µ, which would silently convert a volume from µL to L.
         If do not want to convert the specs file to UTF-8 and you are certain that no important Unicode
         characters would be dropped, then you can set this parameter to false.
-    :return:
+
+    Returns
+    -------
         dict mapping each strand name in keys of `absorbances` to a pair (`conc`, `vol_to_add`),
         where `conc` is the measured concentration according to the absorbance value(s) of that strandm
         and `vol_to_add` is the volume needed to add to reach concentration `target_conc_low`.
@@ -660,20 +722,28 @@ def hydrate_from_specs(
     Indicates how much volume to add to a dry DNA sample to reach a particular concentration,
     given data in an Excel file in the IDT format.
 
-    :param filename:
+    Parameters
+    ----------
+
+    filename:
         path to IDT Excel/CSV spreadsheet with specs of strands (e.g., coa.csv)
-    :param target_conc:
+
+    target_conc:
         target concentration. If float/int, units are µM (micromolar).
-    :param strands:
+
+    strands:
         strands to hydrate. Can be list of strand names (strings), or list of of ints indicating
         which rows in the Excel spreadsheet to hydrate
-    :param enforce_utf8:
+
+    enforce_utf8:
         If `filename` is a text CSV file and this paramter is True, it enforces that `filename` is valid
         UTF-8, raising an exception if not. This helps to avoid accidentally dropping Unicode characters
         such as µ, which would silently convert a volume from µL to L.
         If do not want to convert the specs file to UTF-8 and you are certain that no important Unicode
         characters would be dropped, then you can set this parameter to false.
-    :return:
+
+    Returns
+    -------
         dict mapping each strand name to an amount of µL (microliters) of water/buffer
         to pipette to reach `target_conc` concentration for that strand
     """
@@ -805,20 +875,27 @@ def measure_conc_from_specs(
     Indicates the concentrations of DNA samples, given data in an Excel file in the IDT format and
     measured absorbances from a Nanodrop machine.
 
-    :param filename:
+    Parameters
+    ----------
+
+    filename:
         path to IDT Excel/CSV spreadsheet with specs of strands (e.g., coa.csv)
-    :param absorbances:
+
+    absorbances:
         dict mapping each strand name to its absorbance value.
         Each absorbance value represents UV absorbance at 260 nm.
         Each can either be a single float/int or a nonempty sequence of floats/ints
         representing repeated measurements; if the latter then an average is taken.
-    :param enforce_utf8:
+
+    enforce_utf8:
         If `filename` is a text CSV file and this paramter is True, it enforces that `filename` is valid
         UTF-8, raising an exception if not. This helps to avoid accidentally dropping Unicode characters
         such as µ, which would silently convert a volume from µL to L.
         If do not want to convert the specs file to UTF-8 and you are certain that no important Unicode
         characters would be dropped, then you can set this parameter to false.
-    :return:
+
+    Returns
+    -------
         dict mapping each strand name to a concentration for that strand
     """
     name_key = "Sequence Name"
@@ -891,11 +968,16 @@ def display_hydrate_from_specs(
     given data in an Excel file in the IDT format,
     displaying the result in a jupyter notebook.
 
-    :param filename:
+    Parameters
+    ----------
+
+    filename:
         path to IDT Excel/CSV spreadsheet with specs of strands (e.g., coa.csv)
-    :param target_conc:
+
+    target_conc:
         target concentration. If float/int, units are µM (micromolar).
-    :param strands:
+
+    strands:
         strands to hydrate. Can be list of strand names (strings), or list of of ints indicating
         which rows in the Excel spreadsheet to hydrate
     """
@@ -926,9 +1008,13 @@ def display_measure_conc_from_specs(
     given data in an Excel/CSV file in the IDT format,
     displaying the result in a jupyter notebook.
 
-    :param filename:
+    Parameters
+    ----------
+
+    filename:
         path to IDT Excel/CSV spreadsheet with specs of strands (e.g., coa.csv)
-    :param absorbances:
+
+    absorbances:
         dict mapping each strand name to its absorbance value.
         Each absorbance value represents UV absorbance at 260 nm.
         Each can either be a single float/int or a nonempty sequence of floats/ints
