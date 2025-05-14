@@ -86,7 +86,9 @@ class Reference:
         """
         well_to_strand_name = {}
         found_plate_name = False
+        available_plate_names = []
         for row in self.df.itertuples():
+            available_plate_names.append(row.Plate)
             if row.Plate == name:  # type: ignore
                 found_plate_name = True
                 well = row.Well  # type: ignore
@@ -95,7 +97,8 @@ class Reference:
                 well_to_strand_name[well] = strand.name
 
         if not found_plate_name:
-            raise ValueError(f'Plate "{name}" not found in reference file.')
+            raise ValueError(f'Plate "{name}" not found in reference file.'
+                             f'\nAvailable plate names: {", ".join(available_plate_names)}')
 
         plate_map = PlateMap(
             plate_name=name,
