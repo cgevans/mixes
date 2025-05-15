@@ -494,8 +494,12 @@ class EchoFillToVolume(AbstractEchoAction):
         else:
             tvol = self.target_total_volume
 
-        ea_vols = [
-            round(((tvol - othervol) / self.droplet_volume).m_as(""))
+        maybe_vol = ((tvol - othervol) / self.droplet_volume).m_as("")
+        if math.isnan(maybe_vol):
+            return [NAN_VOL] * len(self.components)
+
+        return [
+            round(maybe_vol)
             * self.droplet_volume
         ]
         return ea_vols
