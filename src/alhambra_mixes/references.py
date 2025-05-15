@@ -73,22 +73,43 @@ class Reference:
         plate_type: PlateType = PlateType.wells96,
     ) -> PlateMap:
         """
-        :param name:
+        Return a :class:`PlateMap` for a given plate name in the Reference.
+
+        Parameters
+        ----------
+
+        name:
             Name of plate to make a :class:`PlateMap` for.
-        :param plate_type:
+
+        plate_type:
             Either :data:`PlateType.wells96` or :data:`PlateType.wells384`;
             default is :data:`PlateType.wells96`.
-        :return:
+
+        Returns
+        -------
             a :class:`PlateMap` consisting of all strands in this Reference object from plate named
             `name`. Currently always makes a 96-well plate.
+
+        Raises
+        ------
+        ValueError:
+            If `name` is not the name of a plate in the reference.
         """
         well_to_strand_name = {}
+        found_plate_name = False
+        available_plate_names = set()
         for row in self.df.itertuples():
+            available_plate_names.add(row.Plate)
             if row.Plate == name:  # type: ignore
+                found_plate_name = True
                 well = row.Well  # type: ignore
                 sequence = row.Sequence  # type: ignore
                 strand = Strand(name=row.Name, sequence=sequence)  # type: ignore
                 well_to_strand_name[well] = strand.name
+
+        if not found_plate_name:
+            raise ValueError(f'Plate "{name}" not found in reference file.'
+                             f'\nAvailable plate names: {", ".join(available_plate_names)}')
 
         plate_map = PlateMap(
             plate_name=name,

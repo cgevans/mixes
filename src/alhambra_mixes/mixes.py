@@ -631,9 +631,15 @@ class Mix(AbstractComponent):
 
     def tubes_markdown(self, tablefmt: str | TableFormat = "pipe") -> str:
         """
-        :param tablefmt:
+
+        Parameters
+        ----------
+
+        tablefmt:
             table format (see :meth:`PlateMap.to_table` for description)
-        :return:
+
+        Returns
+        -------
             a Markdown (or other format according to `tablefmt`)
             string indicating which strands in test tubes to pipette, grouped by the volume
             of each
@@ -660,14 +666,20 @@ class Mix(AbstractComponent):
         """
         Displays in a Jupyter notebook the result of calling :meth:`Mix.instructions()`.
 
-        :param plate_type:
+        Parameters
+        ----------
+
+        plate_type:
             96-well or 384-well plate; default is 96-well.
-        :param raise_failed_validation:
+
+        raise_failed_validation:
             If validation fails (volumes don't make sense), raise an exception.
-        :param combine_plate_actions:
+
+        combine_plate_actions:
             If True, then if multiple actions in the Mix take the same volume from the same plate,
             they will be combined into a single :class:`PlateMap`.
-        :param well_marker:
+
+        well_marker:
             By default the strand's name is put in the relevant plate entry. If `well_marker` is specified
             and is a string, then that string is put into every well with a strand in the plate map instead.
             This is useful for printing plate maps that just put,
@@ -678,22 +690,28 @@ class Mix(AbstractComponent):
             that takes as input a string representing the well (such as ``"B3"`` or ``"E11"``),
             and outputs a string. For example, giving the identity function
             ``mix.to_table(well_marker=lambda x: x)`` puts the well address itself in the well.
-        :param title_level:
+
+        title_level:
             The "title" is the first line of the returned string, which contains the plate's name
             and volume to pipette. The `title_level` controls the size, with 1 being the largest size,
             (header level 1, e.g., # title in Markdown or <h1>title</h1> in HTML).
-        :param warn_unsupported_title_format:
+
+        warn_unsupported_title_format:
             If True, prints a warning if `tablefmt` is a currently unsupported option for the title.
             The currently supported formats for the title are 'github', 'html', 'unsafehtml', 'rst',
             'latex', 'latex_raw', 'latex_booktabs', "latex_longtable". If `tablefmt` is another valid
             option, then the title will be the Markdown format, i.e., same as for `tablefmt` = 'github'.
-        :param tablefmt:
+
+        tablefmt:
             By default set to `'github'` to create a Markdown table. For other options see
             https://github.com/astanin/python-tabulate#readme
-        :param include_plate_maps:
+
+        include_plate_maps:
             If True, include plate maps as part of displayed instructions, otherwise only include the
             more compact mixing table (which is always displayed regardless of this parameter).
-        :return:
+
+        Returns
+        -------
             pipetting instructions in the form of strings combining results of :meth:`Mix.table` and
             :meth:`Mix.plate_maps`
         """
@@ -714,9 +732,14 @@ class Mix(AbstractComponent):
 
     def generate_picklist(self, experiment: Experiment | None, _cache_key=None) -> PickList | None:
         """
-        :param experiment:
+        Parameters
+        ----------
+
+        experiment:
             experiment to use for generating picklist
-        :return:
+
+        Returns
+        -------
             picklist for the mix
         """
 
@@ -747,14 +770,21 @@ class Mix(AbstractComponent):
         Returns string combiniing the string results of calling :meth:`Mix.table` and
         :meth:`Mix.plate_maps` (then calling :meth:`PlateMap.to_table` on each :class:`PlateMap`).
 
-        :param plate_type:
+        Parameters
+        ----------
+
+        plate_type:
             96-well or 384-well plate; default is 96-well.
-        :param raise_failed_validation:
+
+
+        raise_failed_validation:
             If validation fails (volumes don't make sense), raise an exception.
-        :param combine_plate_actions:
+
+        combine_plate_actions:
             If True, then if multiple actions in the Mix take the same volume from the same plate,
             they will be combined into a single :class:`PlateMap`.
-        :param well_marker:
+
+        well_marker:
             By default the strand's name is put in the relevant plate entry. If `well_marker` is specified
             and is a string, then that string is put into every well with a strand in the plate map instead.
             This is useful for printing plate maps that just put,
@@ -765,22 +795,28 @@ class Mix(AbstractComponent):
             that takes as input a string representing the well (such as ``"B3"`` or ``"E11"``),
             and outputs a string. For example, giving the identity function
             ``mix.to_table(well_marker=lambda x: x)`` puts the well address itself in the well.
-        :param title_level:
+
+        title_level:
             The "title" is the first line of the returned string, which contains the plate's name
             and volume to pipette. The `title_level` controls the size, with 1 being the largest size,
             (header level 1, e.g., # title in Markdown or <h1>title</h1> in HTML).
-        :param warn_unsupported_title_format:
+
+        warn_unsupported_title_format:
             If True, prints a warning if `tablefmt` is a currently unsupported option for the title.
             The currently supported formats for the title are 'github', 'html', 'unsafehtml', 'rst',
             'latex', 'latex_raw', 'latex_booktabs', "latex_longtable". If `tablefmt` is another valid
             option, then the title will be the Markdown format, i.e., same as for `tablefmt` = 'github'.
-        :param tablefmt:
+
+        tablefmt:
             By default set to `'github'` to create a Markdown table. For other options see
             https://github.com/astanin/python-tabulate#readme
-        :param include_plate_maps:
+
+        include_plate_maps:
             If True, include plate maps as part of displayed instructions, otherwise only include the
             more compact mixing table (which is always displayed regardless of this parameter).
-        :return:
+
+        Returns
+        -------
             pipetting instructions in the form of strings combining results of :meth:`Mix.table` and
             :meth:`Mix.plate_maps`
         """
@@ -1122,7 +1158,10 @@ class PlateMap:
         which creates a Markdown format. To create other formats such as HTML, change the value of
         `tablefmt`; see https://github.com/astanin/python-tabulate#readme for other possible formats.
 
-        :param well_marker:
+        Parameters
+        ----------
+
+        well_marker:
             By default the strand's name is put in the relevant plate entry. If `well_marker` is specified
             and is a string, then that string is put into every well with a strand in the plate map instead.
             This is useful for printing plate maps that just put,
@@ -1133,29 +1172,39 @@ class PlateMap:
             that takes as input a string representing the well (such as ``"B3"`` or ``"E11"``),
             and outputs a string. For example, giving the identity function
             ``mix.to_table(well_marker=lambda x: x)`` puts the well address itself in the well.
-        :param title_level:
+
+        title_level:
             The "title" is the first line of the returned string, which contains the plate's name
             and volume to pipette. The `title_level` controls the size, with 1 being the largest size,
             (header level 1, e.g., # title in Markdown or <h1>title</h1> in HTML).
-        :param warn_unsupported_title_format:
+
+        warn_unsupported_title_format:
             If True, prints a warning if `tablefmt` is a currently unsupported option for the title.
             The currently supported formats for the title are 'github', 'html', 'unsafehtml', 'rst',
             'latex', 'latex_raw', 'latex_booktabs', "latex_longtable". If `tablefmt` is another valid
             option, then the title will be the Markdown format, i.e., same as for `tablefmt` = 'github'.
-        :param tablefmt:
+
+        tablefmt:
             By default set to `'github'` to create a Markdown table. For other options see
             https://github.com/astanin/python-tabulate#readme
-        :param stralign:
+
+        stralign:
             See https://github.com/astanin/python-tabulate#readme
-        :param missingval:
+
+        missingval:
             See https://github.com/astanin/python-tabulate#readme
-        :param showindex:
+
+        showindex:
             See https://github.com/astanin/python-tabulate#readme
-        :param disable_numparse:
+
+        disable_numparse:
             See https://github.com/astanin/python-tabulate#readme
-        :param colalign:
+
+        colalign:
             See https://github.com/astanin/python-tabulate#readme
-        :return:
+
+        Returns
+        -------
             a string representation of this plate map
         """
         if title_level not in [1, 2, 3, 4, 5, 6]:

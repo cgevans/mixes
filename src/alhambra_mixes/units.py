@@ -207,9 +207,14 @@ def normalize(quantity: DecimalQuantity) -> DecimalQuantity:
     https://pint.readthedocs.io/en/0.18/tutorial.html#simplifying-units)
     and eliminate trailing zeros.
 
-    :param quantity:
+    Parameters
+    ----------
+
+    quantity:
         a pint DecimalQuantity
-    :return:
+
+    Returns
+    -------
         `quantity` normalized to be compact and without trailing zeros.
     """
     quantity = cast(DecimalQuantity, quantity.to_compact())

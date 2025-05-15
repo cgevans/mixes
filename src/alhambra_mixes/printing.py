@@ -19,11 +19,17 @@ def emphasize(text: str, tablefmt: str | TableFormat, strong: bool = False) -> s
     surrounds with pair of *'s; if `strong` is True, with double *'s. For `tablefmt` = `'html'`,
     uses ``<emph>`` or ``<strong>``.
 
-    :param text:
+    Parameters
+    ----------
+
+    text:
         text to emphasize
-    :param tablefmt:
+
+    tablefmt:
         format in which to add emphasis markup
-    :return:
+
+    Returns
+    -------
         emphasized version of `text`
     """
     # formats a title for a table produced using tabulate,
