@@ -18,6 +18,7 @@ from .units import (
     DecimalQuantity,
     _parse_conc_optional,
     _parse_conc_required,
+    NAN_CONC,
     nM,
     ureg,
 )
