@@ -31,7 +31,7 @@ from .actions import (
 )
 from .components import AbstractComponent, Component, _empty_components
 from .dictstructure import _STRUCTURE_CLASSES, _structure, _unstructure
-from .locations import PlateType, WellPos
+from .locations import PlateType, WellPos, _parse_wellpos_optional
 from .logging import log
 from .printing import (
     _ALL_TABLEFMTS,
@@ -176,8 +176,16 @@ class Mix(AbstractComponent):
         kw_only=True,
         on_setattr=attrs.setters.convert,
     )
-    plate: str = ""
-    well: WellPos | None = None
+    plate: str | None = attrs.field(
+        default=None,
+        kw_only=True
+    )
+    well: WellPos | None = attrs.field(
+        converter=_parse_wellpos_optional,
+        default=None,
+        kw_only=True,
+        on_setattr=attrs.setters.convert,
+    )
 
     @property
     def is_mix(self) -> bool:
