@@ -299,7 +299,6 @@ class Mix(AbstractComponent):
         self,
         tablefmt: TableFormat | str = "pipe",
         raise_failed_validation: bool = False,
-        buffer_name: str = "Buffer",
         stralign="default",
         missingval="",
         showindex="default",
@@ -319,25 +318,22 @@ class Mix(AbstractComponent):
         validate
             Ensure volumes make sense.
 
-        buffer_name
-            Name of the buffer to use. (Default="Buffer")
-
         buffer_line_if_absent
             If True and the buffer volume is 0, include an explicit line for buffer anyway that says 0 uL.
         """
         _cache_key = gen_random_hash() if _cache_key is None else _cache_key
 
-        mixlines = list(self.mixlines(buffer_name=buffer_name, tablefmt=tablefmt, _cache_key=_cache_key))
+        mixlines = list(self.mixlines(tablefmt=tablefmt, _cache_key=_cache_key))
 
         if not buffer_line_if_absent:
-            remove_buffer_mixline_if_absent(mixlines, buffer_name)
+            remove_buffer_mixline_if_absent(mixlines, self.buffer_name)
 
         validation_errors = self.validate(mixlines=mixlines, _cache_key=_cache_key)
 
         # If we're validating and generating an error, we need the tablefmt to be
         # a text one, so we'll call ourselves again:
         if validation_errors and raise_failed_validation:
-            raise VolumeError(self.table("pipe", buffer_name=buffer_name))
+            raise VolumeError(self.table("pipe"))
 
         mixlines.append(
             MixLine(
@@ -371,7 +367,6 @@ class Mix(AbstractComponent):
     def mixlines(
         self,
         tablefmt: str | TableFormat = "pipe",
-        buffer_name: str = "Buffer",
         _cache_key=None,
     ) -> list[MixLine]:
         mixlines: list[MixLine] = []
@@ -388,7 +383,7 @@ class Mix(AbstractComponent):
         if self.has_fixed_total_volume():
             mixlines.append(
                 MixLine(
-                    [buffer_name],
+                    [self.buffer_name],
                     None,
                     None,
                     self._get_buffer_volume(_cache_key=_cache_key),
