@@ -10,7 +10,7 @@ from tabulate import TableFormat
 
 from alhambra_mixes.util import gen_random_hash, maybe_cache_once
 
-from .actions import AbstractAction, ActionWithComponents
+from .actions import AbstractAction, ActionWithComponents, _STRUCTURE_CLASSES
 from .experiments import Experiment
 from .mixes import Mix
 from .printing import MixLine
@@ -502,7 +502,6 @@ class EchoFillToVolume(AbstractEchoAction):
             round(maybe_vol)
             * self.droplet_volume
         ]
-        return ea_vols
 
     @maybe_cache_once
     def _mixlines(
@@ -538,3 +537,6 @@ class EchoFillToVolume(AbstractEchoAction):
 #     """Use an intermediate mix to obtain a target concentration."""
 
 #     ...
+
+for c in [EchoFixedVolume, EchoEqualTargetConcentration, EchoTargetConcentration, EchoFillToVolume]:
+    _STRUCTURE_CLASSES[c.__name__] = c
