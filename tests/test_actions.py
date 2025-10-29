@@ -1,6 +1,6 @@
 import pytest
 
-from alhambra_mixes.abbreviated import EC, FC, FV, Q_, TC, C, uL, ureg
+from riverine.abbreviated import EC, FC, FV, Q_, TC, C, uL, ureg
 
 
 def test_names_and_numbers():

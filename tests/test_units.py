@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from alhambra_mixes.units import (
+from riverine.units import (
     Q_,
     _parse_conc_optional,
     _parse_conc_required,

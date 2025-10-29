@@ -1,7 +1,7 @@
 import pytest
 from pint.testsuite.helpers import assert_quantity_almost_equal as assert_approx
 
-from alhambra_mixes.quantitate import (
+from riverine.quantitate import (
     Q_,
     D,
     dilute,

@@ -25,7 +25,7 @@ from .util import _get_picklist_class, gen_random_hash, maybe_cache_once
 if TYPE_CHECKING:  # pragma: no cover
     from kithairon import PickList
 
-    from alhambra_mixes.actions import AbstractAction
+    from riverine.actions import AbstractAction
 
     from .components import AbstractComponent
     from .references import Reference

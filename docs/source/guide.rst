@@ -1,4 +1,4 @@
-.. currentmodule:: alhambra_mixes
+.. currentmodule:: riverine
 
 User's guide
 ============
@@ -6,9 +6,9 @@ User's guide
 Concepts
 --------
 
-Alhambra-mixes is a small library to make it easier to organize complicated, hierarchical mixes.
+Riverine is a small library to make it easier to organize complicated, hierarchical mixes.
 
-Alhambra-mixes organizes the mixing process into several concepts:
+Riverine organizes the mixing process into several concepts:
 
 - A *Component* is something that goes into a mix, and has a source concentration.  It may be a generic component, a strand with a sequence, or a mix.  It may also contain information about
 - An *Action* describes how a component or set of components is to be added to a mix.  It may specify that each component be added to get a target concentration in the mix, for example, or that a fixed volume of each component be added.  For example, the `FixedConcentration` action adds a component (or several components) to a mix at a fixed desired concentration, while `FixedVolume` adds components at fixed volumes.
@@ -16,7 +16,7 @@ Alhambra-mixes organizes the mixing process into several concepts:
 - A *Reference* is an object that has information about component concentrations, sequences, and locations.
 - An *Experiment* collects many mixes/components.  These are not necessary, but allow saving and loading to and from files, tracking of produced and used concentrations, and referencing of other components and mixes by name.
 
-Physical units are used extensively in alhambra-mixes.  Internally, the library uses pint to handle units, and the decimal library to handle numbers, to avoid floating point inaccuracies.  While using the library, units can be specifid flexibly as strings, which will be processed as the correct quantity, for example `"50 nM"`, or `"10 µL"`,
+Physical units are used extensively in riverine.  Internally, the library uses pint to handle units, and the decimal library to handle numbers, to avoid floating point inaccuracies.  While using the library, units can be specifid flexibly as strings, which will be processed as the correct quantity, for example `"50 nM"`, or `"10 µL"`,
 or `"5 uM"`.  If you need to do calculations, quantities can be created using :any:`Q_`, for example, `Q_(10, "µL")`,
 or `Q_("55.3", "nM")`, and these values can be used with normal arithmetic operations.
 
@@ -97,7 +97,7 @@ There are two main actions.  `FixedConcentration` is useful when you'd like to a
   ToConcentration
 
 .. note::
-   Previous versions of alhambra_mixes only supported single components for `FixedVolume` and `FixedConcentration`, and included separate `MultiFixedVolume` and `MultiFixedConcentration`  classes for multiple components.  The two `Multi` class names are currently kept for compatibility reasons, as aliases of `FixedVolume` and `FixedConcentration`.  `FixedVolume` originally implemented the features of `EqualConcentration`, but this was confusing: the `equal_conc` parameter to `FixedVolume` is deprecated, but will try to create a corresponding `EqualConcentration` instance.  Note that `FixedVolume` originally by default gave an error if destination concentrations were different; it no longer does so, and simply transfers fixed volumes.
+   Previous versions of riverine only supported single components for `FixedVolume` and `FixedConcentration`, and included separate `MultiFixedVolume` and `MultiFixedConcentration`  classes for multiple components.  The two `Multi` class names are currently kept for compatibility reasons, as aliases of `FixedVolume` and `FixedConcentration`.  `FixedVolume` originally implemented the features of `EqualConcentration`, but this was confusing: the `equal_conc` parameter to `FixedVolume` is deprecated, but will try to create a corresponding `EqualConcentration` instance.  Note that `FixedVolume` originally by default gave an error if destination concentrations were different; it no longer does so, and simply transfers fixed volumes.
 
    Actions must implement the :any:`AbstractAction` class.  For convenience, there's the :any:`ActionWithComponents` class, which is generally applicable for actions that act on a list of components.
 
@@ -130,7 +130,7 @@ Mixes can also provide information on the individual components they contain, ca
 References
 ----------
 
-While alhambra-mixes can be used while specifying all component information directly, it is often more useful to collect that information from other sources.
+While riverine can be used while specifying all component information directly, it is often more useful to collect that information from other sources.
 
 .. autosummary::
    Reference

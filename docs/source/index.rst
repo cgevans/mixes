@@ -3,10 +3,10 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-.. currentmodule:: alhambra_mixes
+.. currentmodule:: riverine
 
-Alhambra-mixes
-==============
+Riverine
+========
 
 .. toctree::
    :maxdepth: 2

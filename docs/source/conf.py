@@ -18,12 +18,12 @@ sys.path.insert(0, os.path.abspath("../../src"))
 
 # -- Project information -----------------------------------------------------
 
-project = "alhambra-mixes"
+project = "riverine"
 copyright = "2022, Constantine Evans"
 author = "Constantine Evans"
 
 try:
-    from alhambra_mixes._version import version
+    from riverine._version import version
 except ImportError:
     pass
 else:
@@ -50,7 +50,7 @@ extensions = [
 extensions.append("autoapi.extension")
 
 autoapi_type = "python"
-autoapi_dirs = [os.path.abspath("../../src/alhambra_mixes")]
+autoapi_dirs = [os.path.abspath("../../src/riverine")]
 
 autosummary_generate = True
 

@@ -1,5 +1,5 @@
 
-from alhambra_mixes import Reference
+from riverine import Reference
 
 
 def test_idt():

@@ -70,3 +70,5 @@ MANIFEST
 .conda*/
 
 .hypothesis
+
+*.lock

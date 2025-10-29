@@ -5,8 +5,8 @@ from typing import cast
 
 import pytest
 
-from alhambra_mixes import Q_, Component, Experiment, Mix, Reference, VolumeError, ureg
-from alhambra_mixes.abbreviated import FC, FV, C, Exp
+from riverine import Q_, Component, Experiment, Mix, Reference, VolumeError, ureg
+from riverine.abbreviated import FC, FV, C, Exp
 
 
 @pytest.fixture
