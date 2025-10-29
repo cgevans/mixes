@@ -6,7 +6,7 @@ from typing import Optional
 import pint.testing
 import pytest
 
-from alhambra_mixes import (
+from riverine import (
     Q_,
     Component,
     EqualConcentration,
@@ -24,7 +24,7 @@ from alhambra_mixes import (
     uM,
     ureg,
 )
-from alhambra_mixes.actions import ToConcentration
+from riverine.actions import ToConcentration
 
 
 def test_wellpos_movement():
@@ -418,7 +418,7 @@ def test_toconcentration():
 
 
 def test_combine_plate_actions():
-    from alhambra_mixes import Mix, MultiFixedConcentration, Strand
+    from riverine import Mix, MultiFixedConcentration, Strand
 
     s1 = Strand("s1", "40 uM", plate="plate1", well="A1")
     s2 = Strand("s2", "40 uM", plate="plate1", well="A2")
@@ -452,7 +452,7 @@ def test_combine_plate_actions():
 
 def test_combine_plate_actions_false():
     # this is sort of a "control" for the previous test; make sure we can reproduce old behavior
-    from alhambra_mixes import Mix, MultiFixedConcentration, Strand
+    from riverine import Mix, MultiFixedConcentration, Strand
 
     s1 = Strand("s1", "40 uM", plate="plate1", well="A1")
     s2 = Strand("s2", "40 uM", plate="plate1", well="A2")
@@ -497,7 +497,7 @@ def assert_close(
 
 
 def test_split_mix():
-    from alhambra_mixes import FixedConcentration, FixedVolume, Mix, Strand, split_mix
+    from riverine import FixedConcentration, FixedVolume, Mix, Strand, split_mix
 
     staples = [Strand(f"stap{i}", concentration="1uM") for i in range(10)]
     staple_mix = Mix(
@@ -531,7 +531,7 @@ def test_split_mix():
 
 
 def test_split_mix_with_excess():
-    from alhambra_mixes import FixedConcentration, FixedVolume, Mix, Strand, split_mix
+    from riverine import FixedConcentration, FixedVolume, Mix, Strand, split_mix
 
     staples = [Strand(f"stap{i}", concentration="1uM") for i in range(10)]
     staple_mix = Mix(
@@ -566,7 +566,7 @@ def test_split_mix_with_excess():
 
 @pytest.fixture
 def master_mix_fixture():
-    from alhambra_mixes import FixedConcentration, Mix, Strand
+    from riverine import FixedConcentration, Mix, Strand
 
     s1 = Strand("s1", concentration="100 nM")
     s2 = Strand("s2", concentration="100 nM")
@@ -602,7 +602,7 @@ def master_mix_fixture():
 
 
 def test_master_mix(master_mix_fixture):
-    from alhambra_mixes import master_mix
+    from riverine import master_mix
 
     mixes = master_mix_fixture
 
@@ -653,7 +653,7 @@ def test_master_mix(master_mix_fixture):
 
 
 def test_master_mix_different_buffer_volumes():
-    from alhambra_mixes import master_mix
+    from riverine import master_mix
 
     s1 = Component("s1", concentration="100 nM")
     s2 = Component("s2", concentration="100 nM")
@@ -706,7 +706,7 @@ def test_master_mix_different_buffer_volumes():
 
 
 def test_master_mix_exclude_shared_components(master_mix_fixture):
-    from alhambra_mixes import master_mix
+    from riverine import master_mix
 
     mixes = master_mix_fixture
 
@@ -761,7 +761,7 @@ def test_master_mix_exclude_shared_components(master_mix_fixture):
 
 
 def test_master_mix_with_FixedVolume_action(master_mix_fixture):
-    from alhambra_mixes import FixedConcentration, FixedVolume, Mix, Strand, master_mix
+    from riverine import FixedConcentration, FixedVolume, Mix, Strand, master_mix
 
     s1 = Strand("s1", concentration="100 nM")
     s2 = Strand("s2", concentration="100 nM")

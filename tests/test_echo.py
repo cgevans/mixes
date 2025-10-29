@@ -1,11 +1,11 @@
 import pytest
 
-from alhambra_mixes import Component, Experiment, Mix
+from riverine import Component, Experiment, Mix
 
 
 def test_echo_experiment():
     pytest.importorskip('kithairon')
-    from alhambra_mixes import EchoTargetConcentration
+    from riverine import EchoTargetConcentration
     exp = Experiment()
 
     # We'll make some components:

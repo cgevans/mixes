@@ -5,7 +5,7 @@ and diluting and hydrating to reach a desired concentration.
 The main "easy" functions to use are :func:`hydrate_from_specs` and
 :func:`hydrate_and_measure_conc_and_dilute_from_specs`.
 
->>> from alhambra_mixes.quantitate import hydrate_from_specs, hydrate_and_measure_conc_and_dilute_from_specs
+>>> from riverine.quantitate import hydrate_from_specs, hydrate_and_measure_conc_and_dilute_from_specs
 >>> specs_file = 'path/to/coa.csv'
 >>> target_conc_high = '200 uM'
 >>> target_conc_low = '100 uM'
@@ -344,7 +344,7 @@ def measure_conc_and_dilute_from_specs(
 
     Example usage:
 
-    >>> from alhambra_mixes.quantitate import measure_conc_and_dilute_from_specs
+    >>> from riverine.quantitate import measure_conc_and_dilute_from_specs
     >>> specs_file = 'coa-stub.csv'
     >>> target_conc = '150 uM'
     >>> absorbances = {'mon0': [38.88, 39.3], 'adp0': [77.96, 78.72]}
@@ -465,7 +465,7 @@ def display_measure_conc_and_dilute_from_specs(
         for name, (conc, vol_to_add) in names_to_concs_and_vols_to_add.items()
     ]
     table = tabulate(table_list, headers=headers, tablefmt="pipe", floatfmt=".2f")
-    from alhambra_mixes.mixes import _format_title
+    from riverine.mixes import _format_title
 
     raw_title = "Initial measured concentrations and subsequent dilution volumes"
     title = _format_title(raw_title, level=2, tablefmt="pipe")
@@ -583,7 +583,7 @@ def hydrate_and_measure_conc_and_dilute_from_specs(
     The intended usage of this method is to be used in conjunction with the function
     :func:`hydrate_from_specs` as follows.
 
-    >>> from alhambra_mixes.quantitate import hydrate_from_specs, hydrate_and_measure_conc_and_dilute_from_specs
+    >>> from riverine.quantitate import hydrate_from_specs, hydrate_and_measure_conc_and_dilute_from_specs
     >>> specs_file = 'path/to/coa.csv'
     >>> target_conc_high = '200 uM'
     >>> target_conc_low = '100 uM'
@@ -951,7 +951,7 @@ def display_hydrate_and_measure_conc_and_dilute_from_specs(
         for name, (conc, vol_to_add) in names_to_concs_and_vols_to_add.items()
     ]
     table = tabulate(table_list, headers=headers, tablefmt="pipe", floatfmt=".2f")
-    from alhambra_mixes.mixes import _format_title
+    from riverine.mixes import _format_title
 
     raw_title = "Initial measured concentrations and subsequent dilution volumes"
     title = _format_title(raw_title, level=2, tablefmt="pipe")
@@ -993,7 +993,7 @@ def display_hydrate_from_specs(
     for name, vol in names_to_vols.items():
         table_list.append((name, round(vol, 2)))  # type: ignore
     table = tabulate(table_list, headers=headers, tablefmt="pipe", floatfmt=".2f")
-    from alhambra_mixes.mixes import _format_title
+    from riverine.mixes import _format_title
 
     raw_title = "Initial hydration volumes"
     title = _format_title(raw_title, level=2, tablefmt="pipe")

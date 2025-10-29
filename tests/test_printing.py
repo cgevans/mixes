@@ -1,5 +1,5 @@
 
-from alhambra_mixes.printing import _format_title
+from riverine.printing import _format_title
 
 
 def test_title():

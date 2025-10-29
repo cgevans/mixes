@@ -8,7 +8,7 @@ import attrs
 import polars as pl
 from tabulate import TableFormat
 
-from alhambra_mixes.util import gen_random_hash, maybe_cache_once
+from riverine.util import gen_random_hash, maybe_cache_once
 
 from .actions import AbstractAction, ActionWithComponents, _STRUCTURE_CLASSES
 from .experiments import Experiment

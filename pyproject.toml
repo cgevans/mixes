@@ -11,7 +11,7 @@ rye = { dev-dependencies = [
 version.source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/alhambra_mixes/_version.py"
+version-file = "src/riverine/_version.py"
 
 [tool.pytest.ini_options]
 # addopts = "--cov alhambra --cov-report term-missing --cov-report html"
@@ -23,13 +23,13 @@ testpaths = ["tests"]
 
 [tool.hatch.metadata.hooks.vcs.urls]
 Homepage = "https://github.com/cgevans/mixes"
-Documentation = "https://alhambra-mixes.readthedocs.io"
+Documentation = "https://riverine.readthedocs.io"
 Repository = "https://github.com/cgevans/mixes.git"
 Issues = "https://github.com/cgevans/issues"
 source_archive = "https://github.com/org/repo/archive/{commit_hash}.zip"
 
 [project]
-name = "alhambra_mixes"
+name = "riverine"
 dynamic = ["version", "urls"]
 description = "Many-component mix library for molecular programming"
 authors = [{name = "Constantine Evans", email="mixes@mb.costi.net"}]
@@ -77,7 +77,7 @@ echo = [
     "kithairon >= 0.2.0",
 ]
 all = [
-    "alhambra_mixes[echo]"
+    "riverine[echo]"
 ]
 
 
