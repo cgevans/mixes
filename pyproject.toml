@@ -57,7 +57,7 @@ dependencies = [
     "typing_extensions >= 4.2",
 ]
 readme = "README.md"
-requires-python = ">= 3.8"
+requires-python = ">= 3.10"
 
 [project.optional-dependencies]
 docs = [
