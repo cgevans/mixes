@@ -22,11 +22,11 @@ norecursedirs = [
 testpaths = ["tests"]
 
 [tool.hatch.metadata.hooks.vcs.urls]
-Homepage = "https://github.com/cgevans/mixes"
+Homepage = "https://github.com/cgevans/riverine"
 Documentation = "https://riverine.readthedocs.io"
-Repository = "https://github.com/cgevans/mixes.git"
-Issues = "https://github.com/cgevans/issues"
-source_archive = "https://github.com/org/repo/archive/{commit_hash}.zip"
+Repository = "https://github.com/cgevans/riverine.git"
+Issues = "https://github.com/cgevans/riverine/issues"
+source_archive = "https://github.com/cgevans/riverine/archive/{commit_hash}.zip"
 
 [project]
 name = "riverine"

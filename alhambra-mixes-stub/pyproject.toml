@@ -1,0 +1,28 @@
+[build-system]
+requires = ["uv_build>=0.9.6,<0.10.0"]
+build-backend = "uv_build"
+
+[project]
+name = "alhambra-mixes"
+version = "0.6.2a1"
+description = "Deprecated: This package has been renamed to 'riverine'"
+authors = [{name = "Constantine Evans", email="mixes@mb.costi.net"}]
+license = { file = "LICENSE.txt" }
+classifiers = [
+    "Development Status :: 7 - Inactive",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: BSD License",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed"]
+dependencies = [
+    "riverine >= 0.6.0",
+]
+readme = "README.md"
+requires-python = ">= 3.10"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
